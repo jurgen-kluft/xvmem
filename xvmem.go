@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/jurgen-kluft/xallocator/package"
 	"github.com/jurgen-kluft/xcode"
+	"github.com/jurgen-kluft/xvmem/package"
 )
 
 func main() {
 	xcode.Init()
-	xcode.Generate(xallocator.GetPackage())
+	xcode.Generate(xvmem.GetPackage())
 }
