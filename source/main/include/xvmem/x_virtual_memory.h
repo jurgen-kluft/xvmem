@@ -32,8 +32,7 @@ namespace xcore
         virtual void release() = 0;
     };
 
-    xpage_alloc* gCreateVMemPageAllocator(xalloc* allocator, u64 address_range, u32 page_size, u32 page_attrs,
-                                       u32 protection_attrs, xvirtual_memory* vmem);
+    xpage_alloc* gCreateVMemPageAllocator(xalloc* allocator, u64 address_range, u32 page_size, u32 page_attrs, u32 protection_attrs, xvirtual_memory* vmem);
 
 }; // namespace xcore
 
