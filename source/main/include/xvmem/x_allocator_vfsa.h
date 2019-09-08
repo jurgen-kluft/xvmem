@@ -6,7 +6,7 @@
 #endif
 
 #include "xbase/x_allocator.h"
-#include "xallocator/x_virtual_memory.h"
+#include "xvmem/x_virtual_memory.h"
 
 namespace xcore
 {
