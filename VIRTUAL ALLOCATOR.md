@@ -133,7 +133,7 @@ Pros and Cons:
 - Coalesce needs a Node = Prev/Next, 4 B + 4 B
 
 ```C++
-struct caolesce_node_t
+struct coalesce_node_t
 {
     u32         m_addr;     // *
     u32         m_prev;
@@ -146,7 +146,7 @@ struct caolesce_node_t
 };
 ```
 
-### Size Table (btree)
+### Size Table
 
 - MinSize = 4 KB
 - MaxSize = 32 MB
