@@ -2,7 +2,6 @@
 #include "xbase/x_debug.h"
 #include "xbase/x_allocator.h"
 
-#include "xallocator/private/x_bitlist.h"
 #include "xvmem/x_virtual_memory.h"
 
 namespace xcore
@@ -110,7 +109,7 @@ namespace xcore
     class xvpage_alloc : public xpage_alloc
     {
     public:
-        virtual void* allocate(u32& size)
+        virtual void* allocate()
         {
             void* ptr = nullptr;
             if (m_pages_empty_cnt == 0)
@@ -125,7 +124,6 @@ namespace xcore
                         m_pages_free_cnt -= 1;
                         m_pages_free.clr(page_index);
                         ptr  = calc_page_addr(page_index);
-                        size = m_page_size;
                     }
                 }
             }
@@ -140,7 +138,6 @@ namespace xcore
                     m_pages_empty.clr(page_index);
                     ptr = calc_page_addr(page_index);
                     m_vmem->commit(ptr, m_page_size, 1);
-                    size = m_page_size;
                 }
             }
             return ptr;
@@ -163,12 +160,13 @@ namespace xcore
             }
         }
 
-        virtual bool info(void* ptr, void*& page_addr, u32& page_index)
+        virtual bool info(void* ptr, void*& page_addr, u32& page_size, u32& page_index)
         {
             if (ptr >= m_addr_base && ptr < (void*)((uptr)m_addr_base + m_addr_range))
             {
                 u32 const pindex = calc_page_index(ptr);
                 page_addr        = calc_page_addr(pindex);
+                page_size        = m_page_size;
                 page_index       = pindex;
                 return true;
             }

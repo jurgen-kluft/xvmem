@@ -7,44 +7,53 @@
 
 namespace xcore
 {
-    class xssa : public xalloc
+    class xalloc_small : public xalloc
     {
     public:
-        u32        m_min_size;
-        u32        m_max_size;
-        u32        m_size_step;
-        xvfsa**    m_fsalloc;
-    };
-
-    struct xvelem_t
-    {
-        xvelem_t*     m_next;
+        u32     m_min_size;
+        u32     m_max_size;
+        u32     m_size_step;
+        xvfsa** m_fsalloc;
     };
 
     struct xvpage_t
     {
-        inline      xvpage_t() : m_next(nullptr), m_prev(nullptr), m_free(nullptr), m_cur(0), m_max(0) {}
-        xvpage_t*   m_next;
-        xvpage_t*   m_prev;
-        xvelem_t*   m_free;
-        u16         m_scur;
-        u16         m_smax;
-        u16         m_used;
-        u16         m_capacity;
-        bool        is_full() const { return m_used == m_capacity; }
+        enum { INDEX32_NIL = 0xffffffff, INDEX16_NIL, PAGE_PHYSICAL = 1, PAGE_VIRTUAL = 2 };
+        inline xvpage_t() : m_next(INDEX32_NIL), m_prev(INDEX32_NIL), m_free(INDEX16_NIL), m_flags(VIRTUAL), m_scur(0), m_smax(0), m_used(0), m_capacity(0) {}
+
+        u32       m_next;
+        u32       m_prev;
+        u16       m_free;
+        u16       m_flags;
+        u16       m_scur;
+        u16       m_smax;
+        u16       m_used;
+        u16       m_capacity;
+
+        bool      is_full() const { return m_used == m_capacity && m_capacity > 0; }
+        bool      is_empty() const { return m_used == 0 && m_capacity > 0; }
+        bool      is_free() const { return m_used == 0 && m_capacity == 0; }
+        bool      is_virtual() const { return m_flags & PAGE_VIRTUAL == PAGE_VIRTUAL; }
     };
 
     class xvpage_allocator
     {
     public:
+        xvpage_t*   alloc_page();
+        void        free_page(xvpage_t* page);
 
+        xvpage_t*   find_page(void* address);
+        xvpage_t*   get_page(u32 page_index);
+
+    protected:
+        s32         m_page_cnt;
+        xvpage_t*   m_page;
     };
 
     /**
         @brief	xvfsa is a fixed size allocator using virtual memory pages over a reserved address range.
 
         This makes the address of pages predictable and deallocation thus easy to find out which page to manipulate.
-
         Example:
             FSA address range = 512 MB
             Page Size = 64 KB
@@ -58,7 +67,10 @@ namespace xcore
         xvfsa();
         ~xvfsa() {}
 
-		enum { Null = 0xffffffff };
+        enum
+        {
+            Null = 0xffffffff
+        };
 
         ///@name	Should be called when created with default constructor
         //			Parameters are the same as for constructor with parameters
@@ -72,15 +84,12 @@ namespace xcore
     protected:
         bool extend(u32& page_index, void*& page_address);
 
-
-
     protected:
         xvfsa_params m_params;
         xalloc*      m_alloc;
         xpage_alloc* m_page_allocator;
-        page_t*      m_pages_notfull;
-        page_t*      m_pages_full;
-        xhibitset    m_pages_noncommitted;
+        xvpage_t*    m_pages_notfull;
+        xvpage_t*    m_pages_full;
 
     private:
         // Copy construction and assignment are forbidden
@@ -108,7 +117,7 @@ namespace xcore
         if (m_page_current == nullptr)
             return nullptr;
 
-		/*
+        /*
         void* page_address = calc_page_address(m_page_to_alloc_from);
         void* p            = m_pages[m_page_to_alloc_from].allocate(page_address);
 
@@ -127,13 +136,13 @@ namespace xcore
             }
         }
         return p;
-		*/
-		return nullptr;
+        */
+        return nullptr;
     }
 
     void xvfsa::deallocate(void* p)
     {
-		/*
+        /*
         s32   page_index = calc_page_index(p);
         void* page_addr  = calc_page_address(page_index);
         m_pages[page_index].deallocate(p);
@@ -149,7 +158,7 @@ namespace xcore
                 m_page_to_alloc_from = m_pages_empty.find();
             }
         }
-		*/
+        */
     }
 
     bool xvfsa::extend(u32& page_index, void*& page_address)
@@ -168,13 +177,13 @@ namespace xcore
 
     xfsalloc* gCreateVFsAllocator(xalloc* a, xpage_alloc* page_allocator, xvfsa_params const& params)
     {
-        xheap          heap(a);
+        xheap  heap(a);
         xvfsa* allocator = heap.construct<xvfsa>();
         allocator->init(a, page_allocator, params);
         return allocator;
     }
 
-    #if 0
+#if 0
     class vmalloc : public xdexedfxsa
     {
         enum
