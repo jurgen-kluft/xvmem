@@ -10,23 +10,14 @@ namespace xcore
     class xvirtual_memory
     {
     public:
-        virtual bool reserve(u64 address_range, u32 page_size, u32 attributes, void*& baseptr) = 0;
+        virtual bool reserve(u64 address_range, u32& page_size, u32 attributes, void*& baseptr) = 0;
         virtual bool release(void* baseptr)                                                    = 0;
 
-        virtual bool commit(void* page_address, u32 page_size, u32 page_count)   = 0;
-        virtual bool decommit(void* page_address, u32 page_size, u32 page_count) = 0;
+        virtual bool commit(void* address, u32 page_size, u32 page_count)   = 0;
+        virtual bool decommit(void* address, u32 page_size, u32 page_count) = 0;
     };
-    extern xvirtual_memory* gGetVirtualMemory();
 
-    class xpage_alloc
-    {
-    public:
-        virtual void* allocate() = 0;
-        virtual void  deallocate(void*)   = 0;
-        virtual bool query(void* ptr, void*& page_addr, u32& page_size, u32& page_index) = 0;
-        virtual void release() = 0;
-    };
-    xpage_alloc* gCreateVMemPageAllocator(xalloc* allocator, u64 address_range, u32 page_size, u32 page_attrs, u32 protection_attrs, xvirtual_memory* vmem);
+    extern xvirtual_memory* gGetVirtualMemory();
 
 }; // namespace xcore
 
