@@ -44,9 +44,6 @@ Total number of actual FSA's = 128 + 24 = 152
 - Non-contiguous virtual pages
 - Releases empty pages back to the page allocator
 - 192 GB address range
-- Address range divided into multiple spaces
-- Space = 32 MB (N pages)
-- Space is tracked with external bookkeeping
 - Suitable for GPU memory
 
 ## Medium Size Allocator 2 [WIP]
@@ -55,9 +52,6 @@ Total number of actual FSA's = 128 + 24 = 152
 - Non-contiguous virtual pages
 - Releases empty pages back to the page allocator
 - 192 GB address range
-- Address range divided into multiple spaces
-- Space = 32 MB (N pages)
-- Space is tracked with external bookkeeping
 - Suitable for GPU memory
 
 ## Medium Size Temporal/Forward Allocator [WIP]
