@@ -41,25 +41,33 @@ Total number of actual FSA's = 128 + 24 = 152
 ## Medium Size Allocator 1 [WIP]
 
 - All other sizes go here (4 KB < Size < 128 KB)
+- Size-alignment = 64 bytes
+- For Size dexer is covering 12-bits [0000.0000.0000.000x.xxxx.xxxx.xxx0.0000]
 - Non-contiguous virtual pages
 - Releases empty pages back to the page allocator
-- 192 GB address range
+- 128 GB address range
+  For address dexer is covering 29-bits [0000.0000.000x.xxxx][xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.0000.0000]
+  Root array, 9 bits, 20 bits left for tree, 2 bits per node, 10 nodes deep
 - Suitable for GPU memory
 
 ## Medium Size Allocator 2 [WIP]
 
 - All other sizes go here (128 KB < Size < 1 MB)
+- Size-alignment = 256 bytes
+- For Size dexer is covering 12-bits [0000.0000.0000.000x.xxxx.xxxx.xxx0.0000]
 - Non-contiguous virtual pages
 - Releases empty pages back to the page allocator
-- 192 GB address range
+- 128 GB address range
+  For address dexer is covering 29-bits [0000.0000.000x.xxxx][xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.0000.0000]
 - Suitable for GPU memory
+
 
 ## Medium Size Temporal/Forward Allocator [WIP]
 
 - For requests that have a very similar life-time
 - Non-contiguous virtual pages
 - Moves forward when allocating (this is an optimization)
-- 192 GB address space
+- 128 GB address space
 - Space = 32 MB (N pages)
 - Space is tracked with simplified external bookkeeping
 - Suitable for GPU memory
