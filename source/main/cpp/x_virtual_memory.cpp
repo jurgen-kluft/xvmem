@@ -74,7 +74,7 @@ namespace xcore
 
     bool xvmem_os::decommit(void* page_address, u32 page_size, u32 page_count) 
     {
-		BOOL b = ::VirtualFree(page_address, page_size, MEM_DECOMMIT);
+		BOOL b = ::VirtualFree(page_address, page_size * page_count, MEM_DECOMMIT);
         return b; 
     }
 

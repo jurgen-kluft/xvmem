@@ -111,11 +111,11 @@ namespace xcore
     class xvpages_t
     {
     public:
-        void initialize(xvpage_t* pages, u32 count, void* memory_base, u64 memory_range, u32 pagesize)
+        void initialize(xvpage_t* pages, u32 pagesize, u32 pagecount, void* memory_base, u64 memory_range)
 		{
-            m_page = pages;
+            m_page_array = pages;
             m_page_size = pagesize;
-            m_page_total_cnt = count;
+            m_page_total_cnt = pagecount;
 			m_memory_base = memory_base;
 			m_memory_range = memory_range;
             m_free_pages_physical_head = xvpage_t::INDEX_NIL;
@@ -188,7 +188,7 @@ namespace xcore
         xvpage_t* find_page(void* address) const
         {
             u32 const page_index = ((u64)address - (u64)m_memory_base) / m_page_size;
-            return &m_page[page_index];
+            return &m_page_array[page_index];
         }
 
         void* idx2ptr(u64 index, u32 page_elem_cnt, u32 alloc_size) const
@@ -216,23 +216,23 @@ namespace xcore
         xvpage_t* next_page(xvpage_t* page)
         {
             u32 next = page->m_next;
-            return &m_page[next];
+            return &m_page_array[next];
         }
         xvpage_t* prev_page(xvpage_t* page)
         {
             u32 prev = page->m_prev;
-            return &m_page[prev];
+            return &m_page_array[prev];
         }
 
         xvpage_t* indexto_page(u32 page) const
         {
             ASSERT(page < m_page_total_cnt);
-            return &m_page[page];
+            return &m_page_array[page];
         }
         u32       indexof_page(xvpage_t* ppage) const
         {
             if (ppage == nullptr) return xvpage_t::INDEX_NIL;
-            u32 page = (u32)(ppage - &m_page[0]);
+            u32 page = (u32)(ppage - &m_page_array[0]);
             return page;
         }
 
@@ -244,7 +244,7 @@ namespace xcore
         u32       m_free_pages_physical_count;
         u32       m_free_pages_virtual_head;
         u32       m_free_pages_virtual_count;
-        xvpage_t* m_page;
+        xvpage_t* m_page_array;
     };
 
     static inline void      insert_in_list(xvpages_t* pages, u32& head, u32 page)
@@ -344,6 +344,24 @@ namespace xcore
             insert_in_list(this, freelist, page);
         }
     }    
+
+	// An object that can alloc/free pages from a memory range
+	xvpages_t*	gCreateVPages(xalloc* main_allocator, u64 memoryrange)
+    {
+        xvpages_t* vpages = main_allocator->construct<xvpages_t>(es, allocsize);
+
+        xvirtual_memory* vmem = gGetVirtualMemory();
+        u32 pagesize;
+        void* memory_base = nullptr;
+        vmem->reserve(memoryrange, pagesize, 0, memory_base);
+
+        u32 const pagecount = memoryrange / pagesize;
+        xvpage_t* pagearray = main_allocator->allocate(sizeof(xvpage_t) * pagecount, sizeof(void*));
+
+        vpages->initialize(pagearray, pagesize, pagecount, memory_base, memory_range);
+
+        return vpages;
+    }
 
     // ----------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------
