@@ -132,14 +132,23 @@ struct node_t
     u32         m_flags;      // Allocated, Free, Locked
     u32         m_addr_prev;  // previous node in memory, can be free, can be allocated
     u32         m_addr_next;  // next node in memory, can be free, can be allocated
-    u32         m_list_prev;  // either in the allocation slot array as a list node
-    u32         m_list_next;  // or in the size slot array as a list node
 #if defined X_ALLOCATOR_DEBUG
     s32         m_file_line;
     const char* m_file_name;
     const char* m_func_name;
 #endif
 };
+
+struct ll_size_node_t
+{
+    u32         m_list_prev;  // either in the allocation slot array as a list node
+    u32         m_list_next;  // or in the size slot array as a list node
+    u32         m_size;
+    u32         m_node_idx;   //
+};
+
+btree32 has nodes that are of size 16
+
 ```
 
 ### Notes 1
@@ -169,3 +178,32 @@ For allocations that are under but close to size like 4K, 8/12/16/20 we could al
 ### Notes 4
 
 For GPU resources it is best to analyze the resource constraints, for example; On Nintendo Switch shaders should be allocated with an alignment of 256 bytes and the size should also be a multiple of 256.
+
+### Notes 5
+
+A direct size and address table design:
+
+- Heap 1
+  MemSize = 128 GB, SizeAlignment = 128, MinSize = 4 KB, MaxSize = 128 KB
+  
+  Address-Root-Table = 1024 entries
+  128 GB / Root-Table-Size = 128 MB
+  Every entry is a btree32
+
+  Size-Root-Table = 1024 entries
+  Every entry is a linked-list of free spaces
+
+- Heap 2
+  MemSize = 128 GB, SizeAlignment = 256, MinSize = 128 KB, MaxSize = 1 MB
+  
+  Address-Root-Table = 1024 entries
+  128 GB / Root-Table-Size = 128 MB
+  Every entry is a btree32
+
+  Size-Root-Table = 1024 entries
+  Every entry is a linked-list of free spaces
+
+  Linked-List-Item:
+  u32 m_next;
+  u32 m_prev;
+  u32 m_item;

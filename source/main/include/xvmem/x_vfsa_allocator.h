@@ -10,8 +10,14 @@
 
 namespace xcore
 {
+	class xvpages_t;
+
 	// A fixed-size allocator (small allocator) using virtual memory.
-	extern xfsa*	gCreateVirtualMemoryBasedFixedSizeAllocator(xalloc* main_allocator, xvpages* vpages, u32 alloc_size);
+	extern xfsa*		gCreateVMemBasedFsa(xalloc* main_allocator, xvpages_t* vpages, u32 allocsize);
+
+	// A fixed-size allocator (small allocator) using virtual memory constraint in such a way as to be
+	// able to get a 32-bit index for every allocation.
+	extern xfsadexed*	gCreateVMemBasedDexedFsa(xalloc* main_allocator, xvpages_t* vpages, u32 allocsize);
 };
 
 #endif	/// __X_VMEM_VFSA_ALLOCATOR_H__
