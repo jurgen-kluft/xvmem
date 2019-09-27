@@ -15,8 +15,6 @@ namespace xcore
 			INDEX16_NIL   = 0xffff,
             PAGE_PHYSICAL = 1,
             PAGE_VIRTUAL  = 2,
-            PAGE_EMPTY    = 4,
-            PAGE_FULL     = 8
         };
 
 		// Constraints:
@@ -33,11 +31,14 @@ namespace xcore
         u16 m_elem_size;
         u16 m_flags;
 
-        bool is_full() const { return (m_flags & PAGE_FULL) == PAGE_FULL; }
-        bool is_empty() const { return (m_flags & PAGE_EMPTY) == PAGE_EMPTY; }
+        bool is_full() const { return m_elem_used == m_elem_total; }
+        bool is_empty() const { return m_elem_used == 0; }
         bool is_physical() const { return (m_flags & PAGE_PHYSICAL) == PAGE_PHYSICAL; }
         bool is_virtual() const { return (m_flags & PAGE_VIRTUAL) == PAGE_VIRTUAL; }
         bool is_linked() const { return !(m_next == INDEX_NIL && m_prev == INDEX_NIL); }
+
+        void set_is_virtual() { m_flags = (m_flags & ~(PAGE_PHYSICAL|PAGE_VIRTUAL)) | PAGE_VIRTUAL; }
+        void set_is_physical() { m_flags = (m_flags & ~(PAGE_PHYSICAL|PAGE_VIRTUAL)) | PAGE_PHYSICAL; }
     };
 
     void init_page(xvpage_t* page, u32 page_size, u32 element_size)
@@ -74,17 +75,12 @@ namespace xcore
         // if page == nullptr then first allocate a new page for this size
         // else use the page to allocate a new element.
         // Note: page should NOT be full when calling this function!
-        if (page == nullptr)
+        if (page->m_free_list != xvpage_t::INDEX16_NIL)
         {
             u32  index        = page->m_free_list;
             u32* elem         = indexto_elem(page, page_base_address, index);
             page->m_free_list = elem[0];
-            
 			page->m_elem_used++;
-			if (page->m_elem_used == page->m_elem_total)
-			{
-				page->m_flags |= xvpage_t::PAGE_FULL;
-			}
             return (void*)elem;
         }
         else if (page->m_free_index < page->m_elem_total)
@@ -106,26 +102,26 @@ namespace xcore
         u32* elem         = indexto_elem(page, page_base_address, index);
         elem[0]           = page->m_free_list;
         page->m_free_list = index;
-
-		if (page->m_elem_used == page->m_elem_total)
-		{
-			page->m_flags &= ~xvpage_t::PAGE_FULL;
-		}
-        
 		page->m_elem_used -= 1;
-		if (page->m_elem_used == 0)
-		{
-			page->m_flags |= xvpage_t::PAGE_EMPTY;
-		}
     }
+
+    static void      insert_in_list(xvpages_t* pages, u32& head, u32 page);
+    static void      remove_from_list(xvpages_t* pages, u32& head, u32 page);
 
     class xvpages_t
     {
     public:
-        void initialize(xvpage_t* pages, u32 count, void* memory_base, u64 memory_range)
+        void initialize(xvpage_t* pages, u32 count, void* memory_base, u64 memory_range, u32 pagesize)
 		{
+            m_page = pages;
+            m_page_size = pagesize;
+            m_page_total_cnt = count;
 			m_memory_base = memory_base;
 			m_memory_range = memory_range;
+            m_free_pages_physical_head = xvpage_t::INDEX_NIL;
+            m_free_pages_physical_count = 0;
+            m_free_pages_virtual_head = xvpage_t::INDEX_NIL;
+            m_free_pages_virtual_count = 0;
 		}
 
         u64 memory_range() const { return m_memory_range; }
@@ -133,23 +129,59 @@ namespace xcore
         void* allocate(u32& freelist, u32 allocsize);
         void  deallocate(u32& freelist, void* ptr);
 
-        xvpage_t* alloc_page(u32 size)
+        xvpage_t* alloc_page(u32 allocsize)
         {
-            xvpage_t* ppage = nullptr;
-
             // Get a page from list of physical pages
             // If there are no free physical pages then take one from list of virtual pages and commit the page
             // If there are also no free virtual pages then we are out-of-memory!
+            xvpage_t* ppage = nullptr;
+            if (m_free_pages_physical_head == xvpage_t::INDEX_NIL)
+            {
+                if (m_free_pages_virtual_head == xvpage_t::INDEX_NIL)
+                {
+                    // Get the page pointer and remove it from the list of virtual pages
+                    ppage = indexto_page(m_free_pages_virtual_head);
+                    remove_from_list(this, m_free_pages_virtual_head, m_free_pages_virtual_head);
+
+                    // Commit the virtual memory to physical memory
+                    xvirtual_memory* vmem = gGetVirtualMemory();
+                    void* address = get_base_address(ppage);
+                    vmem->commit(address, m_page_size, 1);
+                }
+            }
+            else
+            {
+                    // Get the page pointer and remove it from the list of physical pages
+                ppage = indexto_page(m_free_pages_physical_head);
+                remove_from_list(this, m_free_pages_physical_head, m_free_pages_physical_head);
+                m_free_pages_physical_count -= 1;
+            }
+
+            // Page is committed, so it is physical, mark it
+            ppage->set_is_physical();
 
             // Initialize page with 'size' (alloc size)
+            init_page(page, m_page_size, allocsize);
 
             return ppage;
         }
 
-        void      free_page(xvpage_t* page)
+        void      free_page(xvpage_t* ppage)
         {
             // If amount of physical pages crosses the maximum then decommit the memory of this page and add it to list of virtual pages
             // Otherwise add this page to the list of physical pages
+            if (m_free_pages_physical_count < 5)
+            {
+                u32 const page = indexof_page(ppage);
+                insert_in_list(this, m_free_pages_physical_head, page);
+            }
+            else
+            {
+                xvirtual_memory* vmem = gGetVirtualMemory();
+                void* address = get_base_address(ppage);
+                vmem->decommit(address, m_page_size, 1);
+                ppage->set_is_virtual();
+            }
             
         }
 
@@ -208,8 +240,10 @@ namespace xcore
         u64       m_memory_range;
         u32       m_page_size;
         u32       m_page_total_cnt;
-        u32       m_page_list_physical_free;
-        u32       m_page_list_virtual_free;
+        u32       m_free_pages_physical_head;
+        u32       m_free_pages_physical_count;
+        u32       m_free_pages_virtual_head;
+        u32       m_free_pages_virtual_count;
         xvpage_t* m_page;
     };
 
