@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "/Users/obnosis1/Library/Arduino15/packages/AZ3166/tools/**",
+                "/Users/obnosis1/Library/Arduino15/packages/AZ3166/hardware/stm32f4/1.6.0/**",
+                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xbase/source/main/include",
+                "${workspaceRoot}"
+            ],
+            "defines": [
+                "TARGET_MAC_DEV_DEBUG"
+            ],
+            "macFrameworkPath": [
+                "/Library/Developer/CommandLineTools/SDKs/MacOSX10.14.sdk/System/Library/Frameworks"
+            ],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "${default}",
+            "forcedInclude": [
+                "/Users/obnosis1/Library/Arduino15/packages/AZ3166/hardware/stm32f4/1.6.0/cores/arduino/Arduino.h"
+            ]
+        }
+    ],
+    "version": 4
+}
