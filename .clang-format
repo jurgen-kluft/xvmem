@@ -11,6 +11,7 @@ AllowShortCaseLabelsOnASingleLine: "true"
 AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: "false"
 AllowShortLoopsOnASingleLine: "false"
+BreakConstructorInitializers: BeforeComma
 BreakBeforeBraces: Allman
 ColumnLimit: "256"
 CompactNamespaces: "false"
