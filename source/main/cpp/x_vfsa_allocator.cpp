@@ -58,16 +58,10 @@ namespace xcore
         virtual u32 size() const { return m_alloc_size; }
 
         virtual void* allocate() { return m_pages->allocate(m_pages_freelist, m_alloc_size); }
-
-        virtual void deallocate(void* ptr) { return m_pages->deallocate(m_pages_freelist, ptr); }
+        virtual void  deallocate(void* ptr) { return m_pages->deallocate(m_pages_freelist, ptr); }
 
         virtual void* idx2ptr(u32 index) const { return m_pages->idx2ptr(index, m_page_elem_cnt, m_alloc_size); }
-
-        virtual u32 ptr2idx(void* ptr) const
-        {
-            u64 index = m_pages->ptr2idx(ptr, m_page_elem_cnt, m_alloc_size);
-            return (u32)index;
-        }
+        virtual u32   ptr2idx(void* ptr) const { return m_pages->ptr2idx(ptr, m_page_elem_cnt, m_alloc_size); }
 
         virtual void release() {}
 
@@ -87,5 +81,4 @@ namespace xcore
         xvfsa_dexed* fsa = main_allocator->construct<xvfsa_dexed>(vpages, allocsize);
         return fsa;
     }
-
 }; // namespace xcore

@@ -133,7 +133,7 @@ namespace xcore
     {
         // If amount of physical pages crosses the maximum then decommit the memory of this page and add it to list of virtual pages
         // Otherwise add this page to the list of physical pages
-        if (m_free_pages_physical_count < 5)
+        if (m_free_pages_physical_count < 16)
         {
             u32 const page = indexof_page(ppage);
             insert_in_list(this, m_free_pages_physical_head, page);
@@ -155,8 +155,7 @@ namespace xcore
 
     u32 xvpages_t::address_to_allocsize(void* const address) const
     {
-        u32 const page_index = ((u64)address - (u64)m_memory_base) / m_page_size;
-        xvpage_t* ppage      = &m_page_array[page_index];
+        xvpage_t* const ppage = find_page(address);
         return ppage->m_elem_size;
     }
 
@@ -249,10 +248,10 @@ namespace xcore
 
     void* xvpages_t::allocate(u32& page_list, u32 allocsize)
     {
-        // If free list is empty, request a new page and add it to the freelist
+        // If list is empty, request a new page and add it to the page_list
         // Using the page allocate a new element
         // return pointer to element
-        // If page is full remove it from the free list
+        // If page is full remove it from the list
         u32       page  = xvpage_t::INDEX_NIL;
         xvpage_t* ppage = nullptr;
         if (page_list == xvpage_t::INDEX_NIL)
@@ -279,7 +278,7 @@ namespace xcore
         return ptr;
     }
 
-    void xvpages_t::deallocate(u32& freelist, void* ptr)
+    void xvpages_t::deallocate(u32& page_list, void* ptr)
     {
         // Find page that this pointer belongs to
         // Determine element index of this pointer
@@ -293,13 +292,13 @@ namespace xcore
         {
             if (ppage->is_linked())
             {
-                remove_from_list(this, freelist, page);
+                remove_from_list(this, page_list, page);
             }
             free_page(ppage);
         }
         else
         {
-            insert_in_list(this, freelist, page);
+            insert_in_list(this, page_list, page);
         }
     }
 
