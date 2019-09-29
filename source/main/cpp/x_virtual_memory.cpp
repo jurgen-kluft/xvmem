@@ -4,6 +4,12 @@
 
 #include "xvmem/x_virtual_memory.h"
 
+#if defined TARGET_MAC
+#endif
+#if defined TARGET_PC
+#include "Windows.h"
+#endif
+
 namespace xcore
 {
     class xvmem_os : public xvirtual_memory
@@ -55,7 +61,7 @@ namespace xcore
     bool xvmem_os::reserve(u64 address_range, u32& page_size, u32 reserve_flags, void*& baseptr)
     { 
 		unsigned int flags = MEM_RESERVE | reserve_flags;
-		baseptr = ::VirtualAlloc(NULL, address_range, flags, PAGE_NOACCESS);
+		baseptr = ::VirtualAlloc(NULL, (SIZE_T)address_range, flags, PAGE_NOACCESS);
         return baseptr != nullptr;
     }
 

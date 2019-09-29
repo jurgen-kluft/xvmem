@@ -45,7 +45,7 @@ namespace xcore
     {
         page->m_next       = xvpage_t::INDEX_NIL;
         page->m_prev       = xvpage_t::INDEX_NIL;
-        page->m_flags      = xvpage_t::PAGE_PHYSICAL | xvpage_t::PAGE_EMPTY;
+        page->m_flags      = xvpage_t::PAGE_PHYSICAL;
         page->m_free_list  = xvpage_t::INDEX16_NIL;
         page->m_free_index = 0;
         page->m_elem_used  = 0;
@@ -111,23 +111,23 @@ namespace xcore
     class xvpages_t
     {
     public:
-        xvpages_t(xvpage_t* pages, u32 pagesize, u32 pagecount, void* memory_base, u64 memory_range)
+        xvpages_t(xvpage_t* page_array, u32 pagecount, void* memory_base, u64 memory_range, u32 pagesize)
+            : m_page_array                (page_array)
+            , m_page_size                 (pagesize)
+            , m_page_total_cnt            (pagecount)
+            , m_memory_base               (memory_base)
+            , m_memory_range              (memory_range)
+            , m_free_pages_physical_head  (xvpage_t::INDEX_NIL)
+            , m_free_pages_physical_count (0)
+            , m_free_pages_virtual_head   (xvpage_t::INDEX_NIL)
+            , m_free_pages_virtual_count  (0)
         {
-            m_page_array                = pages;
-            m_page_size                 = pagesize;
-            m_page_total_cnt            = pagecount;
-            m_memory_base               = memory_base;
-            m_memory_range              = memory_range;
-            m_free_pages_physical_head  = xvpage_t::INDEX_NIL;
-            m_free_pages_physical_count = 0;
-            m_free_pages_virtual_head   = xvpage_t::INDEX_NIL;
-            m_free_pages_virtual_count  = 0;
         }
 
         u64 memory_range() const { return m_memory_range; }
 
-        void* allocate(u32& freelist, u32 allocsize);
-        void  deallocate(u32& freelist, void* ptr);
+        void* allocate(u32& freelist, u32 const allocsize);
+        void  deallocate(u32& freelist, void* const ptr);
 
         xvpage_t* alloc_page(u32 const allocsize)
         {
@@ -161,7 +161,7 @@ namespace xcore
             ppage->set_is_physical();
 
             // Initialize page with 'size' (alloc size)
-            init_page(page, m_page_size, allocsize);
+            init_page(ppage, m_page_size, allocsize);
 
             return ppage;
         }
@@ -236,6 +236,8 @@ namespace xcore
             return page;
         }
 
+		XCORE_CLASS_PLACEMENT_NEW_DELETE
+
         void* const     m_memory_base;
         u64 const       m_memory_range;
         u32 const       m_page_size;
@@ -251,16 +253,16 @@ namespace xcore
     {
         if (head == xvpage_t::INDEX_NIL)
         {
-            xvpage_t* const ppage = &pages->m_page[page];
+            xvpage_t* const ppage = &pages->m_page_array[page];
             ppage->m_next         = page;
             ppage->m_prev         = page;
             head                  = page;
         }
         else
         {
-            xvpage_t* const phead = &pages->m_page[head];
-            xvpage_t* const pnext = &pages->m_page[phead->m_next];
-            xvpage_t* const ppage = &pages->m_page[page];
+            xvpage_t* const phead = &pages->m_page_array[head];
+            xvpage_t* const pnext = &pages->m_page_array[phead->m_next];
+            xvpage_t* const ppage = &pages->m_page_array[page];
             ppage->m_prev         = head;
             ppage->m_next         = phead->m_next;
             phead->m_next         = page;
@@ -270,23 +272,22 @@ namespace xcore
 
     static inline void remove_from_list(xvpages_t* pages, u32& head, u32 page)
     {
-        xvpage_t* const phead = &pages->m_page[head];
-        xvpage_t* const ppage = &pages->m_page[page];
-        xvpage_t* const pprev = &pages->m_page[ppage->m_prev];
-        xvpage_t* const pnext = &pages->m_page[ppage->m_next];
+        xvpage_t* const phead = &pages->m_page_array[head];
+        xvpage_t* const ppage = &pages->m_page_array[page];
+        xvpage_t* const pprev = &pages->m_page_array[ppage->m_prev];
+        xvpage_t* const pnext = &pages->m_page_array[ppage->m_next];
         pprev->m_next         = ppage->m_next;
         pnext->m_prev         = ppage->m_prev;
         page_unlink(ppage);
 
-        if (phead == ppage)
+        if (phead == ppage && pnext == ppage)
         {
-            phead = pnext;
-            if (phead == ppage)
-            {
-                phead = nullptr;
-            }
+             head = xvpage_t::INDEX_NIL;
         }
-        head = pages->indexof_page(phead);
+		else
+		{
+			head = pages->indexof_page(phead);
+		}
     }
 
     void* xvpages_t::allocate(u32& page_list, u32 allocsize)
@@ -353,11 +354,10 @@ namespace xcore
         void*            memory_base = nullptr;
         vmem->reserve(memoryrange, pagesize, 0, memory_base);
 
-        u32 const pagecount = memoryrange / pagesize;
-        xvpage_t* pagearray = main_allocator->allocate(sizeof(xvpage_t) * pagecount, sizeof(void*));
+        u32 const pagecount = (u32)(memoryrange / pagesize);
+        xvpage_t* pagearray = (xvpage_t*)main_allocator->allocate(sizeof(xvpage_t) * pagecount, sizeof(void*));
 
-        xvpages_t* vpages = main_allocator->construct<xvpages_t>(pagearray, pagesize, pagecount, memory_base, memory_range);
-
+        xvpages_t* vpages = main_allocator->construct<xvpages_t>(pagearray, pagecount, memory_base, memoryrange, pagesize);
         return vpages;
     }
 
@@ -372,7 +372,6 @@ namespace xcore
         virtual u32 size() const { return m_alloc_size; }
 
         virtual void* allocate() { return m_pages->allocate(m_pages_freelist, m_alloc_size); }
-
         virtual void deallocate(void* ptr) { return m_pages->deallocate(m_pages_freelist, ptr); }
 
         virtual void release() {}
