@@ -38,38 +38,35 @@ Total number of actual FSA's = 128 + 24 = 152
 - Fast [+]
 - Difficult to detect memory corruption [-]
 
-## Medium Size Allocator 1 [WIP]
+## Medium Size Allocator - 1 [WIP]
 
-- All other sizes go here (4 KB < Size < 128 KB)
-- Size-alignment = 64 bytes
-- For Size dexer is covering 12-bits [0000.0000.0000.000x.xxxx.xxxx.xxx0.0000]
-- Non-contiguous virtual pages
-- Releases empty pages back to the page allocator
-- 128 GB address range
-  For address dexer is covering 29-bits [0000.0000.000x.xxxx][xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.0000.0000]
-  Root array, 9 bits, 20 bits left for tree, 2 bits per node, 10 nodes deep
+- All other sizes go here (4 KB < Size < 64 KB)
+- Size-alignment = 1024 bytes
+- Size is covering 8-bits [0000.0000.0000.0000.xxxx.xxxx.0000.0000]
+- A reserved memory range of contiguous virtual pages
+- Releases pages back to its underlying page allocator
+- 8 GB address range
+- Address dexer is covering 25-bits [0000.0000.0000.000x][xxxx.xxxx.xxxx.xxxx.xxxx.xx00.0000.0000]
 - Suitable for GPU memory
 
-## Medium Size Allocator 2 [WIP]
+## Medium Size Allocator - 2 [WIP]
 
-- All other sizes go here (128 KB < Size < 1 MB)
-- Size-alignment = 256 bytes
-- For Size dexer is covering 12-bits [0000.0000.0000.000x.xxxx.xxxx.xxx0.0000]
-- Non-contiguous virtual pages
-- Releases empty pages back to the page allocator
-- 128 GB address range
-  For address dexer is covering 29-bits [0000.0000.000x.xxxx][xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.0000.0000]
+- All other sizes go here (64 KB < Size < 32 MB)
+- Size-alignment = Page-Size (64 KB)
+- Bins with reserved memory range of contiguous virtual pages
+- Every bin has 8 GB address range
+  Address dexer is covering 17-bits [0000.0000.0000.000x][xxxx.xxxx.xxxx.xxxx.0000.0000.0000.0000]
 - Suitable for GPU memory
-
 
 ## Medium Size Temporal/Forward Allocator [WIP]
 
-- For requests that have a very similar life-time
-- Non-contiguous virtual pages
+- For requests that have a very similar life-time (frame based allocations)
+- Contiguous virtual pages
 - Moves forward when allocating (this is an optimization)
 - 128 GB address space
-- Space = 32 MB (N pages)
-- Space is tracked with simplified external bookkeeping
+- Tracked with external bookkeeping
+- Configured with a maximum number of allocations
+  This allows easier tracking with a circular array struct{ void* address; u32 numpages; }
 - Suitable for GPU memory
 
 ## Large Size Allocator
@@ -109,6 +106,7 @@ Pros and Cons:
 - Min/Max-Alloc-Size, Heap 1 =   4 KB / 128 KB
   - Size-Alignment = 64 bytes (2 * cache-line)
   - Find Size is using a simple slot array and nodes
+    With a hibitset to quickly find upper bound slots
     124 KB / 64 B = 1984 slots
 - Min/Max-Alloc-Size, Heap 2 = 128 KB / 1   MB
   - Size-Alignment = 256 bytes (multiple of cache-line)
@@ -153,16 +151,16 @@ btree32 has nodes that are of size 16
 
 ### Notes 1
 
-Medium Heap Region Size 1 = 768 MB
-Medium Heap Region Size 2 = 768 MB
+Medium Heap Region Size 1 = 8 GB
+Medium Heap Region Size 2 = 8 GB
 
 Coalesce Heap Region Size = Medium Heap Region Size 1
 Coalesce Heap Min-Size = 4 KB
-Coalesce Heap Max-Size = 128 KB
+Coalesce Heap Max-Size = 64 KB
 Coalesce Heap Step-Size = 64 B
 
 Coalesce Heap Region Size = Medium Heap Region Size 2
-Coalesce Heap Min-Size = 128 KB,
+Coalesce Heap Min-Size = 64 KB,
 Coalesce Heap Max-Size = 1 MB
 Coalesce Heap Step-Size = 256 B
 
@@ -184,17 +182,20 @@ For GPU resources it is best to analyze the resource constraints, for example; O
 A direct size and address table design:
 
 - Heap 1
-  MemSize = 128 GB, SizeAlignment = 128, MinSize = 4 KB, MaxSize = 128 KB
+  MemSize = 8 GB, SizeAlignment = 128, MinSize = 4 KB, MaxSize = 64 KB
   
   Address-Root-Table = 1024 entries
   128 GB / Root-Table-Size = 128 MB
   Every entry is a btree32
+  128 MB = 27 bits
+  Size Alignment = 7 bits
+    btree covers 14 bits (max depth = 7)
 
   Size-Root-Table = 1024 entries
   Every entry is a linked-list of free spaces
 
 - Heap 2
-  MemSize = 128 GB, SizeAlignment = 256, MinSize = 128 KB, MaxSize = 1 MB
+  MemSize = 128 GB, SizeAlignment = 1024, MinSize = 128 KB, MaxSize = 1 MB
   
   Address-Root-Table = 1024 entries
   128 GB / Root-Table-Size = 128 MB
@@ -203,7 +204,13 @@ A direct size and address table design:
   Size-Root-Table = 1024 entries
   Every entry is a linked-list of free spaces
 
-  Linked-List-Item:
-  u32 m_next;
-  u32 m_prev;
-  u32 m_item;
+### Notes 6
+
+Memory Debugging:
+
+- Memory Corruption
+- Memory Leaks
+- Memory Tracking
+
+Writing allocators to be able to debug allocations. We can do this by writing allocators that
+are proxy classes that do some extra work.

@@ -19,6 +19,12 @@ namespace xcore
         u32 m_addr_next; // next node in memory, can be free, can be allocated
     };
 
+	// In total a value in the btree still bites of the lowest 5 bits
+	struct value_t
+	{
+		u32	m_values[4];
+	};
+
     class xvmem_alloc_kv : public xbtree_kv
     {
         xfsadexed* const m_fsa;

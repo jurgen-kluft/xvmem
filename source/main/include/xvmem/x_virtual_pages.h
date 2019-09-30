@@ -57,13 +57,14 @@ namespace xcore
 
         xvpage_t* alloc_page(u32 const allocsize);
         void      free_page(xvpage_t* const ppage);
+	    xvpage_t* find_page(void* const address) const;
 
         u32       address_to_allocsize(void* const address) const;
         xvpage_t* address_to_page(void* const address) const;
         void*     get_base_address(xvpage_t* const page) const;
 
-        void* idx2ptr(u64 const index, u32 const page_elem_cnt, u32 const alloc_size) const;
-        u64   ptr2idx(void* const ptr, u32 const page_elem_cnt, u32 const alloc_size) const;
+        void* idx2ptr(u32 const index, u32 const page_elem_cnt, u32 const alloc_size) const;
+        u32   ptr2idx(void* const ptr, u32 const page_elem_cnt, u32 const alloc_size) const;
 
         xvpage_t* next_page(xvpage_t* const page);
         xvpage_t* prev_page(xvpage_t* const page);

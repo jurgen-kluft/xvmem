@@ -89,9 +89,6 @@ namespace xcore
 
     u64 xvpages_t::memory_range() const { return m_memory_range; }
 
-    void* xvpages_t::allocate(u32& freelist, u32 const allocsize);
-    void  xvpages_t::deallocate(u32& freelist, void* const ptr);
-
     xvpage_t* xvpages_t::alloc_page(u32 const allocsize)
     {
         // Get a page from list of physical pages
@@ -159,7 +156,7 @@ namespace xcore
         return ppage->m_elem_size;
     }
 
-    void* xvpages_t::idx2ptr(u64 const index, u32 const page_elem_cnt, u32 const alloc_size) const
+    void* xvpages_t::idx2ptr(u32 const index, u32 const page_elem_cnt, u32 const alloc_size) const
     {
         u64 const   page = index / page_elem_cnt;
         u64 const   elem = index - (page * page_elem_cnt);
@@ -167,12 +164,13 @@ namespace xcore
         return ptr;
     }
 
-    u64 xvpages_t::ptr2idx(void* const ptr, u32 const page_elem_cnt, u32 const alloc_size) const
+    u32 xvpages_t::ptr2idx(void* const ptr, u32 const page_elem_cnt, u32 const alloc_size) const
     {
         u64 const page = ((u64)ptr - (u64)m_memory_base) / m_page_size;
         u64 const base = (u64)m_memory_base + (page * m_page_size);
         u64 const elem = (page * page_elem_cnt) + (((u64)ptr - base) / alloc_size);
-        return elem;
+		ASSERT(elem < 0x000100000000UL);
+        return (u32)elem;
     }
 
     void* xvpages_t::get_base_address(xvpage_t* const page) const
