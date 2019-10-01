@@ -16,21 +16,21 @@ Let's say an APP has 640 GB of address space and it has the following behaviour:
 
 Not too hard to make multi-thread safe using atomics where the only hard multi-threading problem is page commit/decommit.
 
-FSA very small
+### FSA very small
+
   RegionSize = 256 x 1024 x 1024
   MinSize = 8
   MaxSize = 1024
   Size Increment = 8
   Number of FSA = 1024 / 8 = 128
 
-FSA small
+### FSA small
+
   RegionSize = 256 x 1024 x 1024
   MinSize = 1024
   MaxSize = 4096
-  Size Increment = 128
-  Number of FSA = (4096-1024) / 128 = 24
-
-Total number of actual FSA's = 128 + 24 = 152
+  Size Increment = 256
+  Number of FSA = (4096-1024) / 256 = 12
 
 - Tiny implementation [+]
 - Very low wastage [+]
@@ -38,27 +38,31 @@ Total number of actual FSA's = 128 + 24 = 152
 - Fast [+]
 - Difficult to detect memory corruption [-]
 
-## Medium Size Allocator - 1 [WIP]
+## Coalesce Allocator [WIP]
 
-- All other sizes go here (4 KB < Size < 64 KB)
-- Segregated; every size has a memory range
-- Size is covering 8-bits [0000.0000.0000.0000.xxxx.xxxx.0000.0000]
+- Can use more than one instance
+- Size example: 4 KB < Size < 128 KB (Coverage [0000.0000.0000.000x.xxxx.xxxx.0000.0000])
+- Size alignment: 256
 - A reserved memory range of contiguous virtual pages
 - Releases pages back to its underlying page allocator
-- 8 GB address range
-- Address dexer is covering 25-bits [0000.0000.0000.000x][xxxx.xxxx.xxxx.xxxx.xxxx.xx00.0000.0000]
+- 4 GB address range
+- 2 MB sized spaces
+- Best-Fit strategy
+- Address dexer is covering 24-bits [0000.0000.0000.000x][xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.0000.0000]
 - Suitable for GPU memory
 
-## Medium Size Allocator - 2 [WIP]
+## Segregated Allocator -  [WIP]
 
-- All other sizes go here (64 KB < Size < 32 MB)
-- Segregated; every size has a memory range
+- Can use more than one instance
+- Sizes to go here, example 64 KB < Size < 32 MB
 - Size-alignment = Page-Size (64 KB)
-- Every bin has 8 GB address range
-  Address dexer is covering 17-bits [0000.0000.0000.000x][xxxx.xxxx.xxxx.xxxx.0000.0000.0000.0000]
+- Segregated; every level = Size + MemoryRange
+- Every level has 4 GB address range
+- Can have multiple identical levels
+  Address dexer is covering 16-bits [0000.0000.0000.0000][xxxx.xxxx.xxxx.xxxx.0000.0000.0000.0000]
 - Suitable for GPU memory
 
-## Medium Size Temporal Allocator [WIP]
+## Temporal Allocator [WIP]
 
 - For requests that have a very similar life-time (frame based allocations)
 - Contiguous virtual pages
@@ -71,10 +75,11 @@ Total number of actual FSA's = 128 + 24 = 152
 
 ## Large Size Allocator
 
-- Sizes > 1 MB
+- Sizes > 32 MB
 - Size alignment is page size
-- Reserves huge virtual address space (160GB)
-- Each table divided into equal sized slots
+- Small number of allocations
+- Allocation tracking done with circular array
+- Reserves huge virtual address space (128 GB)
 - Maps and unmaps pages on demand
 - Guarantees contiguous memory
 
@@ -90,6 +95,8 @@ Pros and Cons:
 
 - memset to byte value
   - Keep it memorable
+  - 0x0A10C8ED
+  - 0x0DE1E7ED
 - 0xFA – Fixed-Size (FSA) Memory Allocated
 - 0xFF – Fixed-Size (FSA) Memory Free
 - 0xDA – Direct Memory Allocated
