@@ -21,10 +21,10 @@ namespace xcore
 
     struct nsize_t
     {
-        u32 m_list_prev;  // either in the allocation slot array as a list node
-        u32 m_list_next;  // or in the size slot array as a list node
-        u32 m_size;       // 
-        u32 m_index;      // 
+        u32 m_list_prev; // either in the allocation slot array as a list node
+        u32 m_list_next; // or in the size slot array as a list node
+        u32 m_size;      //
+        u32 m_index;     //
     };
 
     class xvmem_alloc_kv : public xbtree_kv
@@ -50,5 +50,12 @@ namespace xcore
         }
     };
 
+    class xvmem_allocator_coalesce : public xalloc
+    {
+    public:
+        virtual void* allocate(u32 size, u32 alignment);
+        virtual void  deallocate(void* p);
+        virtual void  release();
+    };
 
 }; // namespace xcore
