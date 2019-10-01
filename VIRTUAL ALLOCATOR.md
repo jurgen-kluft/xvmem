@@ -41,7 +41,7 @@ Total number of actual FSA's = 128 + 24 = 152
 ## Medium Size Allocator - 1 [WIP]
 
 - All other sizes go here (4 KB < Size < 64 KB)
-- Size-alignment = 1024 bytes
+- Segregated; every size has a memory range
 - Size is covering 8-bits [0000.0000.0000.0000.xxxx.xxxx.0000.0000]
 - A reserved memory range of contiguous virtual pages
 - Releases pages back to its underlying page allocator
@@ -52,13 +52,13 @@ Total number of actual FSA's = 128 + 24 = 152
 ## Medium Size Allocator - 2 [WIP]
 
 - All other sizes go here (64 KB < Size < 32 MB)
+- Segregated; every size has a memory range
 - Size-alignment = Page-Size (64 KB)
-- Bins with reserved memory range of contiguous virtual pages
 - Every bin has 8 GB address range
   Address dexer is covering 17-bits [0000.0000.0000.000x][xxxx.xxxx.xxxx.xxxx.0000.0000.0000.0000]
 - Suitable for GPU memory
 
-## Medium Size Temporal/Forward Allocator [WIP]
+## Medium Size Temporal Allocator [WIP]
 
 - For requests that have a very similar life-time (frame based allocations)
 - Contiguous virtual pages
@@ -71,7 +71,7 @@ Total number of actual FSA's = 128 + 24 = 152
 
 ## Large Size Allocator
 
-- Sizes > 1 MB                                                                                             
+- Sizes > 1 MB
 - Size alignment is page size
 - Reserves huge virtual address space (160GB)
 - Each table divided into equal sized slots
@@ -157,12 +157,12 @@ Medium Heap Region Size 2 = 8 GB
 Coalesce Heap Region Size = Medium Heap Region Size 1
 Coalesce Heap Min-Size = 4 KB
 Coalesce Heap Max-Size = 64 KB
-Coalesce Heap Step-Size = 64 B
+Coalesce Heap Step-Size = 4 KB
 
 Coalesce Heap Region Size = Medium Heap Region Size 2
 Coalesce Heap Min-Size = 64 KB,
-Coalesce Heap Max-Size = 1 MB
-Coalesce Heap Step-Size = 256 B
+Coalesce Heap Max-Size = 32 MB
+Coalesce Heap Step-Size = 64 KB
 
 ### Notes 2
 
@@ -182,23 +182,23 @@ For GPU resources it is best to analyze the resource constraints, for example; O
 A direct size and address table design:
 
 - Heap 1
-  MemSize = 8 GB, SizeAlignment = 128, MinSize = 4 KB, MaxSize = 64 KB
+  MemSize = 8 GB, SizeAlignment = 4 KB, MinSize = 4 KB, MaxSize = 64 KB
   
   Address-Root-Table = 1024 entries
-  128 GB / Root-Table-Size = 128 MB
+  8 GB / Root-Table-Size = 8 MB
   Every entry is a btree32
-  128 MB = 27 bits
-  Size Alignment = 7 bits
+  8 MB = 23 bits
+  Size Alignment = 8 bits
     btree covers 14 bits (max depth = 7)
 
   Size-Root-Table = 1024 entries
   Every entry is a linked-list of free spaces
 
 - Heap 2
-  MemSize = 128 GB, SizeAlignment = 1024, MinSize = 128 KB, MaxSize = 1 MB
+  MemSize = 8 GB, SizeAlignment = 64K, MinSize = 64 KB, MaxSize = 32 MB
   
   Address-Root-Table = 1024 entries
-  128 GB / Root-Table-Size = 128 MB
+  8 GB / Root-Table-Size = 8 MB
   Every entry is a btree32
 
   Size-Root-Table = 1024 entries
