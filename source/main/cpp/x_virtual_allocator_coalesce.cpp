@@ -13,18 +13,18 @@ namespace xcore
     // The key-value implementation would be like this:
     struct naddr_t
     {
-        u32 m_addr;      // (m_addr * size step) + base addr
-        u32 m_flags;     // Allocated, Free, Locked
-        u32 m_addr_prev; // previous node in memory, can be free, can be allocated
-        u32 m_addr_next; // next node in memory, can be free, can be allocated
+        u32 m_addr;  // (m_addr * size step) + base addr
+        u32 m_flags; // Allocated, Free, Locked
+        u32 m_prev;  // previous node in memory, can be free, can be allocated
+        u32 m_next;  // next node in memory, can be free, can be allocated
     };
 
     struct nsize_t
     {
-        u32 m_list_prev; // either in the allocation slot array as a list node
-        u32 m_list_next; // or in the size slot array as a list node
-        u32 m_size;      //
-        u32 m_index;     //
+        u32 m_size; // cached size
+        u32 m_addr; // the address node that has this size
+        u32 m_prev; // either in the allocation slot array as a list node
+        u32 m_next; // or in the size slot array as a list node
     };
 
     class xvmem_alloc_kv : public xbtree_kv
