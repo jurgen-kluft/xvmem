@@ -28,9 +28,9 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 
   RegionSize = 256 x 1024 x 1024
   MinSize = 1024
-  MaxSize = 4096
-  Size Increment = 256
-  Number of FSA = (4096-1024) / 256 = 12
+  MaxSize = 8192
+  Size Increment = 64
+  Number of FSA = (8192-1024) / 64 = 112
 
 - Tiny implementation [+]
 - Very low wastage [+]
@@ -41,37 +41,84 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 ## Coalesce Allocator [WIP]
 
 - Can use more than one instance
-- Size example: 4 KB < Size < 128 KB (Coverage [0000.0000.0000.000x.xxxx.xxxx.0000.0000])
+- Size example: 8 KB < Size < 128 KB
 - Size alignment: 256
 - A reserved memory range of contiguous virtual pages
 - Releases pages back to its underlying page allocator
-- 4 GB address range
-- 2 MB sized spaces
 - Best-Fit strategy
-- Address dexer is covering 24-bits [0000.0000.0000.000x][xxxx.xxxx.xxxx.xxxx.xxxx.xxxx.0000.0000]
 - Suitable for GPU memory
 
 ## Segregated Allocator -  [WIP]
 
 - Can use more than one instance
-- Sizes to go here, example 64 KB < Size < 32 MB
-- Size-alignment = Page-Size (64 KB)
-- Segregated; every level = Size + MemoryRange
-- Every level has 4 GB address range
-- Can have multiple identical levels
-  Address dexer is covering 16-bits [0000.0000.0000.0000][xxxx.xxxx.xxxx.xxxx.0000.0000.0000.0000]
+- Sizes to go here, example 1 MB < Size < 32 MB
+- Size-Alignment = Page-Size (64 KB)
+  Alloc-Alignment is Level:Size
+- Segregated; every Level = Size + MemoryRange
+- Can have multiple identical Levels
 - Suitable for GPU memory
+
+```C++
+class xsegregated : public xalloc
+{
+public:
+    virtual void* allocate(u32 size, u32 alignment);
+    virtual void  deallocate(void* addr);
+
+protected:
+    struct xlevel
+    {
+        u32      m_block_size;   // e.g. 2 MB
+        u32      m_mem_range;
+        void*    m_mem_base;
+        xlevel*  m_prev;
+        xlevel*  m_next;
+    };
+
+    xvirtual_memory* m_vmem;
+    xalloc*          m_internal_heap;
+    u32              m_level_cnt;
+    xlevel*          m_levels;
+};
+
+```
 
 ## Temporal Allocator [WIP]
 
 - For requests that have a very similar life-time (frame based allocations)
 - Contiguous virtual pages
 - Moves forward when allocating (this is an optimization)
-- 128 GB address space
+- Large address space (~128 GB)
 - Tracked with external bookkeeping
-- Configured with a maximum number of allocations
-  This allows easier tracking with a circular array struct{ void* address; u32 numpages; }
 - Suitable for GPU memory
+- Configured with a maximum number of allocations
+
+```C++
+class xtemporal : public xalloc
+{
+public:
+    void initialize(xalloc* internal_heap, u32 max_num_allocs, xvirtual_memory* vmem, u64 mem_range);
+
+    virtual void* allocate(u32 size, u32 alignment);
+    virtual void  deallocate(void* addr);
+
+protected:
+    struct xentry
+    {
+        void* m_address;
+        u32   m_size;
+        u32   m_state;      // Free / Allocated
+    };
+    xalloc*          m_internal_heap;
+    xvirtual_memory* m_vmem;
+    void*            m_mem_base;
+    u64              m_mem_range;
+    u32              m_entry_write;
+    u32              m_entry_write;
+    u32              m_entry_max;
+    xentry*          m_entry_array;
+};
+```
 
 ## Large Size Allocator
 
@@ -79,7 +126,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Size alignment is page size
 - Small number of allocations
 - Allocation tracking done with circular array
-- Reserves huge virtual address space (128 GB)
+- Reserves huge virtual address space (~128 GB)
 - Maps and unmaps pages on demand
 - Guarantees contiguous memory
 
@@ -110,33 +157,35 @@ Pros and Cons:
 
 ### Address and Size Table
 
-- Min/Max-Alloc-Size, Heap 1 =   4 KB / 128 KB
-  - Size-Alignment = 64 bytes (2 * cache-line)
+- Min/Max-Alloc-Size, Heap 1 =   8 KB / 128 KB
+  - Size-Alignment = 256 B
   - Find Size is using a simple slot array and nodes
-    With a hibitset to quickly find upper bound slots
-    124 KB / 64 B = 1984 slots
-- Min/Max-Alloc-Size, Heap 2 = 128 KB / 1   MB
-  - Size-Alignment = 256 bytes (multiple of cache-line)
+    128 KB / 256 B = 512 slots
+    With a small bit-array to quickly find upper-bound size
+
+- Min/Max-Alloc-Size, Heap 2 = 128 KB / 1024 KB
+  - Size-Alignment = 2048 B
   - Find Size is using a simple slot array and nodes
-    896 KB / 256 B = 3584 slots
-    Also using a hibitset to quickly find free size slot (upper bound)
+    1024 KB / 2048 B = 512 slots
+    With a small bit-array to quickly find upper-bound size
 
 - Deallocate: Find pointer to get node.
-  Slot index = (pointer - base) / 64 KB
+  Divisor = Min-Alloc-Size * 16
+  Slot index = (pointer - base) / divisor
   Addr = (u32)((pointer - base) / size-alignment)
   Then traverse the list there to find the node with that addr
-
-  If heap region is 768 MB then we have 768 MB / 64 KB = 12 K slots
+  - Heap 1:   8 KB * 16 =   64 KB = 1 GB /  128 KB = 8192 slots
+  - Heap 2: 128 KB * 16 = 2048 KB = 1 GB / 2048 KB =  512 slots
 
 ```C++
 
 // Could benefit a lot from a virtual fsa that can grow
-struct node_t
+struct naddr_t
 {
-    u32         m_addr;       // (m_addr * size step) + base addr
-    u32         m_flags;      // Allocated, Free, Locked
-    u32         m_addr_prev;  // previous node in memory, can be free, can be allocated
-    u32         m_addr_next;  // next node in memory, can be free, can be allocated
+    u32         m_addr;       // [Allocated, Free, Locked] (m_addr * size step) + base addr
+    u32         m_nsize;      // size node
+    u32         m_addr_prev;  // previous node in memory
+    u32         m_addr_next;  // next node in memory
 #if defined X_ALLOCATOR_DEBUG
     s32         m_file_line;
     const char* m_file_name;
@@ -144,22 +193,20 @@ struct node_t
 #endif
 };
 
-struct ll_size_node_t
+struct nsize_t
 {
     u32         m_list_prev;  // either in the allocation slot array as a list node
     u32         m_list_next;  // or in the size slot array as a list node
-    u32         m_size;
-    u32         m_node_idx;   //
+    u32         m_size;       // size
+    u32         m_addr;       // addr node
 };
-
-btree32 has nodes that are of size 16
 
 ```
 
 ### Notes 1
 
-Medium Heap Region Size 1 = 8 GB
-Medium Heap Region Size 2 = 8 GB
+Medium Heap Region Size 1 = 1 GB
+Medium Heap Region Size 2 = 1 GB
 
 Coalesce Heap Region Size = Medium Heap Region Size 1
 Coalesce Heap Min-Size = 4 KB
@@ -189,15 +236,11 @@ For GPU resources it is best to analyze the resource constraints, for example; O
 A direct size and address table design:
 
 - Heap 1
-  MemSize = 8 GB, SizeAlignment = 4 KB, MinSize = 4 KB, MaxSize = 64 KB
+  MemSize = 1 GB, SizeAlignment = 4 KB, MinSize = 4 KB, MaxSize = 64 KB
   
   Address-Root-Table = 1024 entries
-  8 GB / Root-Table-Size = 8 MB
-  Every entry is a btree32
-  8 MB = 23 bits
-  Size Alignment = 8 bits
-    btree covers 14 bits (max depth = 7)
-
+  1 GB / (4 KB * 16) = 
+  
   Size-Root-Table = 1024 entries
   Every entry is a linked-list of free spaces
 
