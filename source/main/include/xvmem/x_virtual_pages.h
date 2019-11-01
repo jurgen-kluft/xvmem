@@ -57,7 +57,6 @@ namespace xcore
 
         xvpage_t* alloc_page(u32 const allocsize);
         void      free_page(xvpage_t* const ppage);
-	    xvpage_t* find_page(void* const address) const;
 
         u32       address_to_allocsize(void* const address) const;
         xvpage_t* address_to_page(void* const address) const;

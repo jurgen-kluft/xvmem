@@ -129,6 +129,7 @@ protected:
 - Reserves huge virtual address space (~128 GB)
 - Maps and unmaps pages on demand
 - Guarantees contiguous memory
+- 128 GB / 32 MB = 4096
 
 Pros and Cons:
 
@@ -174,7 +175,7 @@ Pros and Cons:
   Slot index = (pointer - base) / divisor
   Addr = (u32)((pointer - base) / size-alignment)
   Then traverse the list there to find the node with that addr
-  - Heap 1:   8 KB * 16 =   64 KB = 1 GB /  128 KB = 8192 slots
+  - Heap 1:   8 KB * 16 =  128 KB = 1 GB /  128 KB = 8192 slots
   - Heap 2: 128 KB * 16 = 2048 KB = 1 GB / 2048 KB =  512 slots
 
 ```C++
@@ -209,14 +210,14 @@ Medium Heap Region Size 1 = 1 GB
 Medium Heap Region Size 2 = 1 GB
 
 Coalesce Heap Region Size = Medium Heap Region Size 1
-Coalesce Heap Min-Size = 4 KB
-Coalesce Heap Max-Size = 64 KB
-Coalesce Heap Step-Size = 4 KB
+Coalesce Heap Min-Size = 8 KB
+Coalesce Heap Max-Size = 128 KB
+Coalesce Heap Step-Size = 256 B
 
 Coalesce Heap Region Size = Medium Heap Region Size 2
-Coalesce Heap Min-Size = 64 KB,
-Coalesce Heap Max-Size = 32 MB
-Coalesce Heap Step-Size = 64 KB
+Coalesce Heap Min-Size = 128 KB,
+Coalesce Heap Max-Size = 1 MB
+Coalesce Heap Step-Size = 2 KB
 
 ### Notes 2
 
@@ -225,7 +226,7 @@ PS4 = 994 GB address space
 
 ### Notes 3
 
-For allocations that are under but close to size like 4K, 8/12/16/20 we could allocate them in a separate allocator. These sizes are very efficient and could benefit from a fast allocator.
+For allocations that are under but close to sizes like 4K, 8/12/16/20 we could allocate them in a separate allocator. These sizes are very efficient and could benefit from a fast allocator.
 
 ### Notes 4
 
@@ -236,23 +237,17 @@ For GPU resources it is best to analyze the resource constraints, for example; O
 A direct size and address table design:
 
 - Heap 1
-  MemSize = 1 GB, SizeAlignment = 4 KB, MinSize = 4 KB, MaxSize = 64 KB
-  
-  Address-Root-Table = 1024 entries
-  1 GB / (4 KB * 16) = 
-  
-  Size-Root-Table = 1024 entries
-  Every entry is a linked-list of free spaces
+  MemSize = 1 GB, SizeAlignment = 256 B, MinSize = 8 KB, MaxSize = 128 KB
+  Address-Table = 1 GB / (8 KB * 16) = 8192
+  Size-Table = (128 KB - 8 KB) / 256 B = 480
+  Every entry is a linked-list
 
 - Heap 2
-  MemSize = 8 GB, SizeAlignment = 64K, MinSize = 64 KB, MaxSize = 32 MB
-  
-  Address-Root-Table = 1024 entries
-  8 GB / Root-Table-Size = 8 MB
-  Every entry is a btree32
-
-  Size-Root-Table = 1024 entries
-  Every entry is a linked-list of free spaces
+  MemSize = 1 GB, SizeAlignment = 2 KB, MinSize = 128 KB, MaxSize = 1 MB
+  Address-Table = 1 GB / (16 * 128 KB) = 512
+  Every entry is a linked list of addr nodes
+  Size-Table = (1024 KB - 128 KB) / 2 KB = 448
+  Every entry is a linked-list of size nodes
 
 ### Notes 6
 

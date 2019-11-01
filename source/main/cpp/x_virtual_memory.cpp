@@ -12,7 +12,7 @@
 
 namespace xcore
 {
-    class xvmem_os : public xvirtual_memory
+    class xvmem_os : public xvmem
     {
     public:
         virtual bool reserve(u64 address_range, u32& page_size, u32 attributes, void*& baseptr);
@@ -90,7 +90,7 @@ namespace xcore
 
 #endif
 
-    xvirtual_memory* gGetVirtualMemory()
+    xvmem* gGetVirtualMemory()
     {
         static xvmem_os sVMem;
         return &sVMem;

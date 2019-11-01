@@ -104,8 +104,8 @@ namespace xcore
                 remove_from_list(this, m_free_pages_virtual_head, m_free_pages_virtual_head);
 
                 // Commit the virtual memory to physical memory
-                xvirtual_memory* vmem    = gGetVirtualMemory();
-                void*            address = get_base_address(ppage);
+                xvmem* vmem    = gGetVirtualMemory();
+                void*  address = get_base_address(ppage);
                 vmem->commit(address, m_page_size, 1);
             }
         }
@@ -137,23 +137,29 @@ namespace xcore
         }
         else
         {
-            xvirtual_memory* const vmem    = gGetVirtualMemory();
-            void* const            address = get_base_address(ppage);
+            xvmem* const vmem    = gGetVirtualMemory();
+            void* const  address = get_base_address(ppage);
             vmem->decommit(address, m_page_size, 1);
             ppage->set_is_virtual();
         }
     }
 
-    xvpage_t* xvpages_t::find_page(void* const address) const
+    u32 xvpages_t::address_to_allocsize(void* const address) const
+    {
+        xvpage_t* const ppage = address_to_page(address);
+        return ppage->m_elem_size;
+    }
+
+	xvpage_t* xvpages_t::address_to_page(void* const address) const
     {
         u32 const page_index = ((u64)address - (u64)m_memory_base) / m_page_size;
         return &m_page_array[page_index];
     }
 
-    u32 xvpages_t::address_to_allocsize(void* const address) const
+    void* xvpages_t::get_base_address(xvpage_t* const page) const
     {
-        xvpage_t* const ppage = find_page(address);
-        return ppage->m_elem_size;
+        u32 const page_index = indexof_page(page);
+        return (xbyte*)m_memory_base + (page_index * m_page_size);
     }
 
     void* xvpages_t::idx2ptr(u32 const index, u32 const page_elem_cnt, u32 const alloc_size) const
@@ -171,12 +177,6 @@ namespace xcore
         u64 const elem = (page * page_elem_cnt) + (((u64)ptr - base) / alloc_size);
 		ASSERT(elem < 0x000100000000UL);
         return (u32)elem;
-    }
-
-    void* xvpages_t::get_base_address(xvpage_t* const page) const
-    {
-        u32 const page_index = indexof_page(page);
-        return (xbyte*)m_memory_base + (page_index * m_page_size);
     }
 
     xvpage_t* xvpages_t::next_page(xvpage_t* const page)
@@ -283,7 +283,7 @@ namespace xcore
         // Add element to free element list of the page
         // If page is now empty, decide to deallocate this page
         // When deallocating this page, remove it from the free list
-        xvpage_t* ppage = find_page(ptr);
+        xvpage_t* ppage = address_to_page(ptr);
         u32 const page  = indexof_page(ppage);
         deallocate_from_page(ppage, get_base_address(ppage), ptr);
         if (ppage->is_empty())
@@ -303,9 +303,9 @@ namespace xcore
     // An object that can alloc/free pages from a memory range
     xvpages_t* gCreateVPages(xalloc* main_allocator, u64 memoryrange)
     {
-        xvirtual_memory* vmem = gGetVirtualMemory();
-        u32              pagesize;
-        void*            memory_base = nullptr;
+        xvmem* vmem = gGetVirtualMemory();
+        u32    pagesize;
+        void*  memory_base = nullptr;
         vmem->reserve(memoryrange, pagesize, 0, memory_base);
 
         u32 const pagecount = (u32)(memoryrange / pagesize);

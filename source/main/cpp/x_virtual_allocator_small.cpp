@@ -2,7 +2,7 @@
 #include "xbase/x_debug.h"
 #include "xbase/x_allocator.h"
 
-#include "xvmem/x_vfsa_allocator.h"
+#include "xvmem/x_virtual_allocator_small.h"
 #include "xvmem/x_virtual_memory.h"
 #include "xvmem/x_virtual_pages.h"
 

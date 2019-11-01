@@ -5,18 +5,10 @@
 #include "xunittest/xunittest.h"
 #include "xunittest/private/ut_ReportAssert.h"
 
-UNITTEST_SUITE_LIST(xAllocatorUnitTest);
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_freelist);
-//UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_allocator_dlmalloc);	// Doesn't work on 64-bit systems
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_allocator_tlfs);
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_allocator_freelist);
-//UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_allocator_hext);
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_allocator_pool);
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_allocator_forward);
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_idx_allocator_array);
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_idx_allocator_pool);
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_allocator_small_ext);
-UNITTEST_SUITE_DECLARE(xAllocatorUnitTest, x_allocator_memento);
+UNITTEST_SUITE_LIST(xVMemUnitTest);
+
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, x_allocator_vfsa);
+
 
 namespace xcore
 {
@@ -57,7 +49,7 @@ namespace xcore
 
 		virtual const char*	name() const										{ return "xbase unittest test heap allocator"; }
 
-		virtual void*		allocate(xsize_t size, u32 alignment)
+		virtual void*		allocate(u32 size, u32 alignment)
 		{
 			UnitTest::IncNumAllocations();
 			return mAllocator->allocate(size, alignment);
@@ -99,7 +91,7 @@ bool gRunUnitTest(UnitTest::TestReporter& reporter)
 	xcore::TestAllocator testAllocator(systemAllocator);
 	gTestAllocator = &testAllocator;
 
-	int r = UNITTEST_SUITE_RUN(reporter, xAllocatorUnitTest);
+	int r = UNITTEST_SUITE_RUN(reporter, xVMemUnitTest);
 	if (UnitTest::GetNumAllocations()!=0)
 	{
 		reporter.reportFailure(__FILE__, __LINE__, "xunittest", "memory leaks detected!");

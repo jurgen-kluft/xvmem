@@ -4,40 +4,42 @@
 #include "xbase/x_btree.h"
 
 #include "xvmem/x_virtual_allocator.h"
+#include "xvmem/x_virtual_allocator_small.h"
 #include "xvmem/x_virtual_pages.h"
 #include "xvmem/x_virtual_memory.h"
 
 namespace xcore
 {
-    //   64 KB - 16384 allocations
-    //  128 KB - 8192 allocations
-    //  192 KB - 5461 allocations
-    //  256 KB - 4096 allocations
-    //  320 KB - 3276 allocations
-    //  384 KB - 2730 allocations
-    //  448 KB - 2340 allocations
-    //  512 KB - 2048 allocations
-    //  576 KB - 1820 allocations
-    //  640 KB - 1638 allocations
-    //  704 KB - 1489 allocations
-    //  768 KB - 1365 allocations
-    //  832 KB - 1260 allocations
-    //  894 KB - 1170 allocations
-    //  958 KB - 1092 allocations
-    // 1024 KB - 1024 allocations
+	// ---------------------------------------
+	// Example 1:
+
+    //   64 KB <= __ < 128 KB
+    //  128 KB <= __ < 192 KB
+    //  192 KB <= __ < 256 KB
+    //  256 KB <= __ < 320 KB
+    //  320 KB <= __ < 384 KB
+    //  384 KB <= __ < 448 KB
+    //  448 KB <= __ < 512 KB
+    //  512 KB <= __ < 576 KB
+    //  576 KB <= __ < 640 KB
+    //  640 KB <= __ < 704 KB
+    //  704 KB <= __ < 768 KB
+    //  768 KB <= __ < 832 KB
+    //  832 KB <= __ < 894 KB
+    //  894 KB <= __ < 958 KB
+    //  958 KB <= __ < 1024 KB
     // Total 16 * 1 GB = 16 GB
 
-    // 1280 KB
-    // 1536 KB
-    // 1792 KB
-    // 2048 KB
-    // 2304 KB
-    // 2560 KB
-    // 2816 KB
-    // 3072 KB
+	// ---------------------------------------
+	// Example 2:
+
+    // 1 MB >= __ <= 2 MB (2 MB blocks)
+    // 2 MB >= __ <= 3 MB (2 MB blocks)
     // ..
-    // 32 MB
-    // Total 128 * 1
+    // 30 MB >= __ <= 31 MB (2 MB blocks)
+    // 31 MB >= __ <= 32 MB (2 MB blocks)
+
+    // Total 32 * 10 GB
 
     class xvmem_allocator_segregated : public xalloc
     {
@@ -46,35 +48,32 @@ namespace xcore
         virtual void  deallocate(void* p);
         virtual void  release();
 
+        struct region_t
+        {
+            u64   m_alloc_occupancy;
+            u32   m_alloc_pagecnt[64];  
+        };
+
+        // Every level is cut up into regions.
+        // For example with a 10 GB address space:
+        // - [1 MB,2 MB] allocation range it will allocate 10 GB / (2MB * 64) = 80 regions
+        // - [8 MB,10 MB] allocation range it will allocate 10 GB / (10MB * 64) = 16 regions
+        struct level_t
+        {
+            void*     m_base_address;
+            u32       m_alloc_size_min;
+            u32       m_alloc_size_max;
+            u32       m_region_size;   // e.g.1 MB <= X <= 2 MB
+            u32       m_region_cnt;
+            region_t* m_regions;
+        };
+
+
         u32       m_allocsize_min;
         u32       m_allocsize_max;
         u32       m_allocsize_step;
-        xfsalloc* m_alloc;
-
-        struct nsize_t
-        {
-            u32 m_page;
-            u32 m_size;
-            u32 m_next;
-            u32 m_prev;
-        };
-
-        struct naddr_t
-        {
-            u32 m_page;
-            u32 m_flags;
-            u32 m_next;
-            u32 m_prev;
-        };
-
-        struct level_t
-        {
-            void* m_base_address;
-            u64   m_memory_range;
-            u32   m_size_btree;
-            u32   m_addr_btree;
-        };
-
+        xvmem*    m_vmem;
+        xfsa*     m_alloc;
         level_t* m_levels;
     };
 

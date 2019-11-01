@@ -12,8 +12,8 @@ namespace xcore
 
 	// A virtual memory allocator (CPU memory only)
 	// + Small Size Allocator (FSA)
-	// + Medium Size Allocator
-	// + Large Size Allocator
+	// + Coalesce Allocator, Heap 1 and Heap 2
+	// + Segregated Allocator (Large Size)
 	// + Giant Allocator
 	extern xalloc*		gCreateVmAllocator(xalloc*);
 };

@@ -7,7 +7,7 @@
 
 namespace xcore
 {
-    class xvirtual_memory
+    class xvmem
     {
     public:
         virtual bool reserve(u64 address_range, u32& page_size, u32 attributes, void*& baseptr) = 0;
@@ -17,7 +17,7 @@ namespace xcore
         virtual bool decommit(void* address, u32 page_size, u32 page_count) = 0;
     };
 
-    extern xvirtual_memory* gGetVirtualMemory();
+    extern xvmem* gGetVirtualMemory();
 
 }; // namespace xcore
 
