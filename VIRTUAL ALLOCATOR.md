@@ -19,18 +19,20 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 ### FSA very small
 
   RegionSize = 256 x 1024 x 1024
+  PageSize = 4 KB (if possible)
   MinSize = 8
-  MaxSize = 1024
+  MaxSize = 512
   Size Increment = 8
-  Number of FSA = 1024 / 8 = 128
+  Number of FSA = 512 / 8 = 64
 
 ### FSA small
 
   RegionSize = 256 x 1024 x 1024
-  MinSize = 1024
+  PageSize = 64 KB
+  MinSize = 512
   MaxSize = 8192
   Size Increment = 64
-  Number of FSA = (8192-1024) / 64 = 112
+  Number of FSA = (8192-512) / 64 = 120
 
 - Tiny implementation [+]
 - Very low wastage [+]

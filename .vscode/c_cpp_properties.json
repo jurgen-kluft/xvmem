@@ -3,9 +3,10 @@
         {
             "name": "Mac",
             "includePath": [
-                "/Users/obnosis1/Library/Arduino15/packages/AZ3166/tools/**",
-                "/Users/obnosis1/Library/Arduino15/packages/AZ3166/hardware/stm32f4/1.6.0/**",
-                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xbase/source/main/include",
+                "~/Library/Arduino15/packages/AZ3166/tools/**",
+                "~/Library/Arduino15/packages/AZ3166/hardware/stm32f4/1.6.0/**",
+                "~/Dev.Go/src/github.com/jurgen-kluft/xbase/source/main/include",
+                "~/Dev.Go/src/github.com/jurgen-kluft/xvmem/source/main/include",
                 "${workspaceRoot}"
             ],
             "defines": [
