@@ -47,6 +47,8 @@ namespace xcore
         void          release();
         virtual void* allocate(u32 size, u32 alignment);
         virtual void  deallocate(void* p);
+        inline u32    calc_size_slot(u32 size) const { u32 const slot = (size - m_alloc_size_min) / m_alloc_size_step; ASSERT(slot < m_size_nodes_cnt); return slot; }
+        inline u32    calc_addr_slot(void* addr) const { u32 const slot = ((u64)addr - (u64)m_memory_addr) / m_addr_alignment; ASSERT(slot < m_addr_nodes_cnt); return slot; } 
         xalloc*       m_main_heap;
         xfsadexed*    m_node_heap;
         void*         m_memory_addr;
@@ -54,9 +56,11 @@ namespace xcore
         u32           m_alloc_size_min;
         u32           m_alloc_size_max;
         u32           m_alloc_size_step;
+        u32           m_size_nodes_cnt;
         u32*          m_size_nodes;
         xhibitset     m_size_nodes_occupancy;
 		u64           m_addr_alignment;
+        u32           m_addr_nodes_cnt;
         u32*          m_addr_nodes;
     };
 
@@ -85,7 +89,7 @@ namespace xcore
         m_alloc_size_step = size_step;
 		m_addr_alignment  = size_min * 16;
 
-        s32 const num_sizes = (m_alloc_size_max - m_alloc_size_min) / m_alloc_size_step;
+        m_size_nodes_cnt    = (m_alloc_size_max - m_alloc_size_min) / m_alloc_size_step;
         m_size_nodes        = (u32*)m_main_heap->allocate(num_sizes * sizeof(u32), sizeof(void*));
         x_memset(m_size_nodes, 0, num_sizes * sizeof(u32));
 
@@ -95,8 +99,8 @@ namespace xcore
 
         // Please keep the number of addr slots low
         ASSERT((m_memory_size / m_addr_alignment) < (u64)64 * 1024);
-        s32 const num_addrs = (s32)(m_memory_size / m_addr_alignment);
-        m_addr_nodes        = (u32*)m_main_heap->allocate(num_addrs * sizeof(u32), sizeof(void*));
+        m_addr_nodes_cnt = (s32)(m_memory_size / m_addr_alignment);
+        m_addr_nodes     = (u32*)m_main_heap->allocate(num_addrs * sizeof(u32), sizeof(void*));
         x_memset(m_addr_nodes, 0, num_addrs * sizeof(u32));
     }
 
@@ -116,7 +120,7 @@ namespace xcore
         if (size < m_alloc_size_min)
             size = m_alloc_size_min;
         size          = (size + (m_alloc_size_step - 1)) & ~(m_alloc_size_step - 1);
-        u32 size_slot = (size - m_alloc_size_min) / m_alloc_size_step;
+        u32 size_slot = calc_size_slot(size);
         if (!m_size_nodes_occupancy.is_set(size_slot))
         {
             u32 larger_size_slot;
@@ -149,7 +153,7 @@ namespace xcore
 
         // Add the current addr node in the addr DB
 		void* addr = m_memory_addr + ((u64)naddr->m_addr * m_alloc_size_min);
-		u32 const addr_slot = (u64)addr / m_addr_alignment;
+		u32 const addr_slot = calc_addr_slot(addr);
 
 		u32 naddr_head = m_addr_nodes[addr_slot];
 		// Every addr nodes slot uses a nsize_t node
@@ -170,6 +174,7 @@ namespace xcore
         // Calculate the slot in the addr DB
         // Iterate through the list at that slot until we find 'p'
         // Remove the item from the list
+        u32 const addr_slot = calc_addr_slot(p);
 
         // Determine the 'prev' and 'next' of the current addr node
         // If 'prev' is marked as 'Free' then coalesce (merge) with it

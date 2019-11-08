@@ -51,7 +51,7 @@ namespace xcore
         struct region_t
         {
             u64   m_alloc_occupancy;
-            u32   m_alloc_pagecnt[64];  
+            u8    m_alloc_pagecnt[64];  // Number of pages that are NOT committed at the tail of the allocation (always < 1MB)
         };
 
         // Every level is cut up into regions.
