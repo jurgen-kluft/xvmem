@@ -37,37 +37,37 @@ namespace xcore
             m_next_db   = naddr_t::NIL;
         }
 
-        void* get_addr(void* baseaddr, u64 size_step) const
-        {
-            u64 addr = (u64)baseaddr + (u64)m_addr * size_step;
-            return (void*)addr;
-        }
-
-        void set_locked() { m_flags = m_flags | FLAG_LOCKED; }
-        void set_used(bool used) { m_flags = m_flags | FLAG_USED; }
-        bool is_free() const { return (m_flags & FLAG_MASK) == FLAG_FREE; }
-        bool is_locked() const { return (m_flags & FLAG_MASK) == FLAG_LOCKED; }
+        inline void* get_addr(void* baseaddr, u64 size_step) const { return (u64)baseaddr + ((u64)m_addr * size_step); }
+        inline void* set_addr(void* baseaddr, u64 size_step, void* addr) { m_addr = (u32)(((u64)addr - (u64)baseaddr) / size_step); }
+        inline void  set_locked() { m_flags = m_flags | FLAG_LOCKED; }
+        inline void  set_used(bool used) { m_flags = m_flags | FLAG_USED; }
+        inline bool  is_free() const { return (m_flags & FLAG_MASK) == FLAG_FREE; }
+        inline bool  is_locked() const { return (m_flags & FLAG_MASK) == FLAG_LOCKED; }
     };
+
+    static inline void* addr_add(void* addr, u64 offset) { return (void*)((u64)addr + offset); }
 
     class xcoalescee : public xalloc
     {
     public:
         xcoalescee();
 
-        void          initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
-        void          release();
+        // Main API
         virtual void* allocate(u32 size, u32 alignment);
         virtual void  deallocate(void* p);
 
-        void          remove_from_addr(u32 inode, naddr_t* pnode);
-        void          add_to_addr_db(u32 inode, naddr_t* pnode);
-        bool          pop_from_addr_db(void* ptr, u32& inode, naddr_t*& pnode);
-        bool          can_split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode);
-        void          split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode);
-        bool          pop_from_size_db(u32 size, u32& inode, naddr_t*& pnode);
-        void          add_to_size_db(u32 inode, naddr_t* pnode);
-        void          remove_from_size_db(u32 inode, naddr_t* pnode);
-        void          dealloc_node(u32 inode, naddr_t* pnode)
+        // Coalesce related functions
+        void        initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
+        void        release();
+        void        remove_from_addr(u32 inode, naddr_t* pnode);
+        void        add_to_addr_db(u32 inode, naddr_t* pnode);
+        bool        pop_from_addr_db(void* ptr, u32& inode, naddr_t*& pnode);
+        bool        can_split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode);
+        void        split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode, u32& rinode, naddr_t*& rpnode);
+        bool        pop_from_size_db(u32 size, u32& inode, naddr_t*& pnode);
+        void        add_to_size_db(u32 inode, naddr_t* pnode);
+        void        remove_from_size_db(u32 inode, naddr_t* pnode);
+        inline void dealloc_node(u32 inode, naddr_t* pnode)
         {
             ASSERT(m_node_heap->idx2ptr(inode) == pnode);
             m_node_heap->deallocate(pnode);
@@ -81,16 +81,16 @@ namespace xcore
         }
         inline u32 calc_addr_slot(void* addr) const
         {
-            u32 const slot = ((u64)addr - (u64)m_memory_addr) / m_addr_alignment;
+            u32 const slot = (u32)(((u64)addr - (u64)m_memory_addr) / m_addr_alignment);
             ASSERT(slot < m_addr_nodes_cnt);
             return slot;
         }
         inline naddr_t* idx2naddr(u32 idx)
         {
-            naddr_t* pnaddr = nullptr;
+            naddr_t* pnode = nullptr;
             if (idx != naddr_t::NIL)
-                pnaddr = (naddr_t*)m_node_heap->idx2ptr(idx);
-            return pnaddr;
+                pnode = (naddr_t*)m_node_heap->idx2ptr(idx);
+            return pnode;
         }
 
         xalloc*    m_main_heap;
@@ -192,13 +192,15 @@ namespace xcore
             // Could not find a size to fullfill the request
             return nullptr;
         }
-
         // See if we have a split-off part, if so insert an addr node
         //   after the current that is marked as 'Free' and also add it
         //   to the size DB
         if (can_split_node(size, alignment, inode, pnode))
         {
-            split_node(size, alignment, inode, pnode);
+            u32      rinode;
+            naddr_t* rpnode;
+            split_node(size, alignment, inode, pnode, rinode, rpnode);
+            add_to_size_db(rinode, rpnode);
         }
 
         // Add it to the address-db so that we can find it when deallocating
@@ -341,14 +343,27 @@ namespace xcore
         return false;
     }
 
-    bool xcoalescee::can_split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode)
-    {
-        return false;
-    }
+    bool xcoalescee::can_split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode) { return ((pnode->m_size - _size) >= m_alloc_size_step); }
 
-    void xcoalescee::split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode)
+    void xcoalescee::split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode, u32& rinode, naddr_t*& rpnode)
     {
-        
+        u32 alloc_size = size;
+        // TODO: Compute alloc size including alignment
+
+        // Construct new naddr node and link it into the physical address doubly linked list
+        rpnode = m_node_heap->construct<naddr_t>();
+        rinode = m_node_heap->ptr2idx(rpnode);
+        rpnode->init();
+        rpnode->m_size          = pnode->m_size - alloc_size;
+        rpnode->m_flags         = pnode->m_flags;
+        rpnode->m_prev_addr     = inode;
+        rpnode->m_next_addr     = pnode->m_next_addr;
+        pnode->m_next_addr      = rinode;
+        naddr_t* pnode_next     = idx2naddr(pnode->m_next_addr);
+        pnode_next->m_prev_addr = rinode;
+        void* node_addr         = pnode->get_addr(m_memory_addr, m_memory_size);
+        void* rest_addr         = addr_add(node_addr, alloc_size);
+        rpnode->set_addr(m_memory_addr, m_memory_size, rest_addr);
     }
 
     bool xcoalescee::pop_from_size_db(u32 _size, u32& inode, naddr_t*& pnode)
@@ -359,12 +374,12 @@ namespace xcore
         u32 size = _size;
         if (size < m_alloc_size_min)
             size = m_alloc_size_min;
-        size          = (size + (m_alloc_size_step - 1)) & ~(m_alloc_size_step - 1);
-        u32 size_slot = calc_size_slot(size);
-        if (!m_size_nodes_occupancy.is_set(size_slot))
+        size     = (size + (m_alloc_size_step - 1)) & ~(m_alloc_size_step - 1);
+        u32 slot = calc_size_slot(size);
+        if (!m_size_nodes_occupancy.is_set(slot))
         {
-            u32 larger_size_slot;
-            if (!m_size_nodes_occupancy.upper(size_slot, larger_size_slot))
+            u32 larger_slot;
+            if (!m_size_nodes_occupancy.upper(slot, larger_slot))
             {
                 // There are no free min/max sized blocks left in the db.
                 // See if we have large free blocks.
@@ -388,13 +403,13 @@ namespace xcore
                 // Also no large blocks left, so we are unable to allocate
                 return false;
             }
-            size_slot = larger_size_slot;
+            slot = larger_slot;
         }
-        size = m_alloc_size_min + (size_slot * m_alloc_size_step);
+        size = m_alloc_size_min + (slot * m_alloc_size_step);
 
-        inode                   = m_size_nodes[size_slot];
-        pnode                   = (naddr_t*)m_node_heap->idx2ptr(inode);
-        m_size_nodes[size_slot] = pnode->m_next_db;
+        inode              = m_size_nodes[slot];
+        pnode              = (naddr_t*)m_node_heap->idx2ptr(inode);
+        m_size_nodes[slot] = pnode->m_next_db;
 
         return true;
     }
@@ -428,48 +443,47 @@ namespace xcore
             m_size_nodes[slot] = inode;
         }
     }
-} // namespace xcore
 
-class xvmem_allocator_coalesce : public xalloc
-{
-public:
-    xvmem_allocator_coalesce()
-        : m_internal_heap(nullptr)
-        , m_node_alloc(nullptr)
-        , m_memory_addr(nullptr)
-        , m_memory_size(0)
-        , m_alloc_size_min(0)
-        , m_alloc_size_max(0)
-        , m_alloc_size_step(0)
-        , m_size_nodes(nullptr)
-        , m_size_nodes_occupancy(nullptr)
-        , m_addr_nodes(nullptr)
+    class xvmem_allocator_coalesce : public xalloc
     {
-    }
+    public:
+        xvmem_allocator_coalesce()
+            : m_internal_heap(nullptr)
+            , m_node_alloc(nullptr)
+            , m_memory_addr(nullptr)
+            , m_memory_size(0)
+            , m_alloc_size_min(0)
+            , m_alloc_size_max(0)
+            , m_alloc_size_step(0)
+            , m_size_nodes(nullptr)
+            , m_size_nodes_occupancy(nullptr)
+            , m_addr_nodes(nullptr)
+        {
+        }
 
-    virtual void* allocate(u32 size, u32 alignment);
-    virtual void  deallocate(void* p);
-    virtual void  release();
+        virtual void* allocate(u32 size, u32 alignment);
+        virtual void  deallocate(void* p);
+        virtual void  release();
 
-    xalloc*    m_internal_heap;
-    xfsadexed* m_node_alloc; // For allocating naddr_t and nsize_t nodes
+        xalloc*    m_internal_heap;
+        xfsadexed* m_node_alloc; // For allocating naddr_t and nsize_t nodes
 
-    void* m_memory_addr;
-    u64   m_memory_size;
-    u32   m_alloc_size_min;
-    u32   m_alloc_size_max;
-    u32   m_alloc_size_step;
-    u32*  m_size_nodes;
-    u32*  m_size_nodes_occupancy;
-    u32*  m_addr_nodes;
-};
+        void* m_memory_addr;
+        u64   m_memory_size;
+        u32   m_alloc_size_min;
+        u32   m_alloc_size_max;
+        u32   m_alloc_size_step;
+        u32*  m_size_nodes;
+        u32*  m_size_nodes_occupancy;
+        u32*  m_addr_nodes;
+    };
 
-void* xvmem_allocator_coalesce::allocate(u32 size, u32 alignment) { return nullptr; }
+    void* xvmem_allocator_coalesce::allocate(u32 size, u32 alignment) { return nullptr; }
 
-void xvmem_allocator_coalesce::deallocate(void* p) {}
+    void xvmem_allocator_coalesce::deallocate(void* p) {}
 
-void xvmem_allocator_coalesce::release() {}
+    void xvmem_allocator_coalesce::release() {}
 
-xalloc* gCreateVMemCoalesceAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 alloc_addr_list_size) { return nullptr; }
-}
-; // namespace xcore
+    xalloc* gCreateVMemCoalesceAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 alloc_addr_list_size) { return nullptr; }
+
+}; // namespace xcore
