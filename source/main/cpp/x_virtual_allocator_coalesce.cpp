@@ -37,7 +37,7 @@ namespace xcore
             m_next_db   = naddr_t::NIL;
         }
 
-        inline void* get_addr(void* baseaddr, u64 size_step) const { return (u64)baseaddr + ((u64)m_addr * size_step); }
+        inline void* get_addr(void* baseaddr, u64 size_step) const { return (void*)((u64)baseaddr + ((u64)m_addr * size_step)); }
         inline void* set_addr(void* baseaddr, u64 size_step, void* addr) { m_addr = (u32)(((u64)addr - (u64)baseaddr) / size_step); }
         inline void  set_locked() { m_flags = m_flags | FLAG_LOCKED; }
         inline void  set_used(bool used) { m_flags = m_flags | FLAG_USED; }
@@ -57,7 +57,7 @@ namespace xcore
         virtual void  deallocate(void* p);
 
         // Coalesce related functions
-        void        initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
+        void        initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step, u32 list_size);
         void        release();
         void        remove_from_addr(u32 inode, naddr_t* pnode);
         void        add_to_addr_db(u32 inode, naddr_t* pnode);
@@ -124,7 +124,7 @@ namespace xcore
     {
     }
 
-    void xcoalescee::initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step)
+    void xcoalescee::initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step, u32 list_size)
     {
         m_main_heap       = main_heap;
         m_node_heap       = node_heap;
@@ -133,7 +133,7 @@ namespace xcore
         m_alloc_size_min  = size_min;
         m_alloc_size_max  = size_max;
         m_alloc_size_step = size_step;
-        m_addr_alignment  = size_min * 16;
+        m_addr_alignment  = size_min * list_size;
 
         m_size_nodes_cnt = (m_alloc_size_max - m_alloc_size_min) / m_alloc_size_step;
         m_size_nodes     = (u32*)m_main_heap->allocate(m_size_nodes_cnt * sizeof(u32), sizeof(void*));
@@ -300,7 +300,7 @@ namespace xcore
 
     void xcoalescee::add_to_addr_db(u32 inode, naddr_t* pnode)
     {
-        void*     addr  = m_memory_addr + ((u64)pnode->m_addr * m_alloc_size_min);
+        void*     addr  = pnode->get_addr(m_memory_addr, m_alloc_size_min);
         u32 const slot  = calc_addr_slot(addr);
         u32 const ihead = m_addr_nodes[slot];
         if (ihead == naddr_t::NIL)
@@ -343,11 +343,12 @@ namespace xcore
         return false;
     }
 
-    bool xcoalescee::can_split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode) { return ((pnode->m_size - _size) >= m_alloc_size_step); }
+    bool xcoalescee::can_split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode) { return ((pnode->m_size - size) >= m_alloc_size_step); }
 
     void xcoalescee::split_node(u32 size, u32 alignment, u32 inode, naddr_t* pnode, u32& rinode, naddr_t*& rpnode)
     {
         u32 alloc_size = size;
+
         // TODO: Compute alloc size including alignment
 
         // Construct new naddr node and link it into the physical address doubly linked list
@@ -410,6 +411,10 @@ namespace xcore
         inode              = m_size_nodes[slot];
         pnode              = (naddr_t*)m_node_heap->idx2ptr(inode);
         m_size_nodes[slot] = pnode->m_next_db;
+        if (m_size_nodes[slot] == naddr_t::NIL)
+        {
+            m_size_nodes_occupancy.clr(slot);
+        }
 
         return true;
     }
@@ -440,7 +445,12 @@ namespace xcore
             phead->m_prev_db   = inode;
             pprev->m_next_db   = inode;
             pnode->m_next_db   = ihead;
+			bool const first = m_size_nodes[slot] == naddr_t::NIL;
             m_size_nodes[slot] = inode;
+			if (first)
+			{
+				m_size_nodes_occupancy.set(slot);
+			}
         }
     }
 
@@ -450,14 +460,6 @@ namespace xcore
         xvmem_allocator_coalesce()
             : m_internal_heap(nullptr)
             , m_node_alloc(nullptr)
-            , m_memory_addr(nullptr)
-            , m_memory_size(0)
-            , m_alloc_size_min(0)
-            , m_alloc_size_max(0)
-            , m_alloc_size_step(0)
-            , m_size_nodes(nullptr)
-            , m_size_nodes_occupancy(nullptr)
-            , m_addr_nodes(nullptr)
         {
         }
 
@@ -467,23 +469,38 @@ namespace xcore
 
         xalloc*    m_internal_heap;
         xfsadexed* m_node_alloc; // For allocating naddr_t and nsize_t nodes
-
-        void* m_memory_addr;
-        u64   m_memory_size;
-        u32   m_alloc_size_min;
-        u32   m_alloc_size_max;
-        u32   m_alloc_size_step;
-        u32*  m_size_nodes;
-        u32*  m_size_nodes_occupancy;
-        u32*  m_addr_nodes;
+		xvmem*     m_vmem;
+		xcoalescee m_coalescee;
     };
 
     void* xvmem_allocator_coalesce::allocate(u32 size, u32 alignment) { return nullptr; }
 
     void xvmem_allocator_coalesce::deallocate(void* p) {}
 
-    void xvmem_allocator_coalesce::release() {}
+    void xvmem_allocator_coalesce::release()
+	{
+		m_coalescee.release();
 
-    xalloc* gCreateVMemCoalesceAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 alloc_addr_list_size) { return nullptr; }
+		// release virtual memory
+
+		m_internal_heap->destruct<>(this);
+	}
+
+    xalloc* gCreateVMemCoalesceAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 alloc_addr_list_size)
+	{
+		xvmem_allocator_coalesce* allocator = internal_heap->construct<xvmem_allocator_coalesce>();
+		allocator->m_internal_heap = internal_heap;
+		allocator->m_node_alloc = node_alloc;
+		allocator->m_vmem = vmem;
+
+		void* memory_addr = nullptr;
+		u32 page_size;
+		u32 attr = 0;
+		vmem->reserve(mem_size, page_size, attr, memory_addr);
+
+		allocator->m_coalescee.initialize(internal_heap, node_alloc, memory_addr, mem_size, alloc_size_min, alloc_size_max, alloc_size_step, alloc_addr_list_size);
+
+		return allocator; 
+	}
 
 }; // namespace xcore
