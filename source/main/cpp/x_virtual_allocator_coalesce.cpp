@@ -226,9 +226,9 @@ namespace xcore
         // Coalesce:
         //   Determine the 'prev' and 'next' of the current addr node
         //   If 'prev' is marked as 'Free' then coalesce (merge) with it
-        //   Remove the size node that belonged to 'prev' from the size DB
+        //     and remove the size node that belonged to 'prev' from the size DB
         //   If 'next' is marked as 'Free' then coalesce (merge) with it
-        //   Remove the size node that belonged to 'next' from the size DB
+        //     and remove the size node that belonged to 'next' from the size DB
         //   Build the size node with the correct size and reference the 'merged' addr node
         //   Add the size node to the size DB
         //   Done
