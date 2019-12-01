@@ -46,12 +46,13 @@ namespace xcore
             // - 0 if lhs == rhs
             // - [-inf, 0) if lhs < rhs
             struct tree_t;
-            typedef s32 (*compare_f)(tree_t* tree, const pnode lhs, const pnode rhs);
+            typedef s32 (*compare_f)(tree_t* tree, const pnode lhs, const void* rhs);
             typedef s32 (*get_color_f)(tree_t* tree, const pnode lhs);
             typedef void (*set_color_f)(tree_t* tree, pnode lhs, s32 color);
             struct tree_t
             {
-                compare_f m_compare_f;
+                void*       m_user;
+                compare_f   m_compare_f;
                 get_color_f m_get_color_f;
                 set_color_f m_set_color_f;
             };
@@ -59,10 +60,10 @@ namespace xcore
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
             bool clear(pnode& root, pnode& n);
-            bool find(pnode& root, tree_t* tree, pnode& found);
-            bool upper(pnode& root, tree_t* tree, pnode& found);
-            bool insert(pnode& root, tree_t* tree, pnode node);
-            bool remove(pnode& root, tree_t* tree, pnode node);
+            bool find(pnode& root, tree_t* tree, void* data, pnode& found);
+            bool upper(pnode& root, tree_t* tree, void* data, pnode& found);
+            bool insert(pnode& root, tree_t* tree, void* data, pnode node);
+            bool remove(pnode& root, tree_t* tree, void* data, pnode node);
         }
 
         namespace index_based
@@ -81,25 +82,26 @@ namespace xcore
             // - 0 if lhs == rhs
             // - [-inf, 0) if lhs < rhs
             struct tree_t;
-            typedef s32 (*compare_f)(const pnode lhs, const pnode rhs);
+            typedef s32 (*compare_f)(tree_t* tree, const pnode lhs, const void* rhs);
             typedef s32 (*get_color_f)(tree_t* tree, const pnode lhs);
             typedef void (*set_color_f)(tree_t* tree, pnode lhs, s32 color);
-            typedef pnode (*idx2ptr_func_t)(tree_t* tree, inode idx);
+            typedef pnode (*idx2ptr_f)(tree_t* tree, inode idx);
             struct tree_t
             {
-                void* m_user;
-                compare_f m_compare_f;
+                void*       m_user;
+                compare_f   m_compare_f;
                 get_color_f m_get_color_f;
                 set_color_f m_set_color_f;
+                idx2ptr_f   m_idx2ptr_f;
             };
 
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
             bool clear(inode& root, inode& node);
-            bool find(inode& root, tree_t* tree, inode& found);
-            bool upper(inode& root, tree_t* tree, inode& found);
-            bool insert(inode& root, tree_t* tree, inode node);
-            bool remove(inode& root, tree_t* tree, inode node);
+            bool find(inode& root, tree_t* tree, void* data, inode& found);
+            bool upper(inode& root, tree_t* tree, void* data, inode& found);
+            bool insert(inode& root, tree_t* tree, void* data, inode node);
+            bool remove(inode& root, tree_t* tree, void* data, inode node);
         }
     } // namespace xbst
 } // namespace xcore
