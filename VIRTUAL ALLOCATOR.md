@@ -165,12 +165,14 @@ Pros and Cons:
   - Find Size is using a simple slot array and nodes
     128 KB / 256 B = 512 slots
     With a small bit-array to quickly find upper-bound size
+    - Every size bucket is a BST tree sorted by address
 
 - Min/Max-Alloc-Size, Heap 2 = 128 KB / 1024 KB
   - Size-Alignment = 2048 B
   - Find Size is using a simple slot array and nodes
     1024 KB / 2048 B = 512 slots
     With a small bit-array to quickly find upper-bound size
+    - Every size bucket is a BST tree sorted by address
 
 - Deallocate: Find pointer to get node.
   Divisor = Min-Alloc-Size * 16

@@ -18,9 +18,9 @@ namespace xcore
         static u32 const FLAG_LOCKED = 0x2;
         static u32 const FLAG_MASK   = 0x3;
 
-        u32 m_addr;      // (m_addr * size step) + base addr
+        u32 m_addr;      // addr = base_addr(m_addr * size_step)
         u32 m_flags;     // [Allocated, Free, Locked]
-        u32 m_size;      // size
+        u32 m_size;      // size = m_size * size_step
         u32 m_prev_addr; // previous node in memory, can be free, can be allocated
         u32 m_next_addr; // next node in memory, can be free, can be allocated
         u32 m_prev_db;   // as a linked-list node in the addr_db or size_db
@@ -445,12 +445,12 @@ namespace xcore
             phead->m_prev_db   = inode;
             pprev->m_next_db   = inode;
             pnode->m_next_db   = ihead;
-			bool const first = m_size_nodes[slot] == naddr_t::NIL;
+            bool const first   = m_size_nodes[slot] == naddr_t::NIL;
             m_size_nodes[slot] = inode;
-			if (first)
-			{
-				m_size_nodes_occupancy.set(slot);
-			}
+            if (first)
+            {
+                m_size_nodes_occupancy.set(slot);
+            }
         }
     }
 
@@ -469,8 +469,8 @@ namespace xcore
 
         xalloc*    m_internal_heap;
         xfsadexed* m_node_alloc; // For allocating naddr_t and nsize_t nodes
-		xvmem*     m_vmem;
-		xcoalescee m_coalescee;
+        xvmem*     m_vmem;
+        xcoalescee m_coalescee;
     };
 
     void* xvmem_allocator_coalesce::allocate(u32 size, u32 alignment) { return nullptr; }
@@ -478,29 +478,29 @@ namespace xcore
     void xvmem_allocator_coalesce::deallocate(void* p) {}
 
     void xvmem_allocator_coalesce::release()
-	{
-		m_coalescee.release();
+    {
+        m_coalescee.release();
 
-		// release virtual memory
+        // release virtual memory
 
-		m_internal_heap->destruct<>(this);
-	}
+        m_internal_heap->destruct<>(this);
+    }
 
     xalloc* gCreateVMemCoalesceAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 alloc_addr_list_size)
-	{
-		xvmem_allocator_coalesce* allocator = internal_heap->construct<xvmem_allocator_coalesce>();
-		allocator->m_internal_heap = internal_heap;
-		allocator->m_node_alloc = node_alloc;
-		allocator->m_vmem = vmem;
+    {
+        xvmem_allocator_coalesce* allocator = internal_heap->construct<xvmem_allocator_coalesce>();
+        allocator->m_internal_heap          = internal_heap;
+        allocator->m_node_alloc             = node_alloc;
+        allocator->m_vmem                   = vmem;
 
-		void* memory_addr = nullptr;
-		u32 page_size;
-		u32 attr = 0;
-		vmem->reserve(mem_size, page_size, attr, memory_addr);
+        void* memory_addr = nullptr;
+        u32   page_size;
+        u32   attr = 0;
+        vmem->reserve(mem_size, page_size, attr, memory_addr);
 
-		allocator->m_coalescee.initialize(internal_heap, node_alloc, memory_addr, mem_size, alloc_size_min, alloc_size_max, alloc_size_step, alloc_addr_list_size);
+        allocator->m_coalescee.initialize(internal_heap, node_alloc, memory_addr, mem_size, alloc_size_min, alloc_size_max, alloc_size_step, alloc_addr_list_size);
 
-		return allocator; 
-	}
+        return allocator;
+    }
 
 }; // namespace xcore
