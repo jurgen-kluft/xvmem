@@ -15,9 +15,29 @@ namespace xcore
         {
             struct node_t
             {
-                node_t* left;
-                node_t* right;
+                enum EChild { LEFT=0, RIGHT=1 };
+
                 node_t* parent;
+                node_t* children[2];
+
+                void clear() { parent = nullptr; children[0] = nullptr; children[1] = nullptr; }
+
+                node_t* get_parent() { return parent; }
+                void set_parent(node_t* p) { parent = p; }
+
+                void set_left(node_t* child) { children[0] = child; }
+                void set_right(node_t* child) { children[1] = child; }
+                void set_child(s32 c, node_t* child) { children[c] = child; }
+
+                node_t* get_left() { return children[0]; }
+                node_t* get_right() { return children[1]; }
+                node_t* get_child(s32 c) const { ASSERT(c==LEFT || c==RIGHT); return children[c]; }
+
+                void set_color_black(tree_t* t);
+                void set_color_red(tree_t* t);
+
+                bool is_color_black(tree_t* t) const;
+                bool is_color_red(tree_t* t) const;
             };
             typedef node_t*   pnode;
 
@@ -39,10 +59,10 @@ namespace xcore
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
             bool clear(pnode& root, pnode& n);
-            bool find(pnode& root, tree_t& tree, pnode& found);
-            bool upper(pnode& root, tree_t& tree, pnode& found);
-            bool insert(pnode& root, tree_t& tree, pnode node);
-            bool remove(pnode& root, tree_t& tree, pnode node);
+            bool find(pnode& root, tree_t* tree, pnode& found);
+            bool upper(pnode& root, tree_t* tree, pnode& found);
+            bool insert(pnode& root, tree_t* tree, pnode node);
+            bool remove(pnode& root, tree_t* tree, pnode node);
         }
 
         namespace index_based
@@ -76,10 +96,10 @@ namespace xcore
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
             bool clear(inode& root, inode& node);
-            bool find(inode& root, tree_t& tree, inode& found);
-            bool upper(inode& root, tree_t& tree, inode& found);
-            bool insert(inode& root, tree_t& tree, inode node);
-            bool remove(inode& root, tree_t& tree, inode node);
+            bool find(inode& root, tree_t* tree, inode& found);
+            bool upper(inode& root, tree_t* tree, inode& found);
+            bool insert(inode& root, tree_t* tree, inode node);
+            bool remove(inode& root, tree_t* tree, inode node);
         }
     } // namespace xbst
 } // namespace xcore
