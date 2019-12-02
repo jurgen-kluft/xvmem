@@ -7,7 +7,7 @@ using namespace xcore;
 
 extern xalloc* gSystemAllocator;
 
-UNITTEST_SUITE_BEGIN(x_allocator_vfsa)
+UNITTEST_SUITE_BEGIN(x_allocator_coalesce)
 {
     UNITTEST_FIXTURE(main)
     {

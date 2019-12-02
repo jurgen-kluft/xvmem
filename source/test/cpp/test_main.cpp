@@ -7,7 +7,8 @@
 
 UNITTEST_SUITE_LIST(xVMemUnitTest);
 
-UNITTEST_SUITE_DECLARE(xVMemUnitTest, x_allocator_vfsa);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, x_bst);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, x_allocator_coalesce);
 
 
 namespace xcore

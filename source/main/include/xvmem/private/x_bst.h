@@ -11,14 +11,18 @@ namespace xcore
 {
     namespace xbst
     {
+        enum ENodeColor { COLOR_BLACK=0, COLOR_RED=1 };
         namespace pointer_based
         {
+			struct tree_t;
+
             struct node_t
             {
                 enum EChild { LEFT=0, RIGHT=1 };
 
                 node_t* parent;
                 node_t* children[2];
+				// color (1 bit) is stored by the user
 
                 void clear() { parent = nullptr; children[0] = nullptr; children[1] = nullptr; }
 
@@ -33,25 +37,27 @@ namespace xcore
                 node_t* get_right() { return children[1]; }
                 node_t* get_child(s32 c) const { ASSERT(c==LEFT || c==RIGHT); return children[c]; }
 
+                void set_color(tree_t* t, s32 color);
+                s32 get_color(tree_t* t) const;
                 void set_color_black(tree_t* t);
                 void set_color_red(tree_t* t);
-
                 bool is_color_black(tree_t* t) const;
                 bool is_color_red(tree_t* t) const;
             };
-            typedef node_t*   pnode;
 
             // Pointer to a function to compare two nodes, and returns as follows:
             // - (0, +inf] if lhs > rhs
             // - 0 if lhs == rhs
             // - [-inf, 0) if lhs < rhs
             struct tree_t;
-            typedef s32 (*compare_f)(tree_t* tree, const pnode lhs, const void* rhs);
-            typedef s32 (*get_color_f)(tree_t* tree, const pnode lhs);
-            typedef void (*set_color_f)(tree_t* tree, pnode lhs, s32 color);
+            typedef const void* (*get_key_f)(const node_t* lhs);
+            typedef s32 (*compare_f)(const node_t* lhs, const void* rhs);
+            typedef s32 (*get_color_f)(const node_t* lhs);
+            typedef void (*set_color_f)(node_t* lhs, s32 color);
             struct tree_t
             {
                 void*       m_user;
+                get_key_f   m_get_key_f;
                 compare_f   m_compare_f;
                 get_color_f m_get_color_f;
                 set_color_f m_set_color_f;
@@ -59,11 +65,12 @@ namespace xcore
 
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
-            bool clear(pnode& root, pnode& n);
-            bool find(pnode& root, tree_t* tree, void* data, pnode& found);
-            bool upper(pnode& root, tree_t* tree, void* data, pnode& found);
-            bool insert(pnode& root, tree_t* tree, void* data, pnode node);
-            bool remove(pnode& root, tree_t* tree, void* data, pnode node);
+            bool clear(node_t*& root, node_t*& n);
+            bool find(node_t*& root, tree_t* tree, void* data, node_t*& found);
+            bool upper(node_t*& root, tree_t* tree, void* data, node_t*& found);
+            bool insert(node_t*& root, tree_t* tree, void* data, node_t* node);
+            bool remove(node_t*& root, tree_t* tree, void* data, node_t* node);
+            s32 validate(node_t*& root, tree_t* tree, const char*& result);
         }
 
         namespace index_based

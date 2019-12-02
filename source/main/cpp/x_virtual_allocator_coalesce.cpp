@@ -38,11 +38,13 @@ namespace xcore
         }
 
         inline void* get_addr(void* baseaddr, u64 size_step) const { return (void*)((u64)baseaddr + ((u64)m_addr * size_step)); }
-        inline void* set_addr(void* baseaddr, u64 size_step, void* addr) { m_addr = (u32)(((u64)addr - (u64)baseaddr) / size_step); }
+        inline void  set_addr(void* baseaddr, u64 size_step, void* addr) { m_addr = (u32)(((u64)addr - (u64)baseaddr) / size_step); }
         inline void  set_locked() { m_flags = m_flags | FLAG_LOCKED; }
         inline void  set_used(bool used) { m_flags = m_flags | FLAG_USED; }
         inline bool  is_free() const { return (m_flags & FLAG_MASK) == FLAG_FREE; }
         inline bool  is_locked() const { return (m_flags & FLAG_MASK) == FLAG_LOCKED; }
+
+		XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
 
     static inline void* addr_add(void* addr, u64 offset) { return (void*)((u64)addr + offset); }
@@ -137,7 +139,7 @@ namespace xcore
 
         m_size_nodes_cnt = (m_alloc_size_max - m_alloc_size_min) / m_alloc_size_step;
         m_size_nodes     = (u32*)m_main_heap->allocate(m_size_nodes_cnt * sizeof(u32), sizeof(void*));
-        for (s32 i = 0; i < m_size_nodes_cnt; i++)
+        for (u32 i = 0; i < m_size_nodes_cnt; i++)
         {
             m_size_nodes[i] = naddr_t::NIL;
         }
@@ -151,7 +153,7 @@ namespace xcore
         ASSERT((m_memory_size / m_addr_alignment) < (u64)64 * 1024);
         m_addr_nodes_cnt = (s32)(m_memory_size / m_addr_alignment);
         m_addr_nodes     = (u32*)m_main_heap->allocate(m_addr_nodes_cnt * sizeof(u32), sizeof(void*));
-        for (s32 i = 0; i < m_addr_nodes_cnt; i++)
+        for (u32 i = 0; i < m_addr_nodes_cnt; i++)
         {
             m_addr_nodes[i] = naddr_t::NIL;
         }
@@ -471,6 +473,8 @@ namespace xcore
         xfsadexed* m_node_alloc; // For allocating naddr_t and nsize_t nodes
         xvmem*     m_vmem;
         xcoalescee m_coalescee;
+
+		XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
 
     void* xvmem_allocator_coalesce::allocate(u32 size, u32 alignment) { return nullptr; }
