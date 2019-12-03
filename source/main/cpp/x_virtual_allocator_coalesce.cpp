@@ -12,17 +12,20 @@ namespace xcore
 {
     struct naddr_t
     {
-        static u32 const NIL         = 0xffffffff;
-        static u32 const FLAG_FREE   = 0x0;
-        static u32 const FLAG_USED   = 0x1;
-        static u32 const FLAG_LOCKED = 0x2;
-        static u32 const FLAG_MASK   = 0x3;
+        static u32 const NIL            = 0xffffffff;
+        static u32 const FLAG_COLOR_RED = 0x1;
+        static u32 const FLAG_FREE      = 0x2;
+        static u32 const FLAG_USED      = 0x4;
+        static u32 const FLAG_LOCKED    = 0x8;
+        static u32 const FLAG_MASK      = 0xF;
 
         u32 m_addr;      // addr = base_addr(m_addr * size_step)
-        u32 m_flags;     // [Allocated, Free, Locked]
+        u32 m_flags;     // [Allocated, Free, Locked, Color]
         u32 m_size;      // size = m_size * size_step
         u32 m_prev_addr; // previous node in memory, can be free, can be allocated
         u32 m_next_addr; // next node in memory, can be free, can be allocated
+        
+        // This is going to be changed into a BST node
         u32 m_prev_db;   // as a linked-list node in the addr_db or size_db
         u32 m_next_db;   // as a linked-list node in the addr_db or size_db
 

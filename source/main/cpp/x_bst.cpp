@@ -27,15 +27,11 @@ namespace xcore
 				node_t* node = root;
 				while (node != nullptr)
 				{
-					s32 const c = tree->m_compare_f(node, data);
-					if (c < 0) {
-						node = node->get_right();
-					} else if (c == 0) {
-						break; // We found our node
-					} else {
-						// Otherwise, we want the right node, and continue iteration
-						node = node->get_left();
-					}
+					s32 const c = tree->m_compare_f(data, node);
+					ASSERT(c==0 || c==-1 || c==1);
+					if (c == 0)
+						break;
+					node = node->get_child((c + 1) >> 1);
 				}
 
 				if (node == nullptr)
@@ -52,16 +48,50 @@ namespace xcore
 				return ret;
 			}
 
+            bool upper(node_t*& root, tree_t* tree, void* data, node_t*& found)
+			{
+				bool ret;
+
+				ASSERT(tree != nullptr);
+				ASSERT(data != nullptr);
+
+				found = nullptr;
+				if (root == nullptr)
+				{
+					ret = false;
+					goto done;
+				}
+
+				node_t* node = root;
+				while (node != nullptr)
+				{
+					s32 const c = tree->m_compare_f(data, node);
+					ASSERT(c==0 || c==-1 || c==1);
+					node_t* child = nullptr;
+					if (c == 0)
+						break;
+
+					child = node->get_child((c + 1) >> 1);
+					if (child == nullptr)
+						break;
+					node = child;
+				}
+
+				ret = true;
+				found = node;
+
+			done:
+				return ret;
+			}
+
 			static inline node_t* helper_get_sibling(node_t* node)
 			{
 				node_t* parent = node->get_parent();
 				if (parent == nullptr)
 					return nullptr;
 
-				if (node == parent->get_left())
-					return parent->get_right();
-
-				return parent->get_left();
+				s32 const c = (node == parent->get_left()) ? 1 : 0;
+				return parent->get_child(c);
 			}
 
 			static inline node_t* helper_get_grandparent(node_t* node)
@@ -77,10 +107,8 @@ namespace xcore
 				node_t* grandparent = helper_get_grandparent(node);
 				if (grandparent == nullptr)
 					return nullptr;
-
-				if (node->get_parent() == grandparent->get_left())
-					return grandparent->get_right();
-				return grandparent->get_left();
+				const s32 c = (node->get_parent() == grandparent->get_left()) ? 1 : 0;
+				return grandparent->get_child(c);
 			}
 
 			static inline void helper_rotate_left(node_t*& root, node_t* node)
@@ -252,14 +280,14 @@ namespace xcore
 				// Insert a node into the tree as you normally would
 				while (nd != NULL)
 				{
-					s32 const c = tree->m_compare_f(nd, key);
+					s32 const c = tree->m_compare_f(key, nd);
 					if (c == 0)
 					{
 						ret = false;
 						goto done;
 					}
 
-					if (c > 0)
+					if (c < 0)
 					{
 						if (nd->get_left() == NULL)
 						{
@@ -624,7 +652,7 @@ namespace xcore
                     const void* root_key = tree->m_get_key_f(root);
 
                     // Invalid binary search tree
-                    if ((ln != nullptr && tree->m_compare_f(ln, root_key) >= 0) || (rn != nullptr && tree->m_compare_f(rn, root_key) <= 0))
+                    if ((ln != nullptr && tree->m_compare_f(root_key, ln) <= 0) || (rn != nullptr && tree->m_compare_f(root_key, rn) >= 0))
                     {
                         result = "Binary tree violation";
                         return 0;

@@ -51,7 +51,7 @@ namespace xcore
             // - [-inf, 0) if lhs < rhs
             struct tree_t;
             typedef const void* (*get_key_f)(const node_t* lhs);
-            typedef s32 (*compare_f)(const node_t* lhs, const void* rhs);
+            typedef s32 (*compare_f)(const void* key, const node_t* node);
             typedef s32 (*get_color_f)(const node_t* lhs);
             typedef void (*set_color_f)(node_t* lhs, s32 color);
             struct tree_t

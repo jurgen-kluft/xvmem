@@ -162,51 +162,14 @@ Pros and Cons:
 
 - Min/Max-Alloc-Size, Heap 1 =   8 KB / 128 KB
   - Size-Alignment = 256 B
-  - Find Size is using a simple slot array and nodes
-    128 KB / 256 B = 512 slots
-    With a small bit-array to quickly find upper-bound size
-    - Every size bucket is a BST tree sorted by address
+  - Find Size is using a size-BST
 
 - Min/Max-Alloc-Size, Heap 2 = 128 KB / 1024 KB
   - Size-Alignment = 2048 B
-  - Find Size is using a simple slot array and nodes
-    1024 KB / 2048 B = 512 slots
-    With a small bit-array to quickly find upper-bound size
-    - Every size bucket is a BST tree sorted by address
+  - Find Size is using a size-BST
 
-- Deallocate: Find pointer to get node.
-  Divisor = Min-Alloc-Size * 16
-  Slot index = (pointer - base) / divisor
-  Addr = (u32)((pointer - base) / size-alignment)
-  Then traverse the list there to find the node with that addr
-  - Heap 1:   8 KB * 16 =  128 KB = 1 GB /  128 KB = 8192 slots
-  - Heap 2: 128 KB * 16 = 2048 KB = 1 GB / 2048 KB =  512 slots
-
-```C++
-
-// Could benefit a lot from a virtual fsa that can grow
-struct naddr_t
-{
-    u32         m_addr;       // [Allocated, Free, Locked] (m_addr * size step) + base addr
-    u32         m_nsize;      // size node
-    u32         m_addr_prev;  // previous node in memory
-    u32         m_addr_next;  // next node in memory
-#if defined X_ALLOCATOR_DEBUG
-    s32         m_file_line;
-    const char* m_file_name;
-    const char* m_func_name;
-#endif
-};
-
-struct nsize_t
-{
-    u32         m_list_prev;  // either in the allocation slot array as a list node
-    u32         m_list_next;  // or in the size slot array as a list node
-    u32         m_size;       // size
-    u32         m_addr;       // addr node
-};
-
-```
+- Allocate: Find free node with best size in size-BST, insert allocated address in address-BST
+- Deallocate: Find pointer in address-BST
 
 ### Notes 1
 
@@ -230,7 +193,8 @@ PS4 = 994 GB address space
 
 ### Notes 3
 
-For allocations that are under but close to sizes like 4K, 8/12/16/20 we could allocate them in a separate allocator. These sizes are very efficient and could benefit from a fast allocator.
+For allocations that are under but close to sizes like 4K, 8/12/16/20 we could allocate them in a separate allocator. 
+These sizes are very efficient and could benefit from a fast allocator.
 
 ### Notes 4
 
@@ -242,16 +206,13 @@ A direct size and address table design:
 
 - Heap 1
   MemSize = 1 GB, SizeAlignment = 256 B, MinSize = 8 KB, MaxSize = 128 KB
-  Address-Table = 1 GB / (8 KB * 16) = 8192
-  Size-Table = (128 KB - 8 KB) / 256 B = 480
-  Every entry is a linked-list
+  Address-BST
+  Size-BST
 
 - Heap 2
   MemSize = 1 GB, SizeAlignment = 2 KB, MinSize = 128 KB, MaxSize = 1 MB
-  Address-Table = 1 GB / (16 * 128 KB) = 512
-  Every entry is a linked list of addr nodes
-  Size-Table = (1024 KB - 128 KB) / 2 KB = 448
-  Every entry is a linked-list of size nodes
+  Address-BST
+  Size-BST
 
 ### Notes 6
 
