@@ -76,7 +76,10 @@ namespace xcore
             bool insert(node_t*& root, tree_t* tree, void* data, node_t* node);
             bool remove(node_t*& root, tree_t* tree, void* data, node_t* node);
             s32 validate(node_t*& root, tree_t* tree, const char*& result);
-        }
+
+			// Traversal
+			bool in_order(node_t* root, node_t*& node);
+		}
 
         namespace index_based
         {
@@ -127,6 +130,7 @@ namespace xcore
             typedef void (*set_color_f)(node_t* lhs, s32 color);
             struct tree_t
             {
+				inline tree_t() : m_user(nullptr), m_dexer(nullptr), m_compare_f(nullptr), m_get_color_f(nullptr), m_set_color_f(nullptr), m_get_key_f(nullptr) { }
                 void*       m_user;
 				xdexer*     m_dexer;
                 compare_f   m_compare_f;
@@ -145,7 +149,10 @@ namespace xcore
             bool upper(u32& root, tree_t* tree, void* data, u32& found);
             bool insert(u32& root, tree_t* tree, void* data, u32 node);
             bool remove(u32& root, tree_t* tree, void* data, u32 node);
-            s32 validate(u32& root, tree_t* tree, const char*& result);            
+            s32 validate(node_t* root, u32 iroot, tree_t* tree, const char*& result);
+
+			// Traversal
+			bool in_order(u32 root, u32& node, tree_t* tree);
         }
     } // namespace xbst
 } // namespace xcore

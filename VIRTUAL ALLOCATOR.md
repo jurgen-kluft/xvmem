@@ -193,7 +193,7 @@ PS4 = 994 GB address space
 
 ### Notes 3
 
-For allocations that are under but close to sizes like 4K, 8/12/16/20 we could allocate them in a separate allocator. 
+For allocations that are under but close to sizes like 4K, 8/12/16/20 we could allocate them in a separate allocator.
 These sizes are very efficient and could benefit from a fast allocator.
 
 ### Notes 4

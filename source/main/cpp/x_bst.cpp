@@ -1,15 +1,42 @@
 #include "xbase/x_target.h"
 #include "xbase/x_debug.h"
 #include "xbase/x_allocator.h"
+#include "xbase/x_integer.h"
 
 #include "xvmem/private/x_bst.h"
 
 namespace xcore
 {
     namespace xbst
-    {
+	{
 		namespace pointer_based
 		{
+			bool clear(node_t*& iterator, tree_t* tree, node_t*& n)
+			{
+				// Rotate away the left links so that we can treat this like the destruction of a linked list
+				node_t *it = iterator;
+				iterator = nullptr;
+				while (it != nullptr)
+				{
+					if (it->get_left() == nullptr)
+					{	// No left links, just kill the node and move on
+						iterator = it->get_right();
+						it->clear();
+						n = it;
+						return true;
+					}
+					else
+					{	// Rotate away the left link and check again
+						iterator = it->get_left();
+						it->set_left(iterator->get_right());
+						iterator->set_right(it);
+					}
+					it = iterator;
+					iterator = nullptr;
+				}
+				return false;
+			}
+
 			bool find(node_t*& root, tree_t* tree, void* data, node_t*& found)
 			{
 				bool ret;
@@ -499,7 +526,7 @@ namespace xcore
 				}
 			}
 
-			bool remove(tree_t* tree, node_t*& root, node_t* node)
+			bool remove(node_t*& root, tree_t* tree, void* data, node_t* node)
 			{
 				bool const ret = true;
 
@@ -687,6 +714,37 @@ namespace xcore
 				return m_dexer->ptr2idx(p);
 			}
 
+			bool clear(u32& iiterator, tree_t* tree, u32& n)
+			{
+				//	Rotate away the left links so that we can treat this like the destruction of a linked list
+				node_t* iterator = tree->idx2ptr(iiterator);
+				u32 iit = iiterator;
+				node_t *it = iterator;
+				iiterator = 0;
+				iterator = nullptr;
+				while (it != nullptr)
+				{
+					if (it->get_left() == 0)
+					{	// No left links, just kill the node and move on
+						iiterator = it->get_right();
+						it->clear();
+						n = iit;
+						return true;
+					}
+					else
+					{	// Rotate away the left link and check again
+						iiterator = it->get_left();
+						iterator = tree->idx2ptr(iiterator);
+						it->set_left(iterator->get_right());
+						iterator->set_right(iit);
+					}
+					it = iterator;
+					iit = iiterator;
+					iterator = nullptr;
+					iiterator = 0;
+				}
+				return false;
+			}
 
 			bool find(u32& root, tree_t* tree, void* data, u32& found)
 			{
@@ -1022,6 +1080,401 @@ namespace xcore
 			done:
 				return ret;
 			}
-		}	
+
+			static node_t* helper_find_minimum(node_t* node, tree_t* tree)
+			{
+				node_t* x = node;
+				while (x->has_left())
+				{
+					u32 const ix = x->get_left();
+					x = tree->idx2ptr(ix);
+				}
+				return x;
+			}
+
+			static node_t* helper_find_maximum(node_t* node, tree_t* tree)
+			{
+				node_t* x = node;
+				while (x->has_right())
+				{
+					u32 const ix = x->get_right();
+					x = tree->idx2ptr(ix);
+				}
+				return x;
+			}
+
+			static node_t* helper_find_successor(node_t* node, u32 inode, tree_t* tree)
+			{
+				node_t* x = node;
+				u32 ix = inode;
+				if (x->has_right())
+				{
+					u32 const ir = x->get_right();
+					node_t* r = tree->idx2ptr(ir);
+					return helper_find_minimum(r, tree);
+				}
+
+				u32 iy = x->get_parent();
+				node_t* y = tree->idx2ptr(iy);
+				while (y != nullptr && ix == y->get_right())
+				{
+					x = y;
+					ix = iy;
+					iy = y->get_parent();
+					y = tree->idx2ptr(iy);
+				}
+				return y;
+			}
+
+			static node_t* helper_find_predecessor(node_t* node, u32 inode, tree_t* tree)
+			{
+				u32 ix = inode;
+				node_t* x = node;
+				if (x->has_left())
+				{
+					u32 const il = x->get_right();
+					node_t* l = tree->idx2ptr(il);
+					return helper_find_maximum(l, tree);
+				}
+
+				u32 iy = x->get_parent();
+				node_t* y = tree->idx2ptr(iy);
+				while (y != nullptr && ix == y->get_left())
+				{
+					x = y;
+					iy = iy;
+					iy = y->get_parent();
+					y = tree->idx2ptr(iy);
+				}
+				return y;
+			}
+
+			// Replace x with y, inserting y where x previously was
+			static void helper_swap_node(node_t*& root, u32& iroot, node_t* x, u32 ix, node_t* y, u32 iy, tree_t* tree)
+			{
+				u32 ileft = x->get_left();
+				u32 iright = x->get_right();
+				u32 iparent = x->get_parent();
+				node_t* left = tree->idx2ptr(ileft);
+				node_t* right = tree->idx2ptr(iright); 
+				node_t* parent = tree->idx2ptr(iparent);
+
+				y->set_parent(iparent);
+				if (parent != nullptr)
+				{
+					if (parent->get_left() == ix)
+					{
+						parent->set_left(iy);
+					}
+					else
+					{
+						parent->set_right(iy);
+					}
+				}
+				else
+				{
+					if (root == x)
+					{
+						root = y;
+						iroot = iy;
+					}
+				}
+
+				y->set_right(iright);
+				if (right != nullptr)
+				{
+					right->set_parent(iy);
+				}
+				x->set_right(0);
+				y->set_left(ileft);
+				if (left != nullptr)
+				{
+					left->set_parent(iy);
+				}
+				x->set_left(0);
+
+				y->set_color(tree, x->get_color(tree));
+				x->set_parent(0);
+			}
+
+			static void helper_delete_rebalance(node_t*& root, u32 iroot, node_t* node, u32 inode, node_t* parent, u32 iparent, s32 node_is_left, tree_t* tree)
+			{
+				u32 ix = inode;
+				node_t* x = node;
+				u32 ixp = iparent;
+				node_t* xp = parent;
+				s32 is_left = node_is_left;
+
+				while (x != root && (x == nullptr || x->is_color_black(tree)))
+				{
+					u32 iw = is_left ? xp->get_right() : xp->get_left();    // Sibling
+					node_t* w = tree->idx2ptr(iw);
+					if (w != nullptr && w->is_color_red(tree))
+					{
+						// Case 1
+						w->set_color_black(tree);
+						xp->set_color_red(tree);
+						if (is_left)
+						{
+							helper_rotate_left(root, iroot, xp, ixp, tree);
+						}
+						else
+						{
+							helper_rotate_right(root, iroot, xp, ixp, tree);
+						}
+						iw = is_left ? xp->get_right() : xp->get_left();
+						w = tree->idx2ptr(iw);
+					}
+
+					u32 iwleft = (w != nullptr) ? w->get_left() : 0;
+					u32 iwright = (w != nullptr) ? w->get_right() : 0;
+					node_t* wleft = tree->idx2ptr(iwleft);
+					node_t* wright = tree->idx2ptr(iwright);
+
+					if ((wleft == nullptr || wleft->is_color_black(tree)) && (wright == nullptr || wright->is_color_black(tree)))
+					{
+						// Case 2
+						if (w != nullptr)
+						{
+							w->set_color_red(tree);
+						}
+						x = xp;
+						ix = ixp;
+						ixp = x->get_parent();
+						xp = tree->idx2ptr(ixp);
+						is_left = xp && (ix == xp->get_left());
+					}
+					else
+					{
+						if (is_left && (wright == nullptr || wright->is_color_black(tree)))
+						{
+							// Case 3a
+							w->set_color_red(tree);
+							if (wleft)
+							{
+								wleft->set_color_black(tree);
+							}
+							helper_rotate_right(root, iroot, w, iw, tree);
+							iw = xp->get_right();
+							w = tree->idx2ptr(iw);
+						}
+						else if (!is_left && (wleft == nullptr || wleft->is_color_black(tree)))
+						{
+							// Case 3b
+							w->set_color_red(tree);
+							if (wright)
+							{
+								wright->set_color_black(tree);
+							}
+							helper_rotate_left(root, iroot, w, iw, tree);
+							iw = xp->get_left();
+							w = tree->idx2ptr(iw);
+						}
+
+						// Case 4
+						iwleft = w->get_left();
+						iwright = w->get_right();
+						wleft = tree->idx2ptr(iwleft);
+						wright = tree->idx2ptr(iwright);
+
+						w->set_color(tree, xp->get_color(tree));
+						xp->set_color_black(tree);
+
+						if (is_left && wright != nullptr)
+						{
+							wright->set_color_black(tree);
+							helper_rotate_left(root, iroot, xp, ixp, tree);
+						}
+						else if (!is_left && wleft != nullptr)
+						{
+							wleft->set_color_black(tree);
+							helper_rotate_right(root, iroot, xp, ixp, tree);
+						}
+						x = root;
+						ix = iroot;
+					}
+				}
+
+				if (x != nullptr)
+				{
+					x->set_color_black(tree);
+				}
+			}
+
+			bool remove(node_t*& root, u32 iroot, node_t* node, u32 inode, tree_t* tree)
+			{
+				bool const ret = true;
+
+				ASSERT(tree != nullptr);
+				ASSERT(node != nullptr);
+
+				u32 iy;
+				node_t* y;
+				if (!node->has_left() || !node->has_right())
+				{
+					y = node;
+					iy = inode;
+				}
+				else
+				{
+					y = helper_find_successor(node, inode, tree);
+					iy = tree->ptr2idx(y);
+				}
+
+				u32 ix;
+				node_t* x;
+				if (y->has_left())
+				{
+					ix = y->get_left();
+					x = tree->idx2ptr(ix);
+				}
+				else
+				{
+					ix = y->get_right();
+					x = tree->idx2ptr(ix);
+				}
+
+				u32 ixp;
+				if (x != nullptr)
+				{
+					ixp = y->get_parent();
+					x->set_parent(ixp);
+				}
+				else
+				{
+					ixp = y->get_parent();
+				}
+				node_t* xp = tree->idx2ptr(ixp);
+
+				s32 is_left = 0;
+				if (!y->has_parent())
+				{
+					root = x;
+					iroot = ix;
+					ixp = 0;
+					xp = nullptr;
+				}
+				else
+				{
+					u32 iyp = y->get_parent();
+					node_t* yp = tree->idx2ptr(iyp);
+					if (iy == yp->get_left())
+					{
+						yp->set_left(ix);
+						is_left = 1;
+					}
+					else
+					{
+						yp->set_right(ix);
+						is_left = 0;
+					}
+				}
+
+				s32 const y_color = y->get_color(tree);
+
+				// Swap in the node
+				if (y != node)
+				{
+					helper_swap_node(root, iroot, node, inode, y, iy, tree);
+					if (xp == node)
+					{
+						xp = y;
+						ixp = iy;
+					}
+				}
+
+				if (y_color == COLOR_BLACK)
+				{
+					helper_delete_rebalance(root, iroot, x, ix, xp, ixp, is_left, tree);
+				}
+
+				node->clear();
+				return ret;
+			}
+
+            void node_t::set_color(tree_t* t, s32 color)
+			{
+				t->m_set_color_f(this, color);
+			}
+            
+			s32  node_t::get_color(tree_t* t) const
+            {
+				return t->m_get_color_f(this);
+            }
+            
+            void node_t::set_color_black(tree_t* t)
+            {
+				t->m_set_color_f(this, COLOR_BLACK);
+            }
+            
+            void node_t::set_color_red(tree_t* t)
+            {
+				t->m_set_color_f(this, COLOR_RED);
+            }
+            
+            bool node_t::is_color_black(tree_t* t) const
+            {
+				return t->m_get_color_f(this) == COLOR_BLACK;
+            }
+            
+            bool node_t::is_color_red(tree_t* t) const
+            {
+				return t->m_get_color_f(this) == COLOR_RED;
+            }
+            
+
+            s32 validate(node_t* root, u32 iroot, tree_t* tree, const char*& result)
+            {
+                s32 lh, rh;
+                if (root == nullptr)
+                {
+                    return 1;
+                }
+                else
+                {
+                    u32 iln = root->get_left();
+                    u32 irn = root->get_right();
+                    node_t *ln = tree->idx2ptr(iln);
+                    node_t *rn = tree->idx2ptr(irn);
+
+                    // Consecutive red links
+                    if (root->is_color_red(tree))
+                    {
+                        if ((ln!=nullptr && ln->is_color_red(tree)) || (rn!=nullptr && rn->is_color_red(tree)))
+                        {
+                            result = "Red violation";
+                            return 0;
+                        }
+                    }
+
+                    lh = validate(ln, iln, tree, result);
+                    rh = validate(rn, irn, tree, result);
+
+                    const void* root_key = tree->m_get_key_f(root);
+
+                    // Invalid binary search tree
+                    if ((ln != nullptr && tree->m_compare_f(root_key, ln) <= 0) || (rn != nullptr && tree->m_compare_f(root_key, rn) >= 0))
+                    {
+                        result = "Binary tree violation";
+                        return 0;
+                    }
+
+                    // Black height mismatch
+                    if (lh != 0 && rh != 0 && lh != rh)
+                    {
+                        result = "Black violation";
+                        return 0;
+                    }
+
+                    // Only count black links
+                    if (lh != 0 && rh != 0)
+                    {
+                        return root->is_color_red(tree) ? lh : lh + 1;
+                    }
+                    return 0;
+                }
+
+            }
+		}
 	}
 }
