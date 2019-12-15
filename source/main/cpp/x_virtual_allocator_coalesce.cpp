@@ -246,7 +246,7 @@ namespace xcore
 
         m_size_db_cnt = 1 + ((m_alloc_size_max - m_alloc_size_min) / m_alloc_size_step);
         m_size_db     = (u32*)m_main_heap->allocate(m_size_db_cnt * sizeof(u32), sizeof(void*));
-        for (u32 i = 0; i <= m_size_db_cnt; i++)
+        for (u32 i = 0; i < m_size_db_cnt; i++)
         {
             m_size_db[i] = naddr_t::NIL;
         }
@@ -311,31 +311,31 @@ namespace xcore
         u32 alignment = xmax(_alignment, m_alloc_size_step);
 
         // Find the node in the size db that has the same or larger size
-        naddr_t* node;
+        naddr_t* pnode;
         u32      inode;
-        u32      nodeSize;
-        if (find_bestfit(size, alignment, node, inode, nodeSize) == false)
+        u64      nodeSize;
+        if (find_bestfit(size, alignment, pnode, inode, nodeSize) == false)
             return nullptr;
-        ASSERT(node != nullptr);
+        ASSERT(pnode != nullptr);
 
         // Remove 'node' from the size tree since it is not available/free anymore
-        remove_from_size_db(inode, node);
+        remove_from_size_db(inode, pnode);
 
-        void* ptr = node->get_addr(m_memory_addr, m_alloc_size_step);
-        node->set_addr(m_memory_addr, m_alloc_size_step, align_ptr(ptr, alignment));
+        void* ptr = pnode->get_addr(m_memory_addr, m_alloc_size_step);
+        pnode->set_addr(m_memory_addr, m_alloc_size_step, align_ptr(ptr, alignment));
 
-        split_node(inode, node, size);
+        split_node(inode, pnode, size);
 
         // Mark our node as used
-        node->set_used(true);
+        pnode->set_used(true);
 
         // Insert our alloc node into the address tree so that we can find it when
         // deallocate is called.
-        node->clear();
-        insert(m_addr_db, &m_addr_db_config, node, inode);
+        pnode->clear();
+        insert(m_addr_db, &m_addr_db_config, pnode, inode);
 
         // Done...
-        return node->get_addr(m_memory_addr, m_alloc_size_step);
+        return pnode->get_addr(m_memory_addr, m_alloc_size_step);
     }
 
     void xcoalescee::deallocate(void* p)
