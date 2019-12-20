@@ -20,6 +20,7 @@ namespace xcore
 
 	// A fixed-size allocator (small allocator) using virtual memory constraint in such a way as to be
 	// able to get a 32-bit index for every allocation.
+	// NOTE: It is assumed that index == 0xffffffff is treated as NIL or a nullptr !!
 	extern xfsadexed*	gCreateVMemBasedDexedFsa(xalloc* main_allocator, xvpages_t* vpages, u32 allocsize);
 };
 

@@ -55,35 +55,10 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Can use more than one instance
 - Sizes to go here, example 1 MB < Size < 32 MB
 - Size-Alignment = Page-Size (64 KB)
-  Alloc-Alignment is Level:Size
-- Segregated; every Level = Size + MemoryRange
-- Can have multiple identical Levels
+  Alloc-Alignment is Level:Size but will only commit used pages
+- Segregated; every Level takes one or more ranges
+- Levels can consume additional ranges but also release them back
 - Suitable for GPU memory
-
-```C++
-class xsegregated : public xalloc
-{
-public:
-    virtual void* allocate(u32 size, u32 alignment);
-    virtual void  deallocate(void* addr);
-
-protected:
-    struct xlevel
-    {
-        u32      m_block_size;   // e.g. 2 MB
-        u32      m_mem_range;
-        void*    m_mem_base;
-        xlevel*  m_prev;
-        xlevel*  m_next;
-    };
-
-    xvirtual_memory* m_vmem;
-    xalloc*          m_internal_heap;
-    u32              m_level_cnt;
-    xlevel*          m_levels;
-};
-
-```
 
 ## Temporal Allocator [WIP]
 
@@ -127,7 +102,8 @@ protected:
 - Sizes > 32 MB
 - Size alignment is page size
 - Small number of allocations
-- Allocation tracking done with circular array
+- Allocation tracking is done with levels + BST
+  - Could easily track if a level is empty and free it back to main
 - Reserves huge virtual address space (~128 GB)
 - Maps and unmaps pages on demand
 - Guarantees contiguous memory
@@ -136,8 +112,8 @@ protected:
 Pros and Cons:
 
 - No headers [+]
-- Simple implementation (~200 lines of code) [+]
-- No fragmentation [+]
+- Relatively simple implementation (~200 lines of code) [+]
+- Will have no fragmentation [+]
 - Size rounded up to page size [-]
 - Mapping and unmapping kernel calls relatively slow [-]
 

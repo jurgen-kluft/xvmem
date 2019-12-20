@@ -9,45 +9,6 @@
 
 namespace xcore
 {
-    // Using btree32 for the medium size allocators to track allocations.
-    // The key-value implementation would be like this:
-    struct node_t
-    {
-        u32 m_addr;      // (m_addr * size step) + base addr
-        u32 m_flags;     // Allocated, Free, Locked
-        u32 m_addr_prev; // previous node in memory, can be free, can be allocated
-        u32 m_addr_next; // next node in memory, can be free, can be allocated
-    };
-
-	// In total a value in the btree still bites of the lowest 5 bits
-	struct value_t
-	{
-		u32	m_values[4];
-	};
-
-    class xvmem_alloc_kv : public xbtree_kv
-    {
-        xfsadexed* const m_fsa;
-
-    public:
-        inline xvmem_alloc_kv(xfsadexed* fsa)
-            : m_fsa(fsa)
-        {
-        }
-
-        virtual u64 get_key(u32 value) const
-        {
-            // The key is the address
-            node_t* node = (node_t*)m_fsa->idx2ptr(value);
-            return node->m_addr;
-        }
-
-        virtual void set_key(u32 value, u64 key)
-        {
-            // Do not need to do anything since the key is already set
-        }
-    };
-
     class xvmem_allocator : public xalloc
     {
     public:
@@ -81,6 +42,13 @@ namespace xcore
         void*   m_med_mem_base;  // A memory base pointer
         u64     m_med_mem_range; // 768 MB
         xalloc* m_med_allocator;
+
+        // Segregated allocator
+        u32     m_seg_min_size;  //  1 MB
+        u32     m_seg_max_size;  // 32 MB
+        void*   m_seg_mem_base;  // A memory base pointer
+        u64     m_seg_mem_range; // 8 MB
+        xalloc* m_seg_allocator;
 
         // Large allocator
         u32     m_large_min_size; // 32MB

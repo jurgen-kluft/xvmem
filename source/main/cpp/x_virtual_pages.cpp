@@ -205,6 +205,7 @@ namespace xcore
 
     static inline void insert_in_list(xvpages_t* pages, u32& head, u32 page)
     {
+		// TODO: Sort the free pages by address 
         if (head == xvpage_t::INDEX_NIL)
         {
             xvpage_t* const ppage = &pages->m_page_array[page];
