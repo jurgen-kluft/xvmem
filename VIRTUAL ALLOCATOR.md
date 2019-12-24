@@ -2,8 +2,7 @@
 
 These are just thoughts on a virtual memory allocator
 
-1. CPU Fixed-Size-Allocator, 8 <= SIZE <= 4 KB
-   16 KB page size
+1. CPU Fixed-Size-Allocator (FSA), 8 <= SIZE <= 4 KB
 2. Virtual Memory: Alloc, Cache and Free pages back to system
 
 Let's say an APP has 640 GB of address space and it has the following behaviour:
@@ -40,7 +39,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Fast [+]
 - Difficult to detect memory corruption [-]
 
-## Coalesce Allocator [WIP]
+## Coalesce Allocator
 
 - Can use more than one instance
 - Size example: 8 KB < Size < 128 KB
@@ -50,14 +49,13 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Best-Fit strategy
 - Suitable for GPU memory
 
-## Segregated Allocator -  [WIP]
+## Segregated Allocator [WIP]
 
 - Can use more than one instance
-- Sizes to go here, example 1 MB < Size < 32 MB
+- Sizes to go here, example 640 KB < Size < 32 MB
 - Size-Alignment = Page-Size (64 KB)
   Alloc-Alignment is Level:Size but will only commit used pages
-- Segregated; every Level takes one or more ranges
-- Levels can consume additional ranges but also release them back
+- Segregated; A Level obtains and releases ranges
 - Suitable for GPU memory
 
 ## Temporal Allocator [WIP]

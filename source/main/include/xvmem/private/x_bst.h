@@ -98,8 +98,6 @@ namespace xcore
             bool remove(node_t*& root, tree_t* tree, void* data, node_t* node);
             s32  validate(node_t*& root, tree_t* tree, const char*& result);
 
-            // Traversal
-            bool in_order(node_t* root, node_t*& node);
         } // namespace pointer_based
 
         namespace index_based
@@ -201,11 +199,8 @@ namespace xcore
             bool remove(u32& root, tree_t* tree, void* data, u32 node);
             s32  validate(node_t* root, u32 iroot, tree_t* tree, const char*& result);
 
-            // Traversal
-            bool get_min(u32 root, u32& node, tree_t* tree);
-            bool in_order(u32 root, u32& node, tree_t* tree);
         } // namespace index_based
-    }     // namespace xbst
+    } // namespace xbst
 } // namespace xcore
 
 #endif // _X_BST_H_
