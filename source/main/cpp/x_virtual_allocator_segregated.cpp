@@ -21,8 +21,9 @@ namespace xcore
 
         u32 m_addr;      // addr = base_addr(m_addr * size_step)
         u16 m_flags;     // [Allocated, Free, Locked, Color]
-        u16 m_level_idx; // Level index (size)
-        u32 m_page_cnt;  // Number of pages committed
+        u16 m_level;     // Level index (size)
+		u32 m_size;      // Number of bytes of this block
+        u32 m_pages;     // Number of pages committed
         u32 m_prev_addr; // previous node in memory, can be free, can be allocated
         u32 m_next_addr; // next node in memory, can be free, can be allocated
 
@@ -31,20 +32,21 @@ namespace xcore
             clear();
             m_addr      = 0;
             m_flags     = 0;
-            m_level_idx = 0;
-            m_page_cnt  = 0;
+            m_level     = 0;
+			m_size      = 0;
+            m_pages     = 0;
             m_prev_addr = NIL;
             m_next_addr = NIL;
         }
 
         inline void* get_addr(void* baseaddr, u64 size_step) const { return (void*)((u64)baseaddr + ((u64)m_addr * size_step)); }
         inline void  set_addr(void* baseaddr, u64 size_step, void* addr) { m_addr = (u32)(((u64)addr - (u64)baseaddr) / size_step); }
-        inline void  set_level_idx(u16 level_index) { m_level_idx = level_index; }
-        inline u32   get_level_idx() const { return (u32)m_level_idx; }
-        inline u64   get_page_cnt(u64 page_size) const { return (u64)m_page_cnt * page_size; }
-        inline void  set_page_cnt(u64 size, u32 page_size) { m_page_cnt = (u32)(size / page_size); }
-        inline u64   get_size(u32 page_size) const { return m_page_cnt * page_size; }
-        inline void  set_size(u64 size, u32 page_size) { m_page_cnt = (u32)(size / page_size); }
+        inline void  set_level_idx(u16 level_index) { m_level = level_index; }
+        inline u32   get_level_idx() const { return (u32)m_level; }
+        inline u64   get_page_cnt(u64 page_size) const { return (u64)m_pages * page_size; }
+        inline void  set_page_cnt(u64 size, u32 page_size) { m_pages = (u32)(size / page_size); }
+        inline u64   get_size(u32 size_step) const { return m_size * size_step; }
+        inline void  set_size(u64 size, u32 size_step) { m_size = (u32)(size / size_step); }
 
         inline void set_locked() { m_flags = m_flags | FLAG_LOCKED; }
         inline void set_used(bool used) { m_flags = m_flags | FLAG_USED; }
@@ -56,7 +58,7 @@ namespace xcore
         inline bool is_color_red() const { return (m_flags & FLAG_COLOR_RED) == FLAG_COLOR_RED; }
         inline bool is_color_black() const { return (m_flags & FLAG_COLOR_RED) == 0; }
 
-        inline u64 get_key() const { return ((u64)psplit->m_page_cnt << 32) | (u64)psplit->m_addr; }
+        inline u64 get_key() const { return ((u64)m_size << 32) | (u64)m_addr; }
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
@@ -117,9 +119,9 @@ namespace xcore
             u32 const size = (u32)((u64)pkey >> 32);
             u32 const addr = (u32)((u64)pkey & 0xffffffff);
             // First sort by size
-            if (size < n->m_page_cnt)
+            if (size < n->m_size)
                 return -1;
-            if (size > n->m_page_cnt)
+            if (size > n->m_size)
                 return 1;
             // Then sort by address
             if (addr < n->m_addr)
@@ -137,16 +139,16 @@ namespace xcore
         {
             void reset()
             {
-                m_num_allocs = 0;
-                m_lvli       = 0xffff;
-                m_next       = 0xffff;
-                m_prev       = 0xffff;
+                m_allocs = 0;
+                m_lvli   = 0xffff;
+                m_next   = 0xffff;
+                m_prev   = 0xffff;
             }
-            bool is_unused() const { return m_num_allocs == 0; }
-            void register_alloc() { m_num_allocs += 1; }
-            void register_dealloc() { m_num_allocs -= 1; }
+            bool is_unused() const { return m_allocs == 0; }
+            void register_alloc() { m_allocs += 1; }
+            void register_dealloc() { ASSERT(m_allocs>0); m_allocs -= 1; }
 
-            u16 m_num_allocs;
+            u16 m_allocs;
             u16 m_lvli;
             u16 m_next;
             u16 m_prev;
@@ -177,6 +179,7 @@ namespace xcore
                 pcurr->m_next  = inext;
                 pnext->m_prev  = icurr;
             }
+            m_freelist = 0;
         }
 
         void release(xalloc* main_heap)
@@ -184,6 +187,7 @@ namespace xcore
             m_mem_address = nullptr;
             m_range_size  = 0;
             m_range_count = 0;
+            m_freelist    = 0xffff;
             main_heap->deallocate(m_range);
         }
 
@@ -198,36 +202,29 @@ namespace xcore
             // Do we still have some sub-ranges free ?
             if (m_freelist != 0xffff)
             {
-                u32      item  = m_freelist;
-                range_t* pcurr = &m_range[m_freelist];
-                m_freelist     = pcurr->m_next;
-                pcurr->m_lvli  = lvl_index;
-                pcurr->m_next  = 0xffff;
-                pcurr->m_prev  = 0xffff;
-                addr           = (void*)((u64)m_mem_address + (m_range_size * item));
+                u32 const item  = m_freelist;
+                range_t* pcurr  = &m_range[item];
+                m_freelist      = pcurr->m_next;
+                pcurr->m_lvli   = lvl_index;
+                pcurr->m_next   = 0xffff;
+                pcurr->m_prev   = 0xffff;
+                addr            = (void*)((u64)m_mem_address + (m_range_size * item));
                 return true;
             }
             return false;
         }
+
         void release_range(void*& addr)
         {
             // Put this sub-range back into the free-list !
-            u32 const idx   = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
+            u32 const iitem = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
             range_t*  pcurr = &m_range[m_freelist];
-            pcurr->m_prev   = idx;
-            range_t* pitem  = &m_range[idx];
+            pcurr->m_prev   = iitem;
+            range_t* pitem  = &m_range[iitem];
             pitem->m_prev   = 0xffff;
             pitem->m_next   = m_freelist;
             pitem->m_lvli   = 0xffff;
-            m_freelist      = idx;
-        }
-        // We register allocations and de-allocations on every sub-range to know if
-        // a sub-range is used. We are interested to know when a sub-range is free
-        // so that we can release it back.
-        void register_alloc(void* addr)
-        {
-            u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
-            m_range[idx].register_alloc();
+            m_freelist      = iitem;
         }
 
         inline u16 ptr2lvl(void* ptr) const
@@ -236,6 +233,16 @@ namespace xcore
             ASSERT(m_range[idx].m_lvli != 0xffff);
             return m_range[idx].m_lvli;
         }
+
+        // We register allocations and de-allocations on every sub-range to know if
+        // a sub-range is stil used. We are interested to know when a sub-range is free
+        // so that we can release it back.
+        void register_alloc(void* addr)
+        {
+            u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
+            m_range[idx].register_alloc();
+        }
+
         // Returns the level index
         u16 register_dealloc(void* addr)
         {
@@ -272,7 +279,7 @@ namespace xcore
             u32 m_alloc_bst;
         };
 
-        void initialize(xalloc* main_alloc, xfsadexed* node_alloc, xvmem* vmem, u64 vmem_range, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize);
+        void initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_range, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize);
 
         inline u32 ptr2addr(void* p) const { return (u32)(((u64)p - (u64)m_vmem_base_addr) / m_allocsize_step); }
         inline u64 lvl2size(u16 ilvl) const { return m_allocsize_min + (ilvl * m_allocsize_step); }
@@ -307,7 +314,7 @@ namespace xcore
             u64 const node_size = pnode->get_size(m_allocsize_step);
             if (node_size >= lvl2size(ilvl))
             {
-                u32 const inext = pnode->m_next;
+                u32 const inext = pnode->m_next_addr;
                 nblock_t* pnext = (nblock_t*)m_node_alloc->idx2ptr(inext);
 
                 // split the node and add it back into 'free'
@@ -335,23 +342,97 @@ namespace xcore
             return ptr;
         }
 
+        inline nblock_t* idx2block(u32 const i) { if (i==0xffffffff) return nullptr; else return (nblock_t*)m_node_alloc->idx2ptr(i); }
+
+		void add_to_size_db(u32 inode, nblock_t* pnode)
+		{
+		}
+
+		void remove_from_size_db(u32 inode, nblock_t* pnode)
+		{
+		}
+
+		void remove_from_addr_chain(u32 inode, nblock_t* pnode)
+		{
+		}
+
+		void dealloc_node(u32 inode, nblock_t* pnode)
+		{
+		}
+
         void deallocate_from_level(u32 ilvl, void* ptr)
         {
             level_t* plvl = &m_level[ilvl];
             void*    key  = (void*)ptr2addr(ptr);
-            u32      inode;
-            if (xbst::index_based::find(plvl->m_alloc_bst, &m_alloc_bst_config, key, inode))
+            u32      inode_curr;
+            if (xbst::index_based::find(plvl->m_alloc_bst, &m_alloc_bst_config, key, inode_curr))
             {
                 // This node is now 'free', can we coalesce with previous/next ?
                 // Coalesce (but do not add the node back to 'free' yet)
                 // Is the associated range now free ?, if so release it back
                 // If the associated range is not free we can add the node back to 'free'
+				nblock_t* pnode_curr = idx2block(inode_curr);
+				u32 const inode_prev = pnode_curr->m_prev_addr;
+				u32 const inode_next = pnode_curr->m_next_addr;
+				nblock_t* pnode_prev = idx2block(inode_prev);
+				nblock_t* pnode_next = idx2block(inode_next);
+
+				if ((pnode_prev!=nullptr && pnode_prev->is_free()) && (pnode_next!=nullptr && pnode_next->is_free()))
+				{
+					// prev and next are marked as 'free'.
+					// - remove size of prev from size DB
+					// - increase prev size with current and next size
+					// - remove size of current and next from size DB
+					// - remove from addr DB
+					// - remove current and next addr from physical addr list
+					// - add prev size back to size DB
+					// - deallocate current and next
+					remove_from_size_db(inode_prev, pnode_prev);
+					remove_from_size_db(inode_next, pnode_next);
+
+					pnode_prev->m_size += pnode_curr->m_size + pnode_next->m_size;
+					add_to_size_db(inode_prev, pnode_prev);
+					remove_from_addr_chain(inode_curr, pnode_curr);
+					remove_from_addr_chain(inode_next, pnode_next);
+					dealloc_node(inode_curr, pnode_curr);
+					dealloc_node(inode_next, pnode_next);
+				}
+				else if ((pnode_prev==nullptr || !pnode_prev->is_free()) && (pnode_next!=nullptr && pnode_next->is_free()))
+				{
+					// next is marked as 'free' (prev is 'used')
+					// - remove next from size DB and physical addr list
+					// - deallocate 'next'
+					// - add the size of 'next' to 'current'
+					// - add size to size DB
+					remove_from_size_db(inode_next, pnode_next);
+					pnode_curr->m_size += pnode_next->m_size;
+					add_to_size_db(inode_curr, pnode_curr);
+					remove_from_addr_chain(inode_next, pnode_next);
+					dealloc_node(inode_next, pnode_next);
+				}
+				else if ((pnode_prev!=nullptr&& pnode_prev->is_free()) && (pnode_next==nullptr || !pnode_next->is_free()))
+				{
+					// prev is marked as 'free'. (next is 'used')
+					// - remove this addr/size node
+					// - rem/add size node of 'prev', adding the size of 'current'
+					// - deallocate 'current'
+					remove_from_size_db(inode_prev, pnode_prev);
+					pnode_prev->m_size += pnode_curr->m_size;
+					add_to_size_db(inode_prev, pnode_prev);
+					remove_from_addr_chain(inode_curr, pnode_curr);
+					dealloc_node(inode_curr, pnode_curr);
+				}
+				else if ((pnode_prev==nullptr || !pnode_prev->is_free()) && (pnode_next==nullptr || !pnode_next->is_free()))
+				{
+					// prev and next are marked as 'used'.
+					// - add current to size DB
+					add_to_size_db(inode_curr, pnode_curr);
+				}
             }
         }
 
         xalloc*                   m_main_alloc;
         xfsadexed*                m_node_alloc;
-        xvmem*                    m_vmem;
         void*                     m_vmem_base_addr;
         u32                       m_allocsize_min;
         u32                       m_allocsize_max;
@@ -364,12 +445,11 @@ namespace xcore
         xvmem_range_t             m_vrange_manager;
     };
 
-    void xvmem_allocator_segregated::initialize(xalloc* main_alloc, xfsadexed* node_alloc, xvmem* vmem, u64 vmem_range, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize)
+    void xvmem_allocator_segregated::initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_range, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize)
     {
         m_main_alloc     = main_alloc;
         m_node_alloc     = node_alloc;
-        m_vmem           = vmem;
-        m_vmem_base_addr = nullptr;
+        m_vmem_base_addr = vmem_address;
 
         m_allocsize_min  = allocsize_min;
         m_allocsize_max  = allocsize_max;
@@ -392,9 +472,6 @@ namespace xcore
         m_alloc_bst_config.m_get_color_f = bst_color::get_color_node_f;
         m_alloc_bst_config.m_set_color_f = bst_color::set_color_node_f;
 
-        // Reserve the address space
-        m_vmem_base_addr = nullptr;
-
         // Initialize the vmem address range manager
         m_vrange_manager.init(main_alloc, m_vmem_base_addr, vmem_range, level_range);
     }
@@ -403,9 +480,9 @@ namespace xcore
     {
         ASSERT(size >= m_allocsize_min && size < m_allocsize_max);
         ASSERT(alignment <= m_pagesize);
-        u32   aligned_size = (size + m_allocsize_step - 1) & (~m_allocsize_step - 1);
-        u32   level_index  = (aligned_size - m_allocsize_min) / m_level_cnt;
-        void* ptr          = allocate_from_level(level_index, aligned_size);
+        u32   const aligned_size = (size + m_allocsize_step - 1) & (~m_allocsize_step - 1);
+        u32   const level_index  = (aligned_size - m_allocsize_min) / m_level_cnt;
+        void* ptr                = allocate_from_level(level_index, aligned_size);
         ASSERT(m_vrange_manager.ptr2lvl(ptr) == level_index);
         m_vrange_manager.register_alloc(ptr);
         return ptr;
