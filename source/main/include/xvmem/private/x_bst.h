@@ -76,8 +76,8 @@ namespace xcore
             // - 0 if lhs == rhs
             // - [-inf, 0) if lhs < rhs
             struct tree_t;
-            typedef const void* (*get_key_f)(const node_t* lhs);
-            typedef s32 (*compare_f)(const void* key, const node_t* node);
+            typedef u64 (*get_key_f)(const node_t* lhs);
+            typedef s32 (*compare_f)(const u64 key, const node_t* node);
             typedef s32 (*get_color_f)(const node_t* lhs);
             typedef void (*set_color_f)(node_t* lhs, s32 color);
             struct tree_t
@@ -92,10 +92,10 @@ namespace xcore
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
             bool clear(node_t*& root, tree_t* tree, node_t*& n);
-            bool find(node_t*& root, tree_t* tree, void* data, node_t*& found);
-            bool upper(node_t*& root, tree_t* tree, void* data, node_t*& found);
-            bool insert(node_t*& root, tree_t* tree, void* data, node_t* node);
-            bool remove(node_t*& root, tree_t* tree, void* data, node_t* node);
+            bool find(node_t*& root, tree_t* tree, u64 data, node_t*& found);
+            bool upper(node_t*& root, tree_t* tree, u64 data, node_t*& found);
+            bool insert(node_t*& root, tree_t* tree, u64 data, node_t* node);
+            bool remove(node_t*& root, tree_t* tree, u64 data, node_t* node);
             s32  validate(node_t*& root, tree_t* tree, const char*& result);
 
         } // namespace pointer_based
@@ -164,8 +164,8 @@ namespace xcore
             // - 0 if lhs == rhs
             // - [-inf, 0) if lhs < rhs
             struct tree_t;
-            typedef const void* (*get_key_f)(const node_t* lhs);
-            typedef s32 (*compare_f)(const void* key, const node_t* node);
+            typedef u64 (*get_key_f)(const node_t* lhs);
+            typedef s32 (*compare_f)(const u64 key, const node_t* node);
             typedef s32 (*get_color_f)(const node_t* lhs);
             typedef void (*set_color_f)(node_t* lhs, s32 color);
             struct tree_t
@@ -193,14 +193,14 @@ namespace xcore
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
             bool clear(u32& root, tree_t* tree, u32& n);
-            bool find(u32& root, tree_t* tree, void* data, u32& found);
-            bool upper(u32& root, tree_t* tree, void* data, u32& found);
-            bool insert(u32& root, tree_t* tree, void* data, u32 node);
-            bool remove(u32& root, tree_t* tree, void* data, u32 node);
+            bool find(u32& root, tree_t* tree, u64 data, u32& found);
+            bool upper(u32& root, tree_t* tree, u64 data, u32& found);
+            bool insert(u32& root, tree_t* tree, u64 data, u32 node);
+            bool remove(u32& root, tree_t* tree, u64 data, u32 node);
             s32  validate(node_t* root, u32 iroot, tree_t* tree, const char*& result);
 
         } // namespace index_based
-    } // namespace xbst
+    }     // namespace xbst
 } // namespace xcore
 
 #endif // _X_BST_H_

@@ -37,7 +37,7 @@ namespace xcore
                 return false;
             }
 
-            bool find(node_t*& root, tree_t* tree, void* data, node_t*& found)
+            bool find(node_t*& root, tree_t* tree, u64 data, node_t*& found)
             {
                 bool ret;
 
@@ -75,12 +75,11 @@ namespace xcore
                 return ret;
             }
 
-            bool upper(node_t*& root, tree_t* tree, void* data, node_t*& found)
+            bool upper(node_t*& root, tree_t* tree, u64 data, node_t*& found)
             {
                 bool ret;
 
                 ASSERT(tree != nullptr);
-                ASSERT(data != nullptr);
 
                 found = nullptr;
                 if (root == nullptr)
@@ -269,7 +268,7 @@ namespace xcore
                 }
             }
 
-            bool insert(node_t*& root, tree_t* tree, void* key, node_t* node)
+            bool insert(node_t*& root, tree_t* tree, u64 key, node_t* node)
             {
                 bool ret;
 
@@ -526,7 +525,7 @@ namespace xcore
                 }
             }
 
-            bool remove(node_t*& root, tree_t* tree, void* data, node_t* node)
+            bool remove(node_t*& root, tree_t* tree, u64 data, node_t* node)
             {
                 bool const ret = true;
 
@@ -644,7 +643,7 @@ namespace xcore
                     lh = validate(ln, tree, result);
                     rh = validate(rn, tree, result);
 
-                    const void* root_key = tree->m_get_key_f(root);
+                    const u64 root_key = tree->m_get_key_f(root);
 
                     // Invalid binary search tree
                     if ((ln != nullptr && tree->m_compare_f(root_key, ln) <= 0) || (rn != nullptr && tree->m_compare_f(root_key, rn) >= 0))
@@ -727,7 +726,7 @@ namespace xcore
                 return false;
             }
 
-            bool find(u32& root, tree_t* tree, void* data, u32& found)
+            bool find(u32& root, tree_t* tree, u64 data, u32& found)
             {
                 bool ret;
 
@@ -767,12 +766,11 @@ namespace xcore
                 return ret;
             }
 
-            bool upper(u32& root, tree_t* tree, void* data, u32& found)
+            bool upper(u32& root, tree_t* tree, u64 data, u32& found)
             {
                 bool ret;
 
                 ASSERT(tree != nullptr);
-                ASSERT(data != nullptr);
 
                 found = node_t::NIL;
                 if (root == node_t::NIL)
@@ -988,7 +986,7 @@ namespace xcore
                 }
             }
 
-            bool insert(u32& iroot, tree_t* tree, void* key, u32 inode)
+            bool insert(u32& iroot, tree_t* tree, u64 key, u32 inode)
             {
                 bool ret;
 
