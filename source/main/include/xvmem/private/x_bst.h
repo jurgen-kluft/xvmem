@@ -96,8 +96,9 @@ namespace xcore
             bool upper(node_t*& root, tree_t* tree, u64 data, node_t*& found);
             bool insert(node_t*& root, tree_t* tree, u64 data, node_t* node);
             bool remove(node_t*& root, tree_t* tree, u64 data, node_t* node);
-            s32  validate(node_t*& root, tree_t* tree, const char*& result);
+            s32  validate(node_t* root, tree_t* tree, const char*& result);
 
+			bool get_min(node_t* root, tree_t* tree, node_t*& found);
         } // namespace pointer_based
 
         namespace index_based
@@ -199,6 +200,7 @@ namespace xcore
             bool remove(u32& root, tree_t* tree, u64 data, u32 node);
             s32  validate(node_t* root, u32 iroot, tree_t* tree, const char*& result);
 
+            bool get_min(u32 root, tree_t* tree, u32& found);
         } // namespace index_based
     }     // namespace xbst
 } // namespace xcore

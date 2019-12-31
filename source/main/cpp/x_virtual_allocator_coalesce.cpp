@@ -47,7 +47,7 @@ namespace xcore
         m_internal_heap->destruct<>(this);
     }
 
-    xalloc* gCreateVMemCoalesceAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 alloc_addr_list_size)
+    xalloc* gCreateVMemCoalesceBasedAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step)
     {
         xvmem_allocator_coalesce* allocator = internal_heap->construct<xvmem_allocator_coalesce>();
         allocator->m_internal_heap          = internal_heap;
@@ -59,7 +59,7 @@ namespace xcore
         u32   attr = 0;
         vmem->reserve(mem_size, page_size, attr, memory_addr);
 
-        allocator->m_coalescee.initialize(internal_heap, node_alloc, memory_addr, mem_size, alloc_size_min, alloc_size_max, alloc_size_step, alloc_addr_list_size);
+        allocator->m_coalescee.initialize(internal_heap, node_alloc, memory_addr, mem_size, alloc_size_min, alloc_size_max, alloc_size_step);
 
         return allocator;
     }

@@ -42,7 +42,6 @@ namespace xcore
                 bool ret;
 
                 ASSERT(tree != nullptr);
-                ASSERT(data != nullptr);
 
                 found = nullptr;
                 if (root == nullptr)
@@ -618,7 +617,7 @@ namespace xcore
 
             bool node_t::is_color_red(tree_t* t) const { return t->m_get_color_f(this) == COLOR_RED; }
 
-            s32 validate(node_t*& root, tree_t* tree, const char*& result)
+            s32 validate(node_t* root, tree_t* tree, const char*& result)
             {
                 s32 lh, rh;
                 if (root == nullptr)
@@ -667,6 +666,19 @@ namespace xcore
                     return 0;
                 }
             }
+
+			bool get_min(node_t* proot, tree_t* tree, node_t*& found)
+			{
+				found = nullptr;
+				node_t* pnode = proot;
+				while (pnode != nullptr)
+				{
+					found = pnode;
+					pnode = pnode->get_left();
+				}
+				return found != nullptr;
+			}
+
         } // namespace pointer_based
 
         // ============================================================================================================
@@ -731,7 +743,6 @@ namespace xcore
                 bool ret;
 
                 ASSERT(tree != nullptr);
-                ASSERT(data != nullptr);
 
                 found = node_t::NIL;
                 if (root == node_t::NIL)
@@ -1405,7 +1416,7 @@ namespace xcore
                     lh = validate(ln, iln, tree, result);
                     rh = validate(rn, irn, tree, result);
 
-                    const void* root_key = tree->m_get_key_f(root);
+                    const u64 root_key = tree->m_get_key_f(root);
 
                     // Invalid binary search tree
                     if ((ln != nullptr && tree->m_compare_f(root_key, ln) <= 0) || (rn != nullptr && tree->m_compare_f(root_key, rn) >= 0))
@@ -1429,6 +1440,21 @@ namespace xcore
                     return 0;
                 }
             }
+
+            bool get_min(u32& iroot, tree_t* tree, u32& found)
+			{
+				found = 0xffffffff;
+				u32 inode = iroot;
+                node_t* pnode = tree->idx2ptr(iroot);
+                while (pnode != nullptr)
+                {
+					found = inode;
+                    inode = pnode->get_left();
+                    pnode  = tree->idx2ptr(inode);
+                }
+				return found != 0xffffffff;
+			}
+
         } // namespace index_based
     }     // namespace xbst
 } // namespace xcore

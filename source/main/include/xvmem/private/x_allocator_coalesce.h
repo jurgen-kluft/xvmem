@@ -51,6 +51,9 @@ namespace xcore
         inline bool is_color_red() const { return (m_flags & FLAG_COLOR_RED) == FLAG_COLOR_RED; }
         inline bool is_color_black() const { return (m_flags & FLAG_COLOR_RED) == 0; }
 
+	    static inline u64 get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
+        inline u64 get_key() const { return get_size_addr_key(m_size, m_addr); }
+
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
 
@@ -102,7 +105,7 @@ namespace xcore
             if (size > m_alloc_size_max)
                 return m_size_db_cnt;
             ASSERT(size >= m_alloc_size_min);
-            u32 const slot = (size - m_alloc_size_min) / m_alloc_size_step;
+            u32 const slot = (u32)((u64)(size - m_alloc_size_min) / m_alloc_size_step);
             ASSERT(slot < m_size_db_cnt);
             return slot;
         }

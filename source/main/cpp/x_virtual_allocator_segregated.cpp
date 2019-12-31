@@ -11,6 +11,9 @@
 namespace xcore
 {
     inline u64 get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
+    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
+    static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
+    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (size_t)((uptr)next_ptr - (uptr)ptr); }
 
     struct nblock_t : public xbst::index_based::node_t
     {
@@ -60,7 +63,8 @@ namespace xcore
         inline bool is_color_red() const { return (m_flags & FLAG_COLOR_RED) == FLAG_COLOR_RED; }
         inline bool is_color_black() const { return (m_flags & FLAG_COLOR_RED) == 0; }
 
-        inline u64 get_key() const { return get_size_addr_key(m_size, m_addr); }
+		inline u64 get_addr_key() const { return m_addr; }
+        inline u64 get_size_key() const { return get_size_addr_key(m_size, m_addr); }
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
@@ -107,11 +111,11 @@ namespace xcore
 
     namespace bst_size
     {
-        const void* get_key_node_f(const xbst::index_based::node_t* lhs)
+        u64 get_key_node_f(const xbst::index_based::node_t* lhs)
         {
             nblock_t const* n   = (nblock_t const*)(lhs);
-            u64 const       key = n->get_key();
-            return (void*)key;
+            u64 const       key = n->get_size_key();
+            return key;
         }
 
         s32 compare_node_f(const u64 pkey, const xbst::index_based::node_t* node)
@@ -207,7 +211,7 @@ namespace xcore
         void*      get_range_addr(void* addr) const
         {
             u64 const idx = (u64)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
-            return m_mem_address + (idx * m_range_size);
+            return advance_ptr(m_mem_address,  (idx * m_range_size));
         }
 
         bool obtain_range(void*& addr, u16 lvl_index)
@@ -266,10 +270,6 @@ namespace xcore
         }
     };
 
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-    static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
-    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (size_t)((uptr)next_ptr - (uptr)ptr); }
-
     // Segregated Allocator uses BST's for free blocks and allocated blocks.
     // Every level starts of with one free block that covers the memory range of that level.
     // So we can split nodes and we also coalesce.
@@ -316,12 +316,15 @@ namespace xcore
                 pnode->init();
                 pnode->set_addr(m_vmem_base_addr, m_allocsize_step, range_base_addr);
                 pnode->set_page_cnt(m_vrange_manager.m_range_size, m_pagesize);
-                xbst::index_based::insert(plvl->m_free_bst, &m_free_bst_config, (void*)m_vrange_manager.m_range_size, inode);
+				pnode->set_size(m_vrange_manager.m_range_size, m_allocsize_step);
+				u64 const key = get_size_addr_key(m_vrange_manager.m_range_size / m_allocsize_step, pnode->m_addr);
+                xbst::index_based::insert(plvl->m_free_bst, &m_free_bst_config, key, inode);
             }
 
             // Take a node from the 'free' bst of this level
             u32 inode;
-            xbst::index_based::find(plvl->m_free_bst, &m_free_bst_config, (void*)size, inode);
+			u64 const key = get_size_addr_key(size / m_allocsize_step, 0);
+            xbst::index_based::find(plvl->m_free_bst, &m_free_bst_config, key, inode);
             nblock_t* pnode = (nblock_t*)m_node_alloc->idx2ptr(inode);
 
             u64 const node_size = pnode->get_size(m_allocsize_step);
@@ -343,13 +346,12 @@ namespace xcore
                 psplit->set_size(node_size - size, m_pagesize);
                 pnode->set_size(size, m_pagesize);
 
-                u64 const key = (void*)psplit->get_key();
+                u64 const key = psplit->get_size_key();
                 xbst::index_based::insert(plvl->m_free_bst, &m_free_bst_config, key, isplit);
             }
 
             // Add this allocation into the 'alloc' bst for this level
-            u64 const key = (void*)pnode->m_addr;
-            xbst::index_based::insert(plvl->m_alloc_bst, &m_alloc_bst_config, key, inode);
+            xbst::index_based::insert(plvl->m_alloc_bst, &m_alloc_bst_config, pnode->get_addr_key(), inode);
 
             void* ptr = pnode->get_addr(m_vmem_base_addr, m_allocsize_step);
             return ptr;
@@ -486,7 +488,7 @@ namespace xcore
                 u32 range_addr = (u32)((u64)m_vrange_manager.get_range_addr(ptr) / m_allocsize_step);
                 u64 key        = get_size_addr_key(range_size, range_addr);
                 u32 inode;
-                xbst::index_based::remove(plvl->m_free_bst, &m_free_bst_config, (void*)key, inode);
+                xbst::index_based::remove(plvl->m_free_bst, &m_free_bst_config, key, inode);
                 nblock_t* pnode = idx2block(inode);
                 remove_from_addr_chain(inode, pnode);
                 dealloc_node(inode, pnode);
