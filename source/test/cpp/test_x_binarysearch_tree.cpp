@@ -1,7 +1,7 @@
 #include "xbase/x_allocator.h"
 #include "xbase/x_integer.h"
 
-#include "xvmem/private/x_bst.h"
+#include "xvmem/private/x_binarysearch_tree.h"
 
 #include "xunittest/xunittest.h"
 
@@ -21,13 +21,13 @@ namespace xcore
 		xbst::pointer_based::node_t	m_bstnode;
 	};
 
-    const void* get_key_mynode_f(const xbst::pointer_based::node_t* lhs)
+    u64 get_key_mynode_f(const xbst::pointer_based::node_t* lhs)
 	{
 		mynode const* n = (mynode const*)((const xbyte*)lhs - X_OFFSET_OF(mynode, m_bstnode));
-		return &n->m_key;
+		return (u64)&n->m_key;
 	}
 
-	s32 compare_mynode_f(const void* pkey, const xbst::pointer_based::node_t* node)
+	s32 compare_mynode_f(const u64 pkey, const xbst::pointer_based::node_t* node)
 	{
 		mynode* n = (mynode*)((xbyte*)node - X_OFFSET_OF(mynode, m_bstnode));
 		void* key = *(void**)pkey;
@@ -95,7 +95,7 @@ UNITTEST_SUITE_BEGIN(x_bst)
 			xbst::pointer_based::node_t* root = nullptr;
 			for (s32 i=0; i<numnodes; ++i)
 			{
-				xbst::pointer_based::insert(root, &tree, &nodes[i].m_key, &nodes[i].m_bstnode);
+				xbst::pointer_based::insert(root, &tree, (u64)&nodes[i].m_key, &nodes[i].m_bstnode);
 			}
 			const char* result = nullptr;
 			xbst::pointer_based::validate(root, &tree, result);
@@ -122,13 +122,13 @@ UNITTEST_SUITE_BEGIN(x_bst)
 				nodes[i].m_float = 100.0f + i*2;
 				nodes[i].m_integer = 100 + i;
 				nodes[i].m_key = &nodes[i].m_bstnode;
-				xbst::pointer_based::insert(root, &tree, &nodes[i].m_key, &nodes[i].m_bstnode);
+				xbst::pointer_based::insert(root, &tree, (u64)&nodes[i].m_key, &nodes[i].m_bstnode);
 			}
 
 			for (s32 i=0; i<numnodes; ++i)
 			{
 				xbst::pointer_based::node_t* found = nullptr;
-				bool could_find = xbst::pointer_based::find(root, &tree, &nodes[i].m_key, found);
+				bool could_find = xbst::pointer_based::find(root, &tree, (u64)&nodes[i].m_key, found);
 				CHECK_TRUE(could_find);
 				CHECK_EQUAL(found, &nodes[i].m_bstnode);
 			}

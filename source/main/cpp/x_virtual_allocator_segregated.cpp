@@ -6,7 +6,7 @@
 #include "xvmem/x_virtual_allocator.h"
 #include "xvmem/x_virtual_pages.h"
 #include "xvmem/x_virtual_memory.h"
-#include "xvmem/private/x_bst.h"
+#include "xvmem/private/x_binarysearch_tree.h"
 
 namespace xcore
 {
@@ -107,6 +107,8 @@ namespace xcore
                 return 1;
             return 0;
         }
+
+		static tree_t	config;
     } // namespace bst_addr
 
     namespace bst_size
@@ -137,7 +139,9 @@ namespace xcore
 
             return 0;
         }
-    } // namespace bst_size
+
+		static tree_t	config;
+	} // namespace bst_size
 
     struct xvmem_range_t
     {
@@ -174,13 +178,13 @@ namespace xcore
         {
             m_mem_address = mem_address;
             m_range_size  = sub_range;
-            m_range_count = mem_range / sub_range;
+            m_range_count = (u32)(mem_range / sub_range);
             m_range       = (range_t*)main_heap->allocate(sizeof(u16) * m_range_count, sizeof(void*));
-            for (s32 i = 0; i < m_range_count; i++)
+            for (u32 i = 0; i < m_range_count; i++)
             {
                 m_range[i].reset();
             }
-            for (s32 i = 1; i < m_range_count; i++)
+            for (u32 i = 1; i < m_range_count; i++)
             {
                 u16      icurr = i - 1;
                 u16      inext = i;
@@ -318,13 +322,13 @@ namespace xcore
                 pnode->set_page_cnt(m_vrange_manager.m_range_size, m_pagesize);
 				pnode->set_size(m_vrange_manager.m_range_size, m_allocsize_step);
 				u64 const key = get_size_addr_key(m_vrange_manager.m_range_size / m_allocsize_step, pnode->m_addr);
-                xbst::index_based::insert(plvl->m_free_bst, &m_free_bst_config, key, inode);
+                xbst::index_based::insert(plvl->m_free_bst, &bst_size::config, m_node_alloc, key, inode);
             }
 
             // Take a node from the 'free' bst of this level
             u32 inode;
 			u64 const key = get_size_addr_key(size / m_allocsize_step, 0);
-            xbst::index_based::find(plvl->m_free_bst, &m_free_bst_config, key, inode);
+            xbst::index_based::find(plvl->m_free_bst, &bst_size::config, m_node_alloc, key, inode);
             nblock_t* pnode = (nblock_t*)m_node_alloc->idx2ptr(inode);
 
             u64 const node_size = pnode->get_size(m_allocsize_step);
@@ -347,11 +351,11 @@ namespace xcore
                 pnode->set_size(size, m_pagesize);
 
                 u64 const key = psplit->get_size_key();
-                xbst::index_based::insert(plvl->m_free_bst, &m_free_bst_config, key, isplit);
+                xbst::index_based::insert(plvl->m_free_bst, &bst_size::config, m_node_alloc, key, isplit);
             }
 
             // Add this allocation into the 'alloc' bst for this level
-            xbst::index_based::insert(plvl->m_alloc_bst, &m_alloc_bst_config, pnode->get_addr_key(), inode);
+            xbst::index_based::insert(plvl->m_alloc_bst, &bst_addr::config, m_node_alloc, pnode->get_addr_key(), inode);
 
             void* ptr = pnode->get_addr(m_vmem_base_addr, m_allocsize_step);
             return ptr;
@@ -369,14 +373,14 @@ namespace xcore
         {
             u32 const ilvl = pnode->m_level;
             u64       key  = (((u64)pnode->m_size << 32) | (u64)(pnode->m_addr));
-            xbst::index_based::insert(m_level[ilvl].m_free_bst, &m_free_bst_config, key, inode);
+            xbst::index_based::insert(m_level[ilvl].m_free_bst, &bst_size::config, m_node_alloc, key, inode);
         }
 
         void remove_from_size_db(u32 inode, nblock_t* pnode)
         {
             u32 const ilvl = pnode->m_level;
             u64       key  = (((u64)pnode->m_size << 32) | (u64)(pnode->m_addr));
-            xbst::index_based::insert(m_level[ilvl].m_free_bst, &m_free_bst_config, key, inode);
+            xbst::index_based::insert(m_level[ilvl].m_free_bst, &bst_size::config, m_node_alloc, key, inode);
         }
 
         void add_to_addr_chain(u32 icurr, nblock_t* pcurr, u32 inode, nblock_t* pnode)
@@ -414,7 +418,7 @@ namespace xcore
             level_t* plvl = &m_level[ilvl];
             u64      key  = ptr2addr(ptr);
             u32      inode_curr;
-            if (xbst::index_based::find(plvl->m_alloc_bst, &m_alloc_bst_config, key, inode_curr))
+            if (xbst::index_based::find(plvl->m_alloc_bst, &bst_addr::config, m_node_alloc, key, inode_curr))
             {
                 // This node is now 'free', can we coalesce with previous/next ?
                 // Coalesce (but do not add the node back to 'free' yet)
@@ -488,7 +492,7 @@ namespace xcore
                 u32 range_addr = (u32)((u64)m_vrange_manager.get_range_addr(ptr) / m_allocsize_step);
                 u64 key        = get_size_addr_key(range_size, range_addr);
                 u32 inode;
-                xbst::index_based::remove(plvl->m_free_bst, &m_free_bst_config, key, inode);
+                xbst::index_based::remove(plvl->m_free_bst, &bst_size::config, m_node_alloc, inode);
                 nblock_t* pnode = idx2block(inode);
                 remove_from_addr_chain(inode, pnode);
                 dealloc_node(inode, pnode);
@@ -504,8 +508,6 @@ namespace xcore
         u32                       m_pagesize;
         u32                       m_level_cnt;
         level_t*                  m_level;
-        xbst::index_based::tree_t m_free_bst_config;
-        xbst::index_based::tree_t m_alloc_bst_config;
         xvmem_range_t             m_vrange_manager;
     };
 
@@ -526,15 +528,15 @@ namespace xcore
             m_level[i].reset();
         }
 
-        m_free_bst_config.m_get_key_f   = bst_size::get_key_node_f;
-        m_free_bst_config.m_compare_f   = bst_size::compare_node_f;
-        m_free_bst_config.m_get_color_f = bst_color::get_color_node_f;
-        m_free_bst_config.m_set_color_f = bst_color::set_color_node_f;
+        bst_size::config.m_get_key_f   = bst_size::get_key_node_f;
+        bst_size::config.m_compare_f   = bst_size::compare_node_f;
+        bst_size::config.m_get_color_f = bst_color::get_color_node_f;
+        bst_size::config.m_set_color_f = bst_color::set_color_node_f;
 
-        m_alloc_bst_config.m_get_key_f   = bst_addr::get_key_node_f;
-        m_alloc_bst_config.m_compare_f   = bst_addr::compare_node_f;
-        m_alloc_bst_config.m_get_color_f = bst_color::get_color_node_f;
-        m_alloc_bst_config.m_set_color_f = bst_color::set_color_node_f;
+        bst_addr::config.m_get_key_f   = bst_addr::get_key_node_f;
+        bst_addr::config.m_compare_f   = bst_addr::compare_node_f;
+        bst_addr::config.m_get_color_f = bst_color::get_color_node_f;
+        bst_addr::config.m_set_color_f = bst_color::set_color_node_f;
 
         // Initialize the vmem address range manager
         m_vrange_manager.init(main_alloc, m_vmem_base_addr, vmem_range, level_range);

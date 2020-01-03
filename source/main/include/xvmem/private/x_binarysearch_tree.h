@@ -82,7 +82,6 @@ namespace xcore
             typedef void (*set_color_f)(node_t* lhs, s32 color);
             struct tree_t
             {
-                void*       m_user;
                 compare_f   m_compare_f;
                 get_color_f m_get_color_f;
                 set_color_f m_set_color_f;
@@ -95,7 +94,7 @@ namespace xcore
             bool find(node_t*& root, tree_t* tree, u64 data, node_t*& found);
             bool upper(node_t*& root, tree_t* tree, u64 data, node_t*& found);
             bool insert(node_t*& root, tree_t* tree, u64 data, node_t* node);
-            bool remove(node_t*& root, tree_t* tree, u64 data, node_t* node);
+            bool remove(node_t*& root, tree_t* tree, node_t* node);
             s32  validate(node_t* root, tree_t* tree, const char*& result);
 
 			bool get_min(node_t* root, tree_t* tree, node_t*& found);
@@ -172,35 +171,28 @@ namespace xcore
             struct tree_t
             {
                 inline tree_t()
-                    : m_user(nullptr)
-                    , m_dexer(nullptr)
-                    , m_compare_f(nullptr)
+                    : m_compare_f(nullptr)
                     , m_get_color_f(nullptr)
                     , m_set_color_f(nullptr)
                     , m_get_key_f(nullptr)
                 {
                 }
-                void*       m_user;
-                xdexer*     m_dexer;
                 compare_f   m_compare_f;
                 get_color_f m_get_color_f;
                 set_color_f m_set_color_f;
                 get_key_f   m_get_key_f; // Only used by validate()
-
-                node_t* idx2ptr(u32);
-                u32     ptr2idx(node_t*);
             };
 
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
-            bool clear(u32& root, tree_t* tree, u32& n);
-            bool find(u32& root, tree_t* tree, u64 data, u32& found);
-            bool upper(u32& root, tree_t* tree, u64 data, u32& found);
-            bool insert(u32& root, tree_t* tree, u64 data, u32 node);
-            bool remove(u32& root, tree_t* tree, u64 data, u32 node);
-            s32  validate(node_t* root, u32 iroot, tree_t* tree, const char*& result);
+            bool clear(u32& root, tree_t* tree, xdexer* dexer, u32& n);
+            bool find(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found);
+            bool upper(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found);
+            bool insert(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32 node);
+            bool remove(u32& root, tree_t* tree, xdexer* dexer, u32 node);
+            s32  validate(node_t* root, u32 iroot, tree_t* tree, xdexer* dexer, const char*& result);
 
-            bool get_min(u32 root, tree_t* tree, u32& found);
+            bool get_min(u32 root, tree_t* tree, xdexer* dexer, u32& found);
         } // namespace index_based
     }     // namespace xbst
 } // namespace xcore

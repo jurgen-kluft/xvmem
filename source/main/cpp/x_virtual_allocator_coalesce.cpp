@@ -8,7 +8,7 @@
 #include "xvmem/x_virtual_allocator.h"
 #include "xvmem/x_virtual_pages.h"
 #include "xvmem/x_virtual_memory.h"
-#include "xvmem/private/x_allocator_coalesce.h"
+#include "xvmem/private/x_strategy_coalesce.h"
 
 namespace xcore
 {
@@ -17,8 +17,7 @@ namespace xcore
     {
     public:
         xvmem_allocator_coalesce()
-            : m_internal_heap(nullptr)
-            , m_node_alloc(nullptr)
+            : m_vmem(nullptr)
         {
         }
 
@@ -26,8 +25,6 @@ namespace xcore
         virtual void  deallocate(void* p);
         virtual void  release();
 
-        xalloc*    m_internal_heap;
-        xfsadexed* m_node_alloc; // For allocating naddr_t and nsize_t nodes
         xvmem*     m_vmem;
         xcoalescee m_coalescee;
 
@@ -35,23 +32,18 @@ namespace xcore
     };
 
     void* xvmem_allocator_coalesce::allocate(u32 size, u32 alignment) { return m_coalescee.allocate(size, alignment); }
-
     void xvmem_allocator_coalesce::deallocate(void* p) { m_coalescee.deallocate(p); }
 
     void xvmem_allocator_coalesce::release()
     {
         m_coalescee.release();
-
-        // TODO: release virtual memory
-
-        m_internal_heap->destruct<>(this);
+		m_vmem->release(m_coalescee.m_memory_addr);
+        m_coalescee.m_main_heap->destruct<>(this);
     }
 
     xalloc* gCreateVMemCoalesceBasedAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step)
     {
         xvmem_allocator_coalesce* allocator = internal_heap->construct<xvmem_allocator_coalesce>();
-        allocator->m_internal_heap          = internal_heap;
-        allocator->m_node_alloc             = node_alloc;
         allocator->m_vmem                   = vmem;
 
         void* memory_addr = nullptr;
