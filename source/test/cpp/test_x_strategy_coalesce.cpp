@@ -29,12 +29,46 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce)
 			gSystemAllocator->deallocate(sNodeData);
 		}
 
-		UNITTEST_TEST(coalescee)
+		UNITTEST_TEST(coalescee_init)
 		{
 			xcoalescee c;
 			void* mem_base = (void*)0x00ff000000000000ULL;
 			c.initialize(gSystemAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
+			c.release();
 		}
+
+		UNITTEST_TEST(coalescee_alloc_dealloc_once)
+		{
+			xcoalescee c;
+			void* mem_base = (void*)0x00ff000000000000ULL;
+			c.initialize(gSystemAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
+
+			void* p = c.allocate(10 * 1024, 8);
+			c.deallocate(p);
+
+			c.release();
+		}
+
+		UNITTEST_TEST(coalescee_alloc_dealloc_fixed_size_many)
+		{
+			xcoalescee c;
+			void* mem_base = (void*)0x00ff000000000000ULL;
+			c.initialize(gSystemAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
+
+			const s32 cnt = 128;
+			void* ptrs[cnt];
+			for (s32 i=0; i<cnt; ++i)
+			{
+				ptrs[i] = c.allocate(10 * 1024, 8);
+			}
+			for (s32 i=0; i<cnt; ++i)
+			{
+				c.deallocate(ptrs[i]);
+			}
+
+			c.release();
+		}
+
 	}
 }
 UNITTEST_SUITE_END
