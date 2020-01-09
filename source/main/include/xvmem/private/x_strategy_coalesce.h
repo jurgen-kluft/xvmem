@@ -18,7 +18,7 @@ namespace xcore
         void  initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
         void  release();
         void* allocate(u32 size, u32 alignment);
-        void  deallocate(void* p);
+        u32   deallocate(void* p);
 
         xalloc*    m_main_heap;
         xfsadexed* m_node_heap;

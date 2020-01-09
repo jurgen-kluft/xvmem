@@ -51,8 +51,8 @@ namespace xcore
         inline bool is_color_red() const { return (m_flags & FLAG_COLOR_RED) == FLAG_COLOR_RED; }
         inline bool is_color_black() const { return (m_flags & FLAG_COLOR_RED) == 0; }
 
-	    static inline u64 get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
-        inline u64 get_key() const { return get_size_addr_key(m_size, m_addr); }
+        static inline u64 get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
+        inline u64        get_key() const { return get_size_addr_key(m_size, m_addr); }
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
@@ -94,7 +94,7 @@ namespace xcore
             return 0;
         }
 
-        static tree_t    config;
+        static tree_t config;
 
     } // namespace bst_addr
 
@@ -110,7 +110,7 @@ namespace xcore
         {
             naddr_t const* n    = (naddr_t const*)(node);
             u32 const      size = (u32)(pkey >> 32);
-			u32 const      addr = (u32)(pkey & 0xffffffff);
+            u32 const      addr = (u32)(pkey & 0xffffffff);
             if (size < n->m_size)
                 return -1;
             if (size > n->m_size)
@@ -122,7 +122,7 @@ namespace xcore
             return 0;
         }
 
-		static tree_t    config;
+        static tree_t config;
 
     } // namespace bst_size
 
@@ -182,7 +182,7 @@ namespace xcore
         return pnode;
     }
 
-	inline void dealloc_node(xcoalescee& self, u32 inode, naddr_t* pnode)
+    inline void dealloc_node(xcoalescee& self, u32 inode, naddr_t* pnode)
     {
         ASSERT(self.m_node_heap->idx2ptr(inode) == pnode);
         self.m_node_heap->deallocate(pnode);
@@ -260,8 +260,8 @@ namespace xcore
         main_node->m_next_addr = m_node_heap->ptr2idx(tail_node);
         head_node->m_next_addr = main_inode;
         tail_node->m_prev_addr = main_inode;
-		main_node->set_addr(m_memory_addr, m_alloc_size_step, mem_addr);
-		main_node->set_size(mem_size, m_alloc_size_step);
+        main_node->set_addr(m_memory_addr, m_alloc_size_step, mem_addr);
+        main_node->set_size(mem_size, m_alloc_size_step);
         add_to_size_db(*this, main_inode, main_node);
     }
 
@@ -281,7 +281,7 @@ namespace xcore
                 dealloc_node(*this, inode, pnode);
             }
         }
-		m_size_db_occupancy.release(m_main_heap);
+        m_size_db_occupancy.release(m_main_heap);
     }
 
     void* xcoalescee::allocate(u32 _size, u32 _alignment)
@@ -319,14 +319,15 @@ namespace xcore
         return pnode->get_addr(m_memory_addr, m_alloc_size_step);
     }
 
-    void xcoalescee::deallocate(void* p)
+    // Return the size of the allocation that was freed
+    u32 xcoalescee::deallocate(void* p)
     {
         u32      inode_curr = naddr_t::NIL;
         naddr_t* pnode_curr = nullptr;
         if (!pop_from_addr_db(*this, p, inode_curr, pnode_curr))
         {
             // Could not find address in the addr_db
-            return;
+            return 0;
         }
 
         // Coalesce:
@@ -338,6 +339,7 @@ namespace xcore
         //   Build the size node with the correct size and reference the 'merged' addr node
         //   Add the size node to the size DB
         //   Done
+        u32 const size = pnode_curr->get_size(m_alloc_size_step);
 
         u32      inode_prev = pnode_curr->m_prev_addr;
         u32      inode_next = pnode_curr->m_next_addr;
@@ -395,6 +397,8 @@ namespace xcore
             // - add current to size DB
             add_to_size_db(*this, inode_curr, pnode_curr);
         }
+
+        return size;
     }
 
     void remove_from_addr_chain(xcoalescee& self, u32 idx, naddr_t* pnode)
@@ -419,7 +423,7 @@ namespace xcore
         if (find(self.m_addr_db, &bst_addr::config, self.m_node_heap, key, inode))
         {
             pnode = idx2naddr(self, inode);
-            remove(self.m_addr_db, &bst_addr::config, self.m_node_heap,  inode);
+            remove(self.m_addr_db, &bst_addr::config, self.m_node_heap, inode);
             return true;
         }
         return false;
@@ -489,7 +493,7 @@ namespace xcore
             if (self.m_size_db_occupancy.upper(size_db_slot, ilarger))
             {
                 size_db_root = self.m_size_db[ilarger];
-				ASSERT(size_db_root != naddr_t::NIL);
+                ASSERT(size_db_root != naddr_t::NIL);
             }
         }
         if (size_db_root != naddr_t::NIL)
