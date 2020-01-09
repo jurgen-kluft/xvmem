@@ -12,9 +12,6 @@ namespace xcore
 {
 	class xvpages_t;
 
-	// An object that can alloc/free pages from a memory range
-	extern xvpages_t*	gCreateVPages(xalloc* main_allocator, u64 memoryrange);
-
 	// A fixed-size allocator (small allocator) using virtual memory.
 	extern xfsa*		gCreateVMemBasedFsa(xalloc* main_allocator, xvpages_t* vpages, u32 allocsize);
 

@@ -14,8 +14,9 @@ namespace xcore
     class xvfsa : public xfsa
     {
     public:
-        inline xvfsa(xvpages_t* pages, u32 allocsize)
-            : m_pages(pages)
+        inline xvfsa(xalloc* main_heap, xvpages_t* pages, u32 allocsize)
+            : m_main_heap(main_heap)
+			, m_pages(pages)
             , m_pages_freelist(xvpage_t::INDEX_NIL)
             , m_alloc_size(allocsize)
         {
@@ -26,10 +27,14 @@ namespace xcore
         virtual void* allocate() { return m_pages->allocate(m_pages_freelist, m_alloc_size); }
         virtual void  deallocate(void* ptr) { return m_pages->deallocate(m_pages_freelist, ptr); }
 
-        virtual void release() {}
+        virtual void release()
+		{
+			m_main_heap->deallocate(this);
+		}
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     protected:
+		xalloc*          m_main_heap;
         xvpages_t* const m_pages;
         u32              m_pages_freelist;
         u32 const        m_alloc_size;
@@ -37,7 +42,7 @@ namespace xcore
 
     xfsa* gCreateVMemBasedFsa(xalloc* main_allocator, xvpages_t* vpages, u32 allocsize)
     {
-        xvfsa* fsa = main_allocator->construct<xvfsa>(vpages, allocsize);
+        xvfsa* fsa = main_allocator->construct<xvfsa>(main_allocator, vpages, allocsize);
         return fsa;
     }
 
@@ -47,9 +52,10 @@ namespace xcore
     class xvfsa_dexed : public xfsadexed
     {
     public:
-        inline xvfsa_dexed(xvpages_t* pages, u32 allocsize)
-            : m_pages(pages)
-            , m_pages_freelist(xvpage_t::INDEX_NIL)
+        inline xvfsa_dexed(xalloc* main_heap, xvpages_t* pages, u32 allocsize)
+			: m_main_heap(main_heap)
+            , m_pages(pages)
+            , m_pages_notfull_list(xvpage_t::INDEX_NIL)
             , m_alloc_size(allocsize)
             , m_page_elem_cnt(pages->m_page_size / allocsize)
         {
@@ -57,18 +63,23 @@ namespace xcore
 
         virtual u32 size() const { return m_alloc_size; }
 
-        virtual void* allocate() { return m_pages->allocate(m_pages_freelist, m_alloc_size); }
-        virtual void  deallocate(void* ptr) { return m_pages->deallocate(m_pages_freelist, ptr); }
+        virtual void* allocate() { return m_pages->allocate(m_pages_notfull_list, m_alloc_size); }
+        virtual void  deallocate(void* ptr) { return m_pages->deallocate(m_pages_notfull_list, ptr); }
 
         virtual void* idx2ptr(u32 index) const { return m_pages->idx2ptr(index, m_page_elem_cnt, m_alloc_size); }
         virtual u32   ptr2idx(void* ptr) const { return m_pages->ptr2idx(ptr, m_page_elem_cnt, m_alloc_size); }
 
-        virtual void release() {}
+        virtual void release()
+		{
+			m_main_heap->deallocate(this);
+		}
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
+
     protected:
+		xalloc*          m_main_heap;
         xvpages_t* const m_pages;
-        u32              m_pages_freelist;
+        u32              m_pages_notfull_list;
         u32 const        m_alloc_size;
         u32 const        m_page_elem_cnt;
     };
@@ -78,7 +89,7 @@ namespace xcore
     xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_allocator, xvpages_t* vpages, u32 allocsize)
     {
         ASSERT(vpages->memory_range() <= ((u64)4 * 1024 * 1024 * 1024 * allocsize));
-        xvfsa_dexed* fsa = main_allocator->construct<xvfsa_dexed>(vpages, allocsize);
+        xvfsa_dexed* fsa = main_allocator->construct<xvfsa_dexed>(main_allocator, vpages, allocsize);
         return fsa;
     }
 }; // namespace xcore

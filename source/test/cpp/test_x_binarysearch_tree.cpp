@@ -52,7 +52,7 @@ namespace xcore
 
 }
 
-UNITTEST_SUITE_BEGIN(x_bst)
+UNITTEST_SUITE_BEGIN(binarysearch_tree)
 {
     UNITTEST_FIXTURE(main)
     {

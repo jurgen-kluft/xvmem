@@ -229,7 +229,7 @@ namespace xcore
             m_size_db[i] = naddr_t::NIL;
         }
         // Which sizes are available in 'm_size_db' is known through this hierarchical set of bits.
-        m_size_db_occupancy.init(m_main_heap, m_size_db_cnt, xhibitset::FIND_1);
+        m_size_db_occupancy.init(m_main_heap, m_size_db_cnt);
         // The last db contains all sizes larger than m_alloc_size_max
         m_size_db_cnt -= 1;
 
@@ -255,11 +255,13 @@ namespace xcore
         u32 const main_inode = m_node_heap->ptr2idx(main_node);
         main_node->init();
         main_node->m_addr      = 0;
-        main_node->m_size      = (u32)(mem_size / m_alloc_size_min);
+        main_node->m_size      = 0;
         main_node->m_prev_addr = m_node_heap->ptr2idx(head_node);
         main_node->m_next_addr = m_node_heap->ptr2idx(tail_node);
         head_node->m_next_addr = main_inode;
         tail_node->m_prev_addr = main_inode;
+		main_node->set_addr(m_memory_addr, m_alloc_size_step, mem_addr);
+		main_node->set_size(mem_size, m_alloc_size_step);
         add_to_size_db(*this, main_inode, main_node);
     }
 
@@ -279,6 +281,7 @@ namespace xcore
                 dealloc_node(*this, inode, pnode);
             }
         }
+		m_size_db_occupancy.release(m_main_heap);
     }
 
     void* xcoalescee::allocate(u32 _size, u32 _alignment)
@@ -485,7 +488,8 @@ namespace xcore
             u32 ilarger;
             if (self.m_size_db_occupancy.upper(size_db_slot, ilarger))
             {
-                size_db_root = ilarger;
+                size_db_root = self.m_size_db[ilarger];
+				ASSERT(size_db_root != naddr_t::NIL);
             }
         }
         if (size_db_root != naddr_t::NIL)

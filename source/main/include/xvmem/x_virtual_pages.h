@@ -9,6 +9,8 @@
 
 namespace xcore
 {
+	class xvmem;
+
     struct xvpage_t
     {
         enum
@@ -33,6 +35,8 @@ namespace xcore
         u16 m_elem_size;
         u16 m_flags;
 
+		void init();
+
         bool is_full() const { return m_elem_used == m_elem_total; }
         bool is_empty() const { return m_elem_used == 0; }
         bool is_physical() const { return (m_flags & PAGE_PHYSICAL) == PAGE_PHYSICAL; }
@@ -48,7 +52,10 @@ namespace xcore
     class xvpages_t
     {
     public:
-        xvpages_t(xvpage_t* page_array, u32 pagecount, void* memory_base, u64 memory_range, u32 pagesize);
+        xvpages_t(xalloc* main_allocator, xvmem* vmem, void* memory_base, u64 memory_range, u32 pagesize, u32 pagecachecnt);
+
+		void initialize();
+		void release();
 
         u64 memory_range() const;
 
@@ -72,16 +79,24 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
+		xalloc*			m_main_allocator;
+		xvmem*          m_vmem;
         void* const     m_memory_base;
         u64 const       m_memory_range;
         u32 const       m_page_size;
         u32 const       m_page_total_cnt;
+		u32 const       m_page_cache_cnt;
+		u32             m_free_pages_index;
         u32             m_free_pages_physical_head;
         u32             m_free_pages_physical_count;
         u32             m_free_pages_virtual_head;
         u32             m_free_pages_virtual_count;
-        xvpage_t* const m_page_array;
+        xvpage_t*       m_page_array;
     };
+
+	// An object that can alloc/free pages from a memory range
+	extern xvpages_t*	gCreateVPages(xalloc* main_allocator, xvmem* vmem, u64 memoryrange, u32 pagecachecnt);
+
 } // namespace xcore
 
 #endif // __X_VMEM_VIRTUAL_PAGES_H__

@@ -18,7 +18,7 @@ namespace xcore
                 iterator   = nullptr;
                 while (it != nullptr)
                 {
-                    if (it->get_left() == nullptr)
+                    if (!it->has_left())
                     { // No left links, just kill the node and move on
                         iterator = it->get_right();
                         it->clear();
@@ -147,7 +147,7 @@ namespace xcore
                 }
 
                 y->set_parent(x->get_parent());
-                if (x->has_parent())
+                if (!x->has_parent())
                 {
                     root = y;
                 }
@@ -716,7 +716,7 @@ namespace xcore
                 iterator         = nullptr;
                 while (it != nullptr)
                 {
-                    if (it->has_left())
+                    if (!it->has_left())
                     { // No left links, just kill the node and move on
                         iiterator = it->get_right();
                         it->clear();
@@ -856,7 +856,7 @@ namespace xcore
                 }
 
                 y->set_parent(x->get_parent());
-                if (x->has_parent())
+                if (!x->has_parent())
                 {
                     root  = y;
                     iroot = iy;
@@ -1443,7 +1443,7 @@ namespace xcore
                 }
             }
 
-            bool get_min(u32& iroot, tree_t* tree, xdexer* dexer, u32& found)
+            bool get_min(u32 iroot, tree_t* tree, xdexer* dexer, u32& found)
 			{
 				found = 0xffffffff;
 				u32 inode = iroot;

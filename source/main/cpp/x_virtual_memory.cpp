@@ -56,12 +56,15 @@ namespace xcore
         return true;
     }
 
+    static xvmem_os sVMem;
+
 #elif defined TARGET_PC
 
     bool xvmem_os::reserve(u64 address_range, u32& page_size, u32 reserve_flags, void*& baseptr)
     { 
-		unsigned int flags = MEM_RESERVE | reserve_flags;
-		baseptr = ::VirtualAlloc(NULL, (SIZE_T)address_range, flags, PAGE_NOACCESS);
+		unsigned int allocation_type = MEM_RESERVE | reserve_flags;
+		unsigned int protect = 0;
+		baseptr = ::VirtualAlloc(NULL, (SIZE_T)address_range, allocation_type, protect);
         return baseptr != nullptr;
     }
 
@@ -73,16 +76,20 @@ namespace xcore
 
     bool xvmem_os::commit(void* page_address, u32 page_size, u32 page_count) 
     {
-		u32 va_flags = MEM_COMMIT;
-		BOOL success = ::VirtualAlloc(page_address, page_size * page_count, va_flags, PAGE_READWRITE) != NULL;
+		unsigned int allocation_type = MEM_COMMIT;
+		unsigned int protect = PAGE_READWRITE;
+		BOOL success = ::VirtualAlloc(page_address, page_size * page_count, allocation_type, protect) != NULL;
         return success;
     }
 
     bool xvmem_os::decommit(void* page_address, u32 page_size, u32 page_count) 
     {
-		BOOL b = ::VirtualFree(page_address, page_size * page_count, MEM_DECOMMIT);
+		unsigned int allocation_type = MEM_DECOMMIT;
+		BOOL b = ::VirtualFree(page_address, page_size * page_count, allocation_type);
         return b; 
     }
+
+	static xvmem_os sVMem;
 
 #else
 
@@ -92,7 +99,6 @@ namespace xcore
 
     xvmem* gGetVirtualMemory()
     {
-        static xvmem_os sVMem;
         return &sVMem;
     }
 

@@ -5,7 +5,7 @@
 #include "xvmem/x_virtual_allocator.h"
 #include "xvmem/x_virtual_pages.h"
 #include "xvmem/x_virtual_memory.h"
-#include "xvmem/private/x_allocator_coalesce.h"
+#include "xvmem/private/x_strategy_coalesce.h"
 
 namespace xcore
 {

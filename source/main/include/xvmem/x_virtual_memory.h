@@ -11,9 +11,9 @@ namespace xcore
     {
     public:
         virtual bool reserve(u64 address_range, u32& page_size, u32 attributes, void*& baseptr) = 0;
-        virtual bool release(void* baseptr)                                                    = 0;
+        virtual bool release(void* baseptr) = 0;
 
-        virtual bool commit(void* address, u32 page_size, u32 page_count)   = 0;
+        virtual bool commit(void* address, u32 page_size, u32 page_count) = 0;
         virtual bool decommit(void* address, u32 page_size, u32 page_count) = 0;
     };
 
