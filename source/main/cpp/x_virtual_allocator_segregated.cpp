@@ -10,7 +10,7 @@
 
 namespace xcore
 {
-    inline u64 get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
+    static inline u64   get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
     static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
     static uptr         diff_ptr(void* ptr, void* next_ptr) { return (size_t)((uptr)next_ptr - (uptr)ptr); }
@@ -122,11 +122,11 @@ namespace xcore
 
         s32 compare_node_f(const u64 pkey, const xbst::index_based::node_t* node)
         {
-            nblock_t const* n = (nblock_t const*)(node);
-
             u32 const size = (u32)(pkey >> 32);
             u32 const addr = (u32)(pkey & 0xffffffff);
-            // First sort by size
+
+			// First sort by size
+            nblock_t const* n = (nblock_t const*)(node);
             if (size < n->m_size)
                 return -1;
             if (size > n->m_size)
@@ -321,7 +321,7 @@ namespace xcore
                 pnode->set_addr(m_vmem_base_addr, m_allocsize_step, range_base_addr);
                 pnode->set_page_cnt(m_vrange_manager.m_range_size, m_pagesize);
 				pnode->set_size(m_vrange_manager.m_range_size, m_allocsize_step);
-				u64 const key = get_size_addr_key(m_vrange_manager.m_range_size / m_allocsize_step, pnode->m_addr);
+				u64 const key = get_size_addr_key((u32)(m_vrange_manager.m_range_size / m_allocsize_step), pnode->m_addr);
                 xbst::index_based::insert(plvl->m_free_bst, &bst_size::config, m_node_alloc, key, inode);
             }
 
@@ -485,17 +485,17 @@ namespace xcore
 
             if (m_vrange_manager.is_range_empty(ptr))
             {
-                // TODO: Release range
                 // There is still a nblock_t in the free BST for this range, we need
-                // to remove it. We know the size and addr.
+                // to remove it. So just remove the root node.
                 u32 range_size = (u32)(m_vrange_manager.get_range_size() / m_allocsize_step);
                 u32 range_addr = (u32)((u64)m_vrange_manager.get_range_addr(ptr) / m_allocsize_step);
                 u64 key        = get_size_addr_key(range_size, range_addr);
-                u32 inode;
+                u32 inode      = plvl->m_free_bst;
                 xbst::index_based::remove(plvl->m_free_bst, &bst_size::config, m_node_alloc, inode);
                 nblock_t* pnode = idx2block(inode);
                 remove_from_addr_chain(inode, pnode);
                 dealloc_node(inode, pnode);
+				m_vrange_manager.release_range(ptr);
             }
         }
 
@@ -523,7 +523,7 @@ namespace xcore
         m_pagesize       = pagesize;
         m_level_cnt      = (m_allocsize_max - m_allocsize_min) / m_allocsize_step;
         m_level          = (level_t*)m_main_alloc->allocate(sizeof(level_t) * m_level_cnt, sizeof(void*));
-        for (s32 i = 0; i < m_level_cnt; ++i)
+        for (u32 i = 0; i < m_level_cnt; ++i)
         {
             m_level[i].reset();
         }
