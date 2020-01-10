@@ -192,6 +192,17 @@ namespace xcore
         }
     }
 
+	void xvpages_t::free_pages(u32& pagelist)
+	{
+		while (pagelist != xvpage_t::INDEX_NIL)
+		{
+			u32 const ipage = pagelist;
+            xvpage_t* ppage = indexto_page(ipage);
+            remove_from_list(this, pagelist, ipage);
+			free_page(ppage);
+		}
+	}
+
     u32 xvpages_t::address_to_allocsize(void* const address) const
     {
         xvpage_t* const ppage = address_to_page(address);
