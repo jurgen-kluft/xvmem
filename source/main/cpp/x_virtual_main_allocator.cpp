@@ -16,44 +16,45 @@ namespace xcore
         virtual void  deallocate(void* ptr);
 
     protected:
-        // Very small allocator
+        // Very small allocator, size < 1 KB
         u32        m_fvsa_min_size;  // 8
-        u32        m_fvsa_step_size; // 8 (gives us 127 allocators)
-        u32        m_fvsa_max_size;  // 1024
+        u32        m_fvsa_step_size; // 8
+        u32        m_fvsa_max_size;  // 1 KB
         void*      m_fvsa_mem_base;  // A memory base pointer
-        u64        m_fvsa_mem_range; // 256 MB
-        u32        m_fvsa_page_size; // 4 KB (gives us 64 KB pages)
-        xfsa**     m_fvsa_alloc;
+        u64        m_fvsa_mem_range; // 1 GB
+        u32        m_fvsa_page_size; // 64 KB
+        xfsa**     m_fvsa_alloc;     // 127 allocators
         xvpages_t* m_vfsa_vpages;
 
-        // Small allocator, 1 KB < size <= 4KB
-        u32        m_fsa_min_size;  // 1KB
-        u32        m_fsa_step_size; // 16 (gives us 192 allocators)
-        u32        m_fsa_max_size;  // 4KB
+        // Small allocator, 1 KB < size <= 8 KB
+        u32        m_fsa_min_size;  // 1 KB
+        u32        m_fsa_step_size; // 64
+        u32        m_fsa_max_size;  // 8 KB
         void*      m_fsa_mem_base;  // A memory base pointer
-        u64        m_fsa_mem_range; // 256 MB
-        u32        m_fsa_page_size; // 64 KB (gives us 4KB pages)
-        xfsa**     m_fsa_alloc;
+        u64        m_fsa_mem_range; // 1 GB
+        u32        m_fsa_page_size; // 64 KB
+        xfsa**     m_fsa_alloc;     // 112 allocators
         xvpages_t* m_fsa_vpages;
 
         // Medium allocator
-        u32     m_med_min_size;  // 4KB
-        u32     m_med_max_size;  // 32MB
+        u32     m_med_min_size;  // 8 KB
+        u32     m_med_step_size; // 256 (size alignment)
+        u32     m_med_max_size;  // 640 KB
         void*   m_med_mem_base;  // A memory base pointer
         u64     m_med_mem_range; // 768 MB
         xalloc* m_med_allocator;
 
         // Segregated allocator
-        u32     m_seg_min_size;  //  1 MB
+        u32     m_seg_min_size;  // 640 KB
         u32     m_seg_max_size;  // 32 MB
         void*   m_seg_mem_base;  // A memory base pointer
-        u64     m_seg_mem_range; // 8 MB
+        u64     m_seg_mem_range; // 128 GB
         xalloc* m_seg_allocator;
 
         // Large allocator
-        u32     m_large_min_size; // 32MB
-        void*   m_large_mem_base; // A memory base pointer
-        u64     m_large_mem_range;
+        u32     m_large_min_size;  // 32MB
+        void*   m_large_mem_base;  // A memory base pointer
+        u64     m_large_mem_range; // 
         xalloc* m_large_allocator;
     };
 
