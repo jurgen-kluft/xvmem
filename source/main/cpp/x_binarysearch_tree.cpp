@@ -738,7 +738,7 @@ namespace xcore
                 return false;
             }
 
-            bool find(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found)
+            bool find_specific(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found, compare_f comparer)
             {
                 bool ret;
 
@@ -754,7 +754,7 @@ namespace xcore
                 node_t* node = idx2ptr(dexer, root);
                 while (node != nullptr)
                 {
-                    s32 const c = tree->m_compare_f(data, node);
+                    s32 const c = comparer(data, node);
                     ASSERT(c == 0 || c == -1 || c == 1);
                     if (c == 0)
                         break;
@@ -776,6 +776,11 @@ namespace xcore
             done:
                 return ret;
             }
+
+            bool find(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found)
+            {
+				return find_specific(root, tree, dexer, data, found, tree->m_compare_f);
+			}
 
             bool upper(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found)
             {

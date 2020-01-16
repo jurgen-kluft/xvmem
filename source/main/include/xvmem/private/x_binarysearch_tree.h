@@ -186,6 +186,7 @@ namespace xcore
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
             bool clear(u32& root, tree_t* tree, xdexer* dexer, u32& n);
+			bool find_specific(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found, compare_f comparer);
             bool find(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found);
             bool upper(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found);
             bool insert(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32 node);

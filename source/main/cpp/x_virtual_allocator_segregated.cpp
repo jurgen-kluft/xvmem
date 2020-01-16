@@ -10,61 +10,71 @@
 
 namespace xcore
 {
-    inline u64 get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
+    static inline u64   get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-    static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
-    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (size_t)((uptr)next_ptr - (uptr)ptr); }
 
-    struct nblock_t : public xbst::index_based::node_t
+    // Memory Range is divided into Spaces
+    //   A Space has an index to the Level that owns that Space
+    //   A Level can own multiple spaces and are in a linked-list when not full
+	//
+	// Space:
+	//   Can not be larger than 4 GB!
+    //
+    // Allocate:
+    //   The size-request is transformed into the associated Level
+    //   When the linked-list of spaces of that Level is empty we allocate a new space
+    //   We take the linked list head node (space) and allocate from that space
+	// 
+	// Deallocate:
+	//   From the raw pointer we can compute the index of the space that it is part of.
+	//   Knowing the space we can get the level index.
+	//   Just call level->deallocate
+
+	static u16 const NIL16          = 0xffff;
+    static u32 const NIL32          = 0xffffffff;
+
+    struct nnode_t : public xbst::index_based::node_t
     {
-        static u32 const NIL            = 0xffffffff;
-        static u32 const FLAG_COLOR_RED = 0x10000000;
-        static u32 const FLAG_FREE      = 0x20000000;
-        static u32 const FLAG_USED      = 0x40000000;
-        static u32 const FLAG_LOCKED    = 0x80000000;
-        static u32 const FLAG_MASK      = 0xF0000000;
+        static u32 const FLAG_COLOR_RED = 0x40000000;
+        static u32 const FLAG_FREE      = 0x00000000;
+        static u32 const FLAG_USED      = 0x80000000;
+        static u32 const FLAG_MASK      = 0xC0000000;
 
-        u32 m_addr;      // addr = base_addr(m_addr * size_step)
-        u16 m_flags;     // [Allocated, Free, Locked, Color]
-        u16 m_level;     // Level index (size)
-        u32 m_size;      // Number of bytes of this block
-        u32 m_pages;     // Number of pages committed
-        u32 m_prev_addr; // previous node in memory, can be free, can be allocated
-        u32 m_next_addr; // next node in memory, can be free, can be allocated
+        u32 m_addr;            // addr = base_addr(m_addr * size_step) + flags [Bit 31&30 = Used/Free, Color]
+        u16 m_pages_range;     // Number of pages that this block holds
+        u16 m_pages_committed; // Number of pages committed
+        u32 m_prev_addr;       // previous node in memory, can be free, can be allocated (for coalesce)
+        u32 m_next_addr;       // next node in memory, can be free, can be allocated (for coalesce)
 
         void init()
         {
             clear();
-            m_addr      = 0;
-            m_flags     = 0;
-            m_level     = 0;
-            m_size      = 0;
-            m_pages     = 0;
-            m_prev_addr = NIL;
-            m_next_addr = NIL;
+            m_addr            = 0;
+            m_pages_range     = 0;
+            m_pages_committed = 0;
+            m_prev_addr       = NIL32;
+            m_next_addr       = NIL32;
         }
 
-        inline void* get_addr(void* baseaddr, u64 size_step) const { return (void*)((u64)baseaddr + ((u64)m_addr * size_step)); }
-        inline void  set_addr(void* baseaddr, u64 size_step, void* addr) { m_addr = (u32)(((u64)addr - (u64)baseaddr) / size_step); }
-        inline void  set_level_idx(u16 level_index) { m_level = level_index; }
-        inline u32   get_level_idx() const { return (u32)m_level; }
-        inline u64   get_page_cnt(u64 page_size) const { return (u64)m_pages * page_size; }
-        inline void  set_page_cnt(u64 size, u32 page_size) { m_pages = (u32)(size / page_size); }
-        inline u64   get_size(u32 size_step) const { return m_size * size_step; }
-        inline void  set_size(u64 size, u32 size_step) { m_size = (u32)(size / size_step); }
+		inline u32   get_addr() const { return m_addr & ~FLAG_MASK; }
+        inline void* get_full_address(void* baseaddr, u64 page_size) const { u32 const addr = m_addr & ~FLAG_MASK; return (void*)((u64)baseaddr + ((u64)addr * page_size)); }
+        inline void  set_addr_from_full_address(void* baseaddr, u64 page_size, void* addr) { u32 const flags = m_addr & FLAG_MASK; m_addr = (u32)(((u64)addr - (u64)baseaddr) / page_size) | flags; }
+        inline u32   get_page_cnt() const { return (u32)m_pages_range; }
+        inline void  set_page_cnt(u64 page_cnt) { m_pages_range = page_cnt; }
+        inline u32   get_commited_page_cnt() const { return m_pages_committed; }
+        inline void  set_commited_page_cnt(u64 size, u32 size_step) { m_pages_committed = (u32)(size / size_step); }
 
-        inline void set_locked() { m_flags = m_flags | FLAG_LOCKED; }
-        inline void set_used(bool used) { m_flags = m_flags | FLAG_USED; }
-        inline bool is_free() const { return (m_flags & FLAG_MASK) == FLAG_FREE; }
-        inline bool is_locked() const { return (m_flags & FLAG_MASK) == FLAG_LOCKED; }
+        inline void set_used(bool used) { m_addr = m_addr | FLAG_USED; }
+        inline bool is_used() const { return (m_addr & FLAG_USED) == FLAG_USED; }
+        inline bool is_free() const { return (m_addr & FLAG_USED) == FLAG_FREE; }
 
-        inline void set_color_red() { m_flags = m_flags | FLAG_COLOR_RED; }
-        inline void set_color_black() { m_flags = m_flags & ~FLAG_COLOR_RED; }
-        inline bool is_color_red() const { return (m_flags & FLAG_COLOR_RED) == FLAG_COLOR_RED; }
-        inline bool is_color_black() const { return (m_flags & FLAG_COLOR_RED) == 0; }
+        inline void set_color_red() { m_addr = m_addr | FLAG_COLOR_RED; }
+        inline void set_color_black() { m_addr = m_addr & ~FLAG_COLOR_RED; }
+        inline bool is_color_red() const { return (m_addr & FLAG_COLOR_RED) == FLAG_COLOR_RED; }
+        inline bool is_color_black() const { return (m_addr & FLAG_COLOR_RED) == 0; }
 
-		inline u64 get_addr_key() const { return m_addr; }
-        inline u64 get_size_key() const { return get_size_addr_key(m_size, m_addr); }
+        inline u64 get_addr_key() const { return m_addr & ~FLAG_MASK; }
+        inline u64 get_size_key() const { return get_size_addr_key(m_pages_range, (m_addr & ~FLAG_MASK)); }
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
@@ -75,13 +85,13 @@ namespace xcore
     {
         s32 get_color_node_f(const xbst::index_based::node_t* lhs)
         {
-            nblock_t const* n = (nblock_t const*)(lhs);
+            nnode_t const* n = (nnode_t const*)(lhs);
             return n->is_color_red() ? xbst::COLOR_RED : xbst::COLOR_BLACK;
         }
 
         void set_color_node_f(xbst::index_based::node_t* lhs, s32 color)
         {
-            nblock_t* n = (nblock_t*)(lhs);
+            nnode_t* n = (nnode_t*)(lhs);
             if (color == xbst::COLOR_BLACK)
                 n->set_color_black();
             else
@@ -93,310 +103,167 @@ namespace xcore
     {
         u64 get_key_node_f(const xbst::index_based::node_t* lhs)
         {
-            nblock_t const* n = (nblock_t const*)(lhs);
-            return (u64)n->m_addr;
+            nnode_t const* n = (nnode_t const*)(lhs);
+            return (u64)n->get_addr_key();
         }
 
         s32 compare_node_f(const u64 pkey, const xbst::index_based::node_t* node)
         {
-            nblock_t const* n    = (nblock_t const*)(node);
-            u32             addr = (u32)pkey;
-            if (addr < n->m_addr)
+            nnode_t const* n    = (nnode_t const*)(node);
+            u32            addr = (u32)pkey;
+            if (addr < n->get_addr_key())
                 return -1;
-            if (addr > n->m_addr)
+            if (addr > n->get_addr_key())
                 return 1;
             return 0;
         }
 
-		static tree_t	config;
+        static tree_t config;
     } // namespace bst_addr
 
     namespace bst_size
     {
         u64 get_key_node_f(const xbst::index_based::node_t* lhs)
         {
-            nblock_t const* n   = (nblock_t const*)(lhs);
-            u64 const       key = n->get_size_key();
+            nnode_t const* n   = (nnode_t const*)(lhs);
+            u64 const      key = n->get_size_key();
             return key;
         }
 
         s32 compare_node_f(const u64 pkey, const xbst::index_based::node_t* node)
         {
-            nblock_t const* n = (nblock_t const*)(node);
+            u32 const num_pages = (u32)(pkey >> 32);
+            u32 const addr      = (u32)(pkey & 0xffffffff);
 
-            u32 const size = (u32)(pkey >> 32);
-            u32 const addr = (u32)(pkey & 0xffffffff);
             // First sort by size
-            if (size < n->m_size)
+            nnode_t const* n = (nnode_t const*)(node);
+            if (num_pages < n->m_pages_range)
                 return -1;
-            if (size > n->m_size)
+            if (num_pages > n->m_pages_range)
                 return 1;
             // Then sort by address
-            if (addr < n->m_addr)
+            if (addr < n->get_addr_key())
                 return -1;
-            if (addr > n->m_addr)
+            if (addr > n->get_addr_key())
                 return 1;
-
             return 0;
         }
 
-		static tree_t	config;
-	} // namespace bst_size
+        s32 find_node_f(const u64 pkey, const xbst::index_based::node_t* node)
+        {
+            u32 const      num_pages = (u32)(pkey >> 32);
+            nnode_t const* n         = (nnode_t const*)(node);
+            if (num_pages < n->m_pages_range)
+                return -1;
+            if (num_pages >= n->m_pages_range)
+                return 0;
+            return 0;
+        }
 
-    struct xvmem_range_t
+        static tree_t config;
+    } // namespace bst_size
+
+	struct xspace_t;
+    struct xspaces_t
     {
-        struct range_t
+        void*        m_mem_address;
+        u64          m_space_size;  // The size of a range (e.g. 1 GiB)
+        u32          m_space_count; // The full address range is divided into 'n' spaces
+        u32          m_page_size;
+        u16          m_freelist; // The doubly linked list spaces that are 'empty'
+        xspace_t*    m_spaces;   // The array of memory spaces that make up the full address range
+        xdexed_array m_space_dexer;
+
+        void init(xalloc* main_heap, void* mem_address, u64 mem_range, u64 space_size, u32 page_size);
+        void release(xalloc* main_heap);
+
+        bool         is_space_empty(void* addr) const;
+		bool         is_space_full(void* addr) const;
+        inline void* get_base_address() const { return m_mem_address; }
+        inline u32   get_page_size() const { return m_page_size; }
+        inline u64   get_space_size() const { return m_space_size; }
+        void*        get_space_addr(void* addr) const
         {
-            void reset()
-            {
-                m_allocs = 0;
-                m_lvli   = 0xffff;
-                m_next   = 0xffff;
-                m_prev   = 0xffff;
-            }
-            bool is_unused() const { return m_allocs == 0; }
-            void register_alloc() { m_allocs += 1; }
-            void register_dealloc()
-            {
-                ASSERT(m_allocs > 0);
-                m_allocs -= 1;
-            }
-
-            u16 m_allocs;
-            u16 m_lvli;
-            u16 m_next;
-            u16 m_prev;
-        };
-
-        void*    m_mem_address;
-        u64      m_range_size;  // The size of a range (e.g. 1 GiB)
-        u32      m_range_count; // The full address range is divided into 'n' ranges
-        u16      m_freelist;    // The doubly linked list of free ranges
-        range_t* m_range;       // The array of memory ranges that make up the full address range
-
-        void init(xalloc* main_heap, void* mem_address, u64 mem_range, u64 sub_range)
-        {
-            m_mem_address = mem_address;
-            m_range_size  = sub_range;
-            m_range_count = (u32)(mem_range / sub_range);
-            m_range       = (range_t*)main_heap->allocate(sizeof(u16) * m_range_count, sizeof(void*));
-            for (u32 i = 0; i < m_range_count; i++)
-            {
-                m_range[i].reset();
-            }
-            for (u32 i = 1; i < m_range_count; i++)
-            {
-                u16      icurr = i - 1;
-                u16      inext = i;
-                range_t* pcurr = &m_range[icurr];
-                range_t* pnext = &m_range[inext];
-                pcurr->m_next  = inext;
-                pnext->m_prev  = icurr;
-            }
-            m_freelist = 0;
+            u64 const space_idx = (u64)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
+            ASSERT(space_idx < m_space_count);
+            return advance_ptr(m_mem_address, (space_idx * m_space_size));
         }
 
-        void release(xalloc* main_heap)
-        {
-            m_mem_address = nullptr;
-            m_range_size  = 0;
-            m_range_count = 0;
-            m_freelist    = 0xffff;
-            main_heap->deallocate(m_range);
-        }
+        inline u16 ptr2addr(void* p) const { return (u16)(((u64)p - (u64)get_space_addr(p)) / get_page_size()); }
+        xspace_t*  idx2space(u16 idx) { return m_space_dexer.idx2obj<xspace_t>(idx); }
 
-        bool is_range_empty(void* addr) const
-        {
-            u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
-            return m_range[idx].is_unused();
-        }
-
-        inline u64 get_range_size() const { return m_range_size; }
-        void*      get_range_addr(void* addr) const
-        {
-            u64 const idx = (u64)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
-            return advance_ptr(m_mem_address,  (idx * m_range_size));
-        }
-
-        bool obtain_range(void*& addr, u16 lvl_index)
-        {
-            // Do we still have some sub-ranges free ?
-            if (m_freelist != 0xffff)
-            {
-                u32 const item  = m_freelist;
-                range_t*  pcurr = &m_range[item];
-                m_freelist      = pcurr->m_next;
-                pcurr->m_lvli   = lvl_index;
-                pcurr->m_next   = 0xffff;
-                pcurr->m_prev   = 0xffff;
-                addr            = (void*)((u64)m_mem_address + (m_range_size * item));
-                return true;
-            }
-            return false;
-        }
-
-        void release_range(void*& addr)
-        {
-            // Put this sub-range back into the free-list !
-            u32 const iitem = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
-            range_t*  pcurr = &m_range[m_freelist];
-            pcurr->m_prev   = iitem;
-            range_t* pitem  = &m_range[iitem];
-            pitem->m_prev   = 0xffff;
-            pitem->m_next   = m_freelist;
-            pitem->m_lvli   = 0xffff;
-            m_freelist      = iitem;
-        }
-
-        inline u16 ptr2lvl(void* ptr) const
-        {
-            u32 const idx = (u32)(((uptr)ptr - (uptr)m_mem_address) / (uptr)m_range_size);
-            ASSERT(m_range[idx].m_lvli != 0xffff);
-            return m_range[idx].m_lvli;
-        }
-
-        // We register allocations and de-allocations on every sub-range to know if
-        // a sub-range is stil used. We are interested to know when a sub-range is free
-        // so that we can release it back.
-        void register_alloc(void* addr)
-        {
-            u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
-            m_range[idx].register_alloc();
-        }
-
-        // Returns the level index
-        u16 register_dealloc(void* addr)
-        {
-            u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_range_size);
-            ASSERT(m_range[idx].m_lvli != 0xffff);
-            m_range[idx].register_dealloc();
-            return m_range[idx].m_lvli;
-        }
+        void      insert_space_into_list(u16& head, u16 item);
+        xspace_t* remove_space_from_list(u16& head, u16 item);
+        bool      obtain_space(void*& addr, u16& ispace, xspace_t*& pspace);
+        void      release_space(void*& addr);
+		void      release_space(u16 ispace, xspace_t* pspace);
+        u16       ptr2level(void* ptr) const;
+		u16       ptr2space(void* ptr) const;
+        void      register_alloc(void* addr);
+        u16       register_dealloc(void* addr);
     };
 
-    // Segregated Allocator uses BST's for free blocks and allocated blocks.
-    // Every level starts of with one free block that covers the memory range of that level.
-    // So we can split nodes and we also coalesce.
-
-    class xvmem_allocator_segregated : public xalloc
+    struct xspace_t
     {
-    public:
-        virtual void* allocate(u32 size, u32 alignment);
-        virtual void  deallocate(void* p);
-        virtual void  release();
-
-        struct level_t
+        void reset()
         {
-            void reset()
-            {
-                m_free_bst  = nblock_t::NIL;
-                m_alloc_bst = nblock_t::NIL;
-            }
-            u32 m_free_bst;
-            u32 m_alloc_bst;
-        };
-
-        void initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_range, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize);
-
-        inline u32 ptr2addr(void* p) const { return (u32)(((u64)p - (u64)m_vmem_base_addr) / m_allocsize_step); }
-        inline u64 lvl2size(u16 ilvl) const { return m_allocsize_min + (ilvl * m_allocsize_step); }
-
-        void* allocate_from_level(u16 ilvl, u32 size)
-        {
-            // If 'free_bst' == NIL, retrieve an additional range from vrange_manager and add it to free_bst
-            ASSERT(ilvl < m_level_cnt);
-            level_t* plvl = &m_level[ilvl];
-            if (plvl->m_free_bst == nblock_t::NIL)
-            {
-                void* range_base_addr;
-                if (!m_vrange_manager.obtain_range(range_base_addr, ilvl))
-                {
-                    return nullptr;
-                }
-
-                // Create a new nblock_t for this range and add it
-                nblock_t* pnode = (nblock_t*)m_node_alloc->allocate();
-                u32       inode = m_node_alloc->ptr2idx(pnode);
-                pnode->init();
-                pnode->set_addr(m_vmem_base_addr, m_allocsize_step, range_base_addr);
-                pnode->set_page_cnt(m_vrange_manager.m_range_size, m_pagesize);
-				pnode->set_size(m_vrange_manager.m_range_size, m_allocsize_step);
-				u64 const key = get_size_addr_key(m_vrange_manager.m_range_size / m_allocsize_step, pnode->m_addr);
-                xbst::index_based::insert(plvl->m_free_bst, &bst_size::config, m_node_alloc, key, inode);
-            }
-
-            // Take a node from the 'free' bst of this level
-            u32 inode;
-			u64 const key = get_size_addr_key(size / m_allocsize_step, 0);
-            xbst::index_based::find(plvl->m_free_bst, &bst_size::config, m_node_alloc, key, inode);
-            nblock_t* pnode = (nblock_t*)m_node_alloc->idx2ptr(inode);
-
-            u64 const node_size = pnode->get_size(m_allocsize_step);
-            if (node_size >= lvl2size(ilvl))
-            {
-                u32 const inext = pnode->m_next_addr;
-                nblock_t* pnext = (nblock_t*)m_node_alloc->idx2ptr(inext);
-
-                // split the node and add it back into 'free'
-                nblock_t* psplit    = (nblock_t*)m_node_alloc->allocate();
-                u32       isplit    = m_node_alloc->ptr2idx(psplit);
-                psplit->m_prev_addr = inode;
-                psplit->m_next_addr = inext;
-                pnext->m_prev_addr  = isplit;
-                pnode->m_next_addr  = isplit;
-                void* addr          = pnode->get_addr(m_vmem_base_addr, m_allocsize_step);
-                addr                = advance_ptr(addr, size);
-                psplit->set_addr(m_vmem_base_addr, m_allocsize_step, addr);
-                psplit->set_size(node_size - size, m_pagesize);
-                pnode->set_size(size, m_pagesize);
-
-                u64 const key = psplit->get_size_key();
-                xbst::index_based::insert(plvl->m_free_bst, &bst_size::config, m_node_alloc, key, isplit);
-            }
-
-            // Add this allocation into the 'alloc' bst for this level
-            xbst::index_based::insert(plvl->m_alloc_bst, &bst_addr::config, m_node_alloc, pnode->get_addr_key(), inode);
-
-            void* ptr = pnode->get_addr(m_vmem_base_addr, m_allocsize_step);
-            return ptr;
+            m_free_bst  = NIL32;
+            m_alloc_bst = NIL32;
+            m_alloc_cnt = 0;
+            m_level_idx = 0xffff;
+            m_next      = 0xffff;
+            m_prev      = 0xffff;
         }
 
-        inline nblock_t* idx2block(u32 const i)
+        bool is_unused() const { return m_alloc_cnt == 0; }
+		bool is_empty() const { return m_alloc_cnt == 0; }
+        bool is_full() const { return m_free_bst == NIL32; }
+
+        void register_alloc() { m_alloc_cnt += 1; }
+        void register_dealloc()
         {
-            if (i == 0xffffffff)
-                return nullptr;
-            else
-                return (nblock_t*)m_node_alloc->idx2ptr(i);
+            ASSERT(m_alloc_cnt > 0);
+            m_alloc_cnt -= 1;
         }
 
-        void add_to_size_db(u32 inode, nblock_t* pnode)
+        void init(xfsadexed* node_alloc, void* vmem_base_addr, u64 allocsize_step, void* range_base_addr, u64 space_size, u32 page_size)
         {
-            u32 const ilvl = pnode->m_level;
-            u64       key  = (((u64)pnode->m_size << 32) | (u64)(pnode->m_addr));
-            xbst::index_based::insert(m_level[ilvl].m_free_bst, &bst_size::config, m_node_alloc, key, inode);
+            // Create a new nnode_t for this range and add it
+            nnode_t* pnode = (nnode_t*)node_alloc->allocate();
+            u32      inode = node_alloc->ptr2idx(pnode);
+            pnode->init();
+            pnode->set_addr_from_full_address(vmem_base_addr, allocsize_step, range_base_addr);
+            pnode->set_page_cnt(space_size / page_size);
+            u64 const key = get_size_addr_key(pnode->m_pages_range, pnode->get_addr());
+            xbst::index_based::insert(m_free_bst, &bst_size::config, node_alloc, key, inode);
         }
 
-        void remove_from_size_db(u32 inode, nblock_t* pnode)
+        void add_to_size_db(u32 inode, nnode_t* pnode, xdexer* dexer)
         {
-            u32 const ilvl = pnode->m_level;
-            u64       key  = (((u64)pnode->m_size << 32) | (u64)(pnode->m_addr));
-            xbst::index_based::insert(m_level[ilvl].m_free_bst, &bst_size::config, m_node_alloc, key, inode);
+            u64 key = (((u64)pnode->m_pages_range << 32) | (u64)(pnode->get_addr()));
+            xbst::index_based::insert(m_free_bst, &bst_size::config, dexer, key, inode);
         }
 
-        void add_to_addr_chain(u32 icurr, nblock_t* pcurr, u32 inode, nblock_t* pnode)
+        void remove_from_size_db(u32 inode, nnode_t* pnode, xdexer* dexer)
+        {
+            u64 key = (((u64)pnode->m_pages_range << 32) | (u64)(pnode->get_addr()));
+            xbst::index_based::insert(m_free_bst, &bst_size::config, dexer, key, inode);
+        }
+
+        void add_to_addr_chain(u32 icurr, nnode_t* pcurr, u32 inode, nnode_t* pnode, xdexer* dexer)
         {
             u32 const inext    = pcurr->m_next_addr;
-            nblock_t* pnext    = idx2block(inext);
+            nnode_t*  pnext    = dexer->idx2obj<nnode_t>(inext);
             pnext->m_prev_addr = inode;
             pcurr->m_next_addr = inode;
         }
 
-        void remove_from_addr_chain(u32 inode, nblock_t* pnode)
+        void remove_from_addr_chain(u32 inode, nnode_t* pnode, xdexer* dexer)
         {
             u32 const iprev = pnode->m_prev_addr;
             u32 const inext = pnode->m_next_addr;
-            nblock_t* pprev = idx2block(iprev);
-            nblock_t* pnext = idx2block(inext);
+            nnode_t*  pprev = dexer->idx2obj<nnode_t>(iprev);
+            nnode_t*  pnext = dexer->idx2obj<nnode_t>(inext);
             if (pprev != nullptr)
             {
                 pprev->m_next_addr = inext;
@@ -407,28 +274,28 @@ namespace xcore
             }
         }
 
-        void dealloc_node(u32 inode, nblock_t* pnode)
+        void dealloc_node(u32 inode, nnode_t* pnode, xfsadexed* nodes)
         {
-            ASSERT(m_node_alloc->idx2ptr(inode) == pnode);
-            m_node_alloc->deallocate(pnode);
+            ASSERT(nodes->idx2ptr(inode) == pnode);
+            nodes->deallocate(pnode);
         }
 
-        void deallocate_from_level(u32 ilvl, void* ptr)
+        void deallocate(void* ptr, xfsadexed* nodes, xspaces_t* spaces)
         {
-            level_t* plvl = &m_level[ilvl];
-            u64      key  = ptr2addr(ptr);
-            u32      inode_curr;
-            if (xbst::index_based::find(plvl->m_alloc_bst, &bst_addr::config, m_node_alloc, key, inode_curr))
+            u32 key = spaces->ptr2addr(ptr);
+
+            u32 inode_curr;
+            if (xbst::index_based::find(m_alloc_bst, &bst_addr::config, nodes, key, inode_curr))
             {
                 // This node is now 'free', can we coalesce with previous/next ?
                 // Coalesce (but do not add the node back to 'free' yet)
                 // Is the associated range now free ?, if so release it back
                 // If the associated range is not free we can add the node back to 'free'
-                nblock_t* pnode_curr = idx2block(inode_curr);
+                nnode_t*  pnode_curr = nodes->idx2obj<nnode_t>(inode_curr);
                 u32 const inode_prev = pnode_curr->m_prev_addr;
                 u32 const inode_next = pnode_curr->m_next_addr;
-                nblock_t* pnode_prev = idx2block(inode_prev);
-                nblock_t* pnode_next = idx2block(inode_next);
+                nnode_t*  pnode_prev = nodes->idx2obj<nnode_t>(inode_prev);
+                nnode_t*  pnode_next = nodes->idx2obj<nnode_t>(inode_next);
 
                 if ((pnode_prev != nullptr && pnode_prev->is_free()) && (pnode_next != nullptr && pnode_next->is_free()))
                 {
@@ -440,15 +307,15 @@ namespace xcore
                     // - remove current and next addr from physical addr list
                     // - add prev size back to size DB
                     // - deallocate current and next
-                    remove_from_size_db(inode_prev, pnode_prev);
-                    remove_from_size_db(inode_next, pnode_next);
+                    remove_from_size_db(inode_prev, pnode_prev, nodes);
+                    remove_from_size_db(inode_next, pnode_next, nodes);
 
-                    pnode_prev->m_size += pnode_curr->m_size + pnode_next->m_size;
-                    add_to_size_db(inode_prev, pnode_prev);
-                    remove_from_addr_chain(inode_curr, pnode_curr);
-                    remove_from_addr_chain(inode_next, pnode_next);
-                    dealloc_node(inode_curr, pnode_curr);
-                    dealloc_node(inode_next, pnode_next);
+                    pnode_prev->m_pages_range += pnode_curr->m_pages_range + pnode_next->m_pages_range;
+                    add_to_size_db(inode_prev, pnode_prev, nodes);
+                    remove_from_addr_chain(inode_curr, pnode_curr, nodes);
+                    remove_from_addr_chain(inode_next, pnode_next, nodes);
+                    dealloc_node(inode_curr, pnode_curr, nodes);
+                    dealloc_node(inode_next, pnode_next, nodes);
                 }
                 else if ((pnode_prev == nullptr || !pnode_prev->is_free()) && (pnode_next != nullptr && pnode_next->is_free()))
                 {
@@ -457,11 +324,11 @@ namespace xcore
                     // - deallocate 'next'
                     // - add the size of 'next' to 'current'
                     // - add size to size DB
-                    remove_from_size_db(inode_next, pnode_next);
-                    pnode_curr->m_size += pnode_next->m_size;
-                    add_to_size_db(inode_curr, pnode_curr);
-                    remove_from_addr_chain(inode_next, pnode_next);
-                    dealloc_node(inode_next, pnode_next);
+                    remove_from_size_db(inode_next, pnode_next, nodes);
+                    pnode_curr->m_pages_range += pnode_next->m_pages_range;
+                    add_to_size_db(inode_curr, pnode_curr, nodes);
+                    remove_from_addr_chain(inode_next, pnode_next, nodes);
+                    dealloc_node(inode_next, pnode_next, nodes);
                 }
                 else if ((pnode_prev != nullptr && pnode_prev->is_free()) && (pnode_next == nullptr || !pnode_next->is_free()))
                 {
@@ -469,106 +336,369 @@ namespace xcore
                     // - remove this addr/size node
                     // - rem/add size node of 'prev', adding the size of 'current'
                     // - deallocate 'current'
-                    remove_from_size_db(inode_prev, pnode_prev);
-                    pnode_prev->m_size += pnode_curr->m_size;
-                    add_to_size_db(inode_prev, pnode_prev);
-                    remove_from_addr_chain(inode_curr, pnode_curr);
-                    dealloc_node(inode_curr, pnode_curr);
+                    remove_from_size_db(inode_prev, pnode_prev, nodes);
+                    pnode_prev->m_pages_range += pnode_curr->m_pages_range;
+                    add_to_size_db(inode_prev, pnode_prev, nodes);
+                    remove_from_addr_chain(inode_curr, pnode_curr, nodes);
+                    dealloc_node(inode_curr, pnode_curr, nodes);
                 }
                 else if ((pnode_prev == nullptr || !pnode_prev->is_free()) && (pnode_next == nullptr || !pnode_next->is_free()))
                 {
                     // prev and next are marked as 'used'.
                     // - add current to size DB
-                    add_to_size_db(inode_curr, pnode_curr);
+                    add_to_size_db(inode_curr, pnode_curr, nodes);
                 }
             }
-
-            if (m_vrange_manager.is_range_empty(ptr))
-            {
-                // TODO: Release range
-                // There is still a nblock_t in the free BST for this range, we need
-                // to remove it. We know the size and addr.
-                u32 range_size = (u32)(m_vrange_manager.get_range_size() / m_allocsize_step);
-                u32 range_addr = (u32)((u64)m_vrange_manager.get_range_addr(ptr) / m_allocsize_step);
-                u64 key        = get_size_addr_key(range_size, range_addr);
-                u32 inode;
-                xbst::index_based::remove(plvl->m_free_bst, &bst_size::config, m_node_alloc, inode);
-                nblock_t* pnode = idx2block(inode);
-                remove_from_addr_chain(inode, pnode);
-                dealloc_node(inode, pnode);
-            }
         }
 
-        xalloc*                   m_main_alloc;
-        xfsadexed*                m_node_alloc;
-        void*                     m_vmem_base_addr;
-        u32                       m_allocsize_min;
-        u32                       m_allocsize_max;
-        u32                       m_allocsize_step;
-        u32                       m_pagesize;
-        u32                       m_level_cnt;
-        level_t*                  m_level;
-        xvmem_range_t             m_vrange_manager;
+        u32 m_free_bst;   // The binary search tree that tracks free space
+        u32 m_alloc_bst;  // The binary search tree that tracks allocations
+        u16 m_alloc_cnt;  // The number of allocations that are active
+        u16 m_level_idx;  // Which level is using us
+        u16 m_next;       // Used by level to keep track of spaces that are not full
+        u16 m_prev;
     };
 
-    void xvmem_allocator_segregated::initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_range, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize)
+    void xspaces_t::init(xalloc* main_heap, void* mem_address, u64 mem_range, u64 space_size, u32 page_size)
     {
-        m_main_alloc     = main_alloc;
-        m_node_alloc     = node_alloc;
-        m_vmem_base_addr = vmem_address;
-
-        m_allocsize_min  = allocsize_min;
-        m_allocsize_max  = allocsize_max;
-        m_allocsize_step = allocsize_step;
-        m_pagesize       = pagesize;
-        m_level_cnt      = (m_allocsize_max - m_allocsize_min) / m_allocsize_step;
-        m_level          = (level_t*)m_main_alloc->allocate(sizeof(level_t) * m_level_cnt, sizeof(void*));
-        for (s32 i = 0; i < m_level_cnt; ++i)
+        m_mem_address = mem_address;
+        m_page_size   = page_size;
+        m_space_size  = space_size;
+        m_space_count = (u32)(mem_range / space_size);
+        m_spaces      = (xspace_t*)main_heap->allocate(sizeof(u16) * m_space_count, sizeof(void*));
+        for (u32 i = 0; i < m_space_count; i++)
         {
-            m_level[i].reset();
+            m_spaces[i].reset();
+        }
+        for (u32 i = 1; i < m_space_count; i++)
+        {
+            u16       icurr = i - 1;
+            u16       inext = i;
+            xspace_t* pcurr = &m_spaces[icurr];
+            xspace_t* pnext = &m_spaces[inext];
+            pcurr->m_next   = inext;
+            pnext->m_prev   = icurr;
+        }
+        m_freelist    = 0;
+        m_space_dexer = xdexed_array(m_spaces, sizeof(xspace_t), m_space_count);
+    }
+
+    void xspaces_t::release(xalloc* main_heap)
+    {
+        m_mem_address = nullptr;
+        m_space_size  = 0;
+        m_space_count = 0;
+        m_freelist    = 0xffff;
+        main_heap->deallocate(m_spaces);
+    }
+
+    bool xspaces_t::is_space_empty(void* addr) const
+    {
+        u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
+        return m_spaces[idx].is_unused();
+    }
+
+    bool xspaces_t::is_space_full(void* addr) const
+    {
+        u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
+        return m_spaces[idx].is_full();
+    }
+
+    bool xspaces_t::obtain_space(void*& addr, u16& ispace, xspace_t*& pspace)
+    {
+        // Do we still have some free spaces ?
+        if (m_freelist != 0xffff)
+        {
+            u16 const item  = m_freelist;
+            xspace_t* pcurr = &m_spaces[item];
+            remove_space_from_list(m_freelist, m_freelist);
+            m_freelist         = pcurr->m_next;
+            pcurr->m_level_idx = 0xffff;
+            pcurr->m_next      = 0xffff;
+            pcurr->m_prev      = 0xffff;
+            addr               = (void*)((u64)m_mem_address + (m_space_size * item));
+            return true;
+        }
+        return false;
+    }
+
+    void xspaces_t::insert_space_into_list(u16& head, u16 item)
+    {
+        xspace_t* pcurr = m_space_dexer.idx2obj<xspace_t>(head);
+        pcurr->m_prev   = item;
+        xspace_t* pitem = m_space_dexer.idx2obj<xspace_t>(item);
+        pitem->m_prev   = 0xffff;
+        pitem->m_next   = head;
+        head            = item;
+    }
+
+    xspace_t* xspaces_t::remove_space_from_list(u16& head, u16 item)
+    {
+        xspace_t* pitem = m_space_dexer.idx2obj<xspace_t>(item);
+        xspace_t* pprev = m_space_dexer.idx2obj<xspace_t>(pitem->m_prev);
+        xspace_t* pnext = m_space_dexer.idx2obj<xspace_t>(pitem->m_next);
+        if (pprev != nullptr)
+            pprev->m_next = pitem->m_next;
+        if (pnext != nullptr)
+            pnext->m_prev = pitem->m_prev;
+        if (head == item)
+            head = pitem->m_next;
+        return pitem;
+    }
+
+    void xspaces_t::release_space(void*& addr)
+    {
+        // Put this space back into the free-list !
+        u32 const iitem    = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
+        xspace_t* pitem    = &m_spaces[iitem];
+        pitem->m_level_idx = 0xffff;
+        insert_space_into_list(m_freelist, iitem);
+    }
+
+    void xspaces_t::release_space(u16 ispace, xspace_t* pspace)
+    {
+        // Put this space back into the free-list !
+        pspace->m_level_idx = 0xffff;
+        insert_space_into_list(m_freelist, ispace);
+    }
+
+    u16 xspaces_t::ptr2level(void* ptr) const
+    {
+        u16 const space_idx = (u16)(((uptr)ptr - (uptr)m_mem_address) / (uptr)m_space_size);
+        ASSERT(m_spaces[space_idx].m_level_idx != 0xffff);
+        return m_spaces[space_idx].m_level_idx;
+    }
+
+    u16 xspaces_t::ptr2space(void* addr) const
+    {
+        u16 const space_idx = (u16)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
+        return space_idx;
+    }
+
+
+    // We register allocations and de-allocations on every space to know if
+    // it is stil used. We are interested to know when a space is free
+    // so that we can release it back.
+    void xspaces_t::register_alloc(void* addr)
+    {
+        u16 const space_idx = (u16)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
+        m_spaces[space_idx].register_alloc();
+    }
+
+    // Returns the level index
+    u16 xspaces_t::register_dealloc(void* addr)
+    {
+        u16 const space_idx = (u16)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
+        m_spaces[space_idx].register_dealloc();
+        return m_spaces[space_idx].m_level_idx;
+    }
+
+    struct level_t
+    {
+        void reset() { m_spaces_not_full = NIL16; }
+
+        void* allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step)
+        {
+            u16       ispace = m_spaces_not_full;
+            xspace_t* pspace = nullptr;
+            if (ispace == NIL16)
+            {
+                void* space_base_addr;
+                if (!spaces->obtain_space(space_base_addr, ispace, pspace))
+                {
+                    return nullptr;
+                }
+
+                // Initialize the newly obtained space
+                pspace->init(node_alloc, vmem_base_addr, allocsize_step, space_base_addr, spaces->get_space_size(), spaces->get_page_size());
+                spaces->insert_space_into_list(m_spaces_not_full, ispace);
+            }
+            else
+            {
+                pspace = spaces->idx2space(ispace);
+            }
+
+            // Take a node from the 'free' bst of the space
+            u32       inode;
+            u64 const key = get_size_addr_key(size_in_pages, 0);
+            xbst::index_based::find(pspace->m_free_bst, &bst_size::config, node_alloc, key, inode);
+            nnode_t* pnode = (nnode_t*)node_alloc->idx2ptr(inode);
+
+			u64 const size_in_bytes = size_in_pages * spaces->get_page_size();
+
+            u64 const node_size_in_pages = pnode->get_page_cnt();
+            if (node_size_in_pages >= lvl_size_in_pages)
+            {
+                u32 const inext = pnode->m_next_addr;
+                nnode_t*  pnext = (nnode_t*)node_alloc->idx2ptr(inext);
+
+                // split the node and add it back into 'free'
+                nnode_t* psplit     = (nnode_t*)node_alloc->allocate();
+                u32      isplit     = node_alloc->ptr2idx(psplit);
+                psplit->m_prev_addr = inode;
+                psplit->m_next_addr = inext;
+                pnext->m_prev_addr  = isplit;
+                pnode->m_next_addr  = isplit;
+                void* addr          = pnode->get_full_address(vmem_base_addr, allocsize_step);
+                addr                = advance_ptr(addr, size_in_bytes);
+                psplit->set_addr_from_full_address(vmem_base_addr, allocsize_step, addr);
+                psplit->set_page_cnt(node_size_in_pages - size_in_pages);
+                pnode->set_page_cnt(size_in_pages);
+
+                u64 const key = psplit->get_size_key();
+                xbst::index_based::insert(pspace->m_free_bst, &bst_size::config, node_alloc, key, isplit);
+            }
+
+            // Add this allocation into the 'alloc' bst for this level
+            xbst::index_based::insert(pspace->m_alloc_bst, &bst_addr::config, node_alloc, pnode->get_addr_key(), inode);
+
+            // If this space is full then remove it from the linked list
+            if (pspace->is_full())
+            {
+                spaces->remove_space_from_list(m_spaces_not_full, ispace);
+            }
+
+            void* ptr = pnode->get_full_address(vmem_base_addr, allocsize_step);
+            return ptr;
         }
 
-        bst_size::config.m_get_key_f   = bst_size::get_key_node_f;
-        bst_size::config.m_compare_f   = bst_size::compare_node_f;
-        bst_size::config.m_get_color_f = bst_color::get_color_node_f;
-        bst_size::config.m_set_color_f = bst_color::set_color_node_f;
+		void deallocate(void* ptr, xfsadexed* node_alloc, xspaces_t* spaces)
+		{
+			u16 const ispace = spaces->ptr2space(ptr);
+            xspace_t* pspace = spaces->idx2space(ispace);
+			bool const was_full = pspace->is_full();
+			pspace->deallocate(ptr, node_alloc, spaces);
+			bool const is_empty = pspace->is_empty();
 
-        bst_addr::config.m_get_key_f   = bst_addr::get_key_node_f;
-        bst_addr::config.m_compare_f   = bst_addr::compare_node_f;
-        bst_addr::config.m_get_color_f = bst_color::get_color_node_f;
-        bst_addr::config.m_set_color_f = bst_color::set_color_node_f;
+			if (was_full)
+			{
+				spaces->insert_space_into_list(m_spaces_not_full, ispace);
+			}
+			else if (is_empty)
+            {
+				spaces->remove_space_from_list(m_spaces_not_full, ispace);
+                spaces->release_space(ispace, pspace);
+            }
+		}
 
-        // Initialize the vmem address range manager
-        m_vrange_manager.init(main_alloc, m_vmem_base_addr, vmem_range, level_range);
+        u16 m_spaces_not_full;	// Linked list of spaces that are not full and not empty
+    };
+
+    struct xlevels_t
+    {
+        inline u64 lvl2size_in_pages(u16 ilvl) const { return (m_allocsize_min + (ilvl * m_allocsize_step) + (m_pagesize - 1)) / m_pagesize; }
+		inline u16 ptr2lvl(void* ptr)
+		{
+			u16 const level_index = m_spaces.ptr2level(ptr);
+			return level_index;
+		}
+
+		void initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 space_size, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 page_size)
+		{
+			m_main_alloc     = main_alloc;
+			m_node_alloc     = node_alloc;
+			m_vmem_base_addr = vmem_address;
+
+			m_allocsize_min  = allocsize_min;
+			m_allocsize_max  = allocsize_max;
+			m_allocsize_step = allocsize_step;
+			m_pagesize       = page_size;
+			m_level_cnt      = (m_allocsize_max - m_allocsize_min) / m_allocsize_step;
+			m_levels         = (level_t*)m_main_alloc->allocate(sizeof(level_t) * m_level_cnt, sizeof(void*));
+			for (u32 i = 0; i < m_level_cnt; ++i)
+			{
+				m_levels[i].reset();
+			}
+
+			bst_size::config.m_get_key_f   = bst_size::get_key_node_f;
+			bst_size::config.m_compare_f   = bst_size::compare_node_f;
+			bst_size::config.m_get_color_f = bst_color::get_color_node_f;
+			bst_size::config.m_set_color_f = bst_color::set_color_node_f;
+
+			bst_addr::config.m_get_key_f   = bst_addr::get_key_node_f;
+			bst_addr::config.m_compare_f   = bst_addr::compare_node_f;
+			bst_addr::config.m_get_color_f = bst_color::get_color_node_f;
+			bst_addr::config.m_set_color_f = bst_color::set_color_node_f;
+
+			// Initialize the spaces manager
+			m_spaces.init(main_alloc, m_vmem_base_addr, vmem_space, space_size, page_size);
+		}
+
+		void release()
+		{
+	        m_spaces.release(m_main_alloc);
+			m_main_alloc->deallocate(m_levels);
+			m_levels = nullptr;
+		}
+
+		void* allocate(u32 size, u32 alignment)
+		{
+			ASSERT(size >= m_allocsize_min && size <= m_allocsize_max);
+			ASSERT(alignment <= m_pagesize);
+			u32 const aligned_size = (size + (m_allocsize_step - 1)) & (~m_allocsize_step - 1);
+			u32 const size_in_pages = (aligned_size + (m_pagesize - 1)) / m_pagesize;
+			// TODO: I do not think the level index computation is correct 
+			u16 const ilevel = (aligned_size - m_allocsize_min) / m_level_cnt;
+			level_t* plevel  = &m_levels[ilevel];
+			void*     ptr    = plevel->allocate(size_in_pages, lvl2size_in_pages(ilevel), &m_spaces, m_node_alloc, m_vmem_base_addr, m_allocsize_step);
+			ASSERT(ptr2lvl(ptr) == ilevel);
+			m_spaces.register_alloc(ptr);
+			return ptr;
+		}
+
+        void deallocate(void* ptr)
+		{
+			u16 const ilevel = m_spaces.register_dealloc(ptr);
+			level_t* plevel  = &m_levels[ilevel];
+			plevel->deallocate(ptr, m_node_alloc, &m_spaces);
+		}
+
+		xalloc*    m_main_alloc;
+        xfsadexed* m_node_alloc;
+        void*      m_vmem_base_addr;
+        u32        m_allocsize_min;
+        u32        m_allocsize_max;
+        u32        m_allocsize_step;
+        u32        m_pagesize;
+        u32        m_level_cnt;
+        level_t*   m_levels;
+        xspaces_t  m_spaces;
+    };
+
+
+    // Segregated Allocator
+
+    class xvmem_allocator_segregated : public xalloc
+    {
+    public:
+        virtual void* allocate(u32 size, u32 alignment);
+        virtual void  deallocate(void* p);
+        virtual void  release();
+
+        void initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize);
+
+		xlevels_t m_levels;
+    };
+
+    void xvmem_allocator_segregated::initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize)
+    {
+		m_levels.initialize(main_alloc, node_alloc, vmem_address, vmem_space, level_range, allocsize_min, allocsize_max, allocsize_step, pagesize);
     }
 
     void* xvmem_allocator_segregated::allocate(u32 size, u32 alignment)
     {
-        ASSERT(size >= m_allocsize_min && size < m_allocsize_max);
-        ASSERT(alignment <= m_pagesize);
-        u32 const aligned_size = (size + m_allocsize_step - 1) & (~m_allocsize_step - 1);
-        u32 const level_index  = (aligned_size - m_allocsize_min) / m_level_cnt;
-        void*     ptr          = allocate_from_level(level_index, aligned_size);
-        ASSERT(m_vrange_manager.ptr2lvl(ptr) == level_index);
-        m_vrange_manager.register_alloc(ptr);
+		void* ptr = m_levels.allocate(size, alignment);
         return ptr;
     }
 
     void xvmem_allocator_segregated::deallocate(void* ptr)
     {
-        u16 const ilvl = m_vrange_manager.register_dealloc(ptr);
-        deallocate_from_level(ilvl, ptr);
+		m_levels.deallocate(ptr);
     }
 
     void xvmem_allocator_segregated::release()
     {
-        // de-allocate all nblock_t nodes at every level, for both alloc and free bst's
-        // for every level decommit every committed memory block of any allocated nblock_t
-        // release reserved virtual memory address range
-
-        // release resources
-        m_main_alloc->deallocate(m_level);
-        m_vrange_manager.release(m_main_alloc);
+        m_levels.release();
     }
 
 }; // namespace xcore

@@ -59,7 +59,7 @@ namespace xcore
         // - commits pages on allocation
         // - doesn't cache any pages
         // - decommits pages immediately at deallocation
-        u32 const page_count = (size + (m_page_size - 1)) & ~(m_page_size - 1);
+        u32 const page_count = (size + (m_page_size - 1)) / (m_page_size);
         m_vmem->commit(ptr, m_page_size, page_count);
 
         return ptr;
@@ -70,7 +70,7 @@ namespace xcore
         ASSERT(is_partof_memory_range(m_memory_base, m_memory_range, p));
         u32 const size = m_coalesce.deallocate(p);
 
-        u32 const page_count = (size + (m_page_size - 1)) & ~(m_page_size - 1);
+        u32 const page_count = (size + (m_page_size - 1)) / (m_page_size);
         m_vmem->decommit(p, m_page_size, page_count);
     }
 

@@ -13,25 +13,29 @@ Let's say an APP has 640 GB of address space and it has the following behaviour:
 
 ## Fixed Size Allocator [Ok]
 
+### Multi Threading
+
 Not too hard to make multi-thread safe using atomics where the only hard multi-threading problem is page commit/decommit.
 
 ### FSA very small
 
-  RegionSize = 512 x 1024 x 1024
-  PageSize = 4 KB (if possible), otherwise 64 KB
-  MinSize = 8
-  MaxSize = 512
-  Size Increment = 8
-  Number of FSA = 512 / 8 = 64
+- RegionSize = 512 x 1024 x 1024
+- PageSize = 4 KB (if possible), otherwise 64 KB
+- MinSize = 8
+- MaxSize = 512
+- Size Increment = 8
+- Number of FSA = 512 / 8 = 64
 
 ### FSA small
 
-  RegionSize = 256 x 1024 x 1024
-  PageSize = 64 KB
-  MinSize = 512
-  MaxSize = 8192
-  Size Increment = 64
-  Number of FSA = (8192-512) / 64 = 120
+- RegionSize = 256 x 1024 x 1024
+- PageSize = 64 KB
+- MinSize = 512
+- MaxSize = 8192
+- Size Increment = 64
+- Number of FSA = (8192-512) / 64 = 120
+
+#### Pros / Cons
 
 - Tiny implementation [+]
 - Very low wastage [+]
@@ -51,20 +55,28 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 
 ## Segregated Allocator [WIP]
 
+- Segregated:
+  - A large address range is divided into 'spaces', for example 256 MB
+  - A 'level' is a specific allocation size
+  - A 'level' can obtain multiple 'spaces'
+  - A 'level' can release 'spaces'
+  - Upon allocation the necessary pages are committed
+  - Upon deallocation the pages are decommitted
+  - A space is managing free and used blocks using a BST
+  - A deallocated block can coalesce with it's next and prev block
+  - The allocation is aligned to Level:Size but will only commit used pages
 - Can use more than one instance
-- Sizes to go here, example 640 KB < Size < 32 MB
+- Sizes to go here, example 640 KB < Size <= 32 MB
   Sizes; 1 MB, 2 MB, 3 MB, 4 MB ... 32 MB
 - Size-Alignment = Page-Size (64 KB)
-  Alloc-Alignment is Level:Size but will only commit used pages
-- Segregated; A Level obtains and releases ranges
 - Suitable for GPU memory
 
 ## Temporal Allocator [WIP]
 
-- For requests that have a very similar life-time (frame based allocations)
+- For requests that have a very similar life-time (1 or more frames based allocations)
 - Contiguous virtual pages
-- Moves forward when allocating (this is an optimization)
-- Large address space (~128 GB)
+- Moves forward when allocating and wraps around (this is an optimization)
+- Large address space (~32 GB)
 - Tracked with external bookkeeping
 - Suitable for GPU memory
 - Configured with a maximum number of allocations
@@ -90,7 +102,7 @@ protected:
     void*            m_mem_base;
     u64              m_mem_range;
     u32              m_entry_write;
-    u32              m_entry_write;
+    u32              m_entry_read;
     u32              m_entry_max;
     xentry*          m_entry_array;
 };

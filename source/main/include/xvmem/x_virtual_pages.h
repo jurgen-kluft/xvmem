@@ -22,7 +22,7 @@ namespace xcore
         };
 
         // Constraints:
-        // - maximum number of elements is 32768
+        // - maximum number of elements is 65535 - 1
         // - minimum size of an element is 4 bytes
         // - maximum page-size is 32768 * sizeof-element
         //
@@ -59,11 +59,12 @@ namespace xcore
 
         u64 memory_range() const;
 
-        void* allocate(u32& freelist, u32 const allocsize);
-        void  deallocate(u32& freelist, void* const ptr);
+        void* allocate(u32& pagelist, u32 const allocsize);
+        void  deallocate(u32& pagelist, void* const ptr);
 
         xvpage_t* alloc_page(u32 const allocsize);
         void      free_page(xvpage_t* const ppage);
+		void      free_pages(u32& pagelist);
 
         u32       address_to_allocsize(void* const address) const;
         xvpage_t* address_to_page(void* const address) const;
