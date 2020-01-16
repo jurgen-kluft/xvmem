@@ -53,6 +53,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 
 - Can use more than one instance
 - Sizes to go here, example 640 KB < Size < 32 MB
+  Sizes; 1 MB, 2 MB, 3 MB, 4 MB ... 32 MB
 - Size-Alignment = Page-Size (64 KB)
   Alloc-Alignment is Level:Size but will only commit used pages
 - Segregated; A Level obtains and releases ranges
