@@ -72,10 +72,10 @@ namespace xcore
                 u32 const flags = m_addr & FLAG_MASK;
                 m_addr          = (u32)(((u64)addr - (u64)baseaddr) / page_size) | flags;
             }
-            inline u32  get_page_cnt() const { return (u32)m_pages_range; }
-            inline void set_page_cnt(u64 page_cnt) { m_pages_range = page_cnt; }
-            inline u32  get_commited_page_cnt() const { return m_pages_committed; }
-            inline void set_commited_page_cnt(u64 size, u32 size_step) { m_pages_committed = (u32)(size / size_step); }
+            inline u16  get_page_cnt() const { return (u16)m_pages_range; }
+            inline void set_page_cnt(u16 page_cnt) { m_pages_range = page_cnt; }
+            inline u16  get_commited_page_cnt() const { return m_pages_committed; }
+            inline void set_commited_page_cnt(u64 size, u32 page_size) { m_pages_committed = (u16)((size + (page_size - 1)) / page_size); }
 
             inline void set_used(bool used) { m_addr = m_addr | FLAG_USED; }
             inline bool is_used() const { return (m_addr & FLAG_USED) == FLAG_USED; }
@@ -206,7 +206,7 @@ namespace xcore
                 u32      inode = node_alloc->ptr2idx(pnode);
                 pnode->init();
                 pnode->set_addr_from_full_address(vmem_base_addr, allocsize_step, range_base_addr);
-                pnode->set_page_cnt(space_size / page_size);
+                pnode->set_page_cnt((u16)(space_size / page_size));
                 u64 const key = get_size_addr_key(pnode->m_pages_range, pnode->get_addr());
                 xbst::index_based::insert(m_free_bst, &bst_size::config, node_alloc, key, inode);
             }
@@ -353,8 +353,13 @@ namespace xcore
                 pnext->m_prev   = icurr;
             }
             m_freelist    = 0;
-            m_space_dexer = xdexed_array(m_spaces, sizeof(xspace_t), m_space_count);
         }
+
+		inline xspace_t* idx2space(xspaces_t* self, u16 idx)
+		{
+			ASSERT(idx < self->m_space_count);
+			return &self->m_spaces[idx];
+		}
 
         void xspaces_t::release(xalloc* main_heap)
         {
@@ -404,9 +409,9 @@ namespace xcore
 
         void xspaces_t::insert_space_into_list(u16& head, u16 item)
         {
-            xspace_t* pcurr = m_space_dexer.idx2obj<xspace_t>(head);
+            xspace_t* pcurr = idx2space(this, head);
             pcurr->m_prev   = item;
-            xspace_t* pitem = m_space_dexer.idx2obj<xspace_t>(item);
+            xspace_t* pitem = idx2space(this, item);
             pitem->m_prev   = 0xffff;
             pitem->m_next   = head;
             head            = item;
@@ -414,9 +419,9 @@ namespace xcore
 
         xspace_t* xspaces_t::remove_space_from_list(u16& head, u16 item)
         {
-            xspace_t* pitem = m_space_dexer.idx2obj<xspace_t>(item);
-            xspace_t* pprev = m_space_dexer.idx2obj<xspace_t>(pitem->m_prev);
-            xspace_t* pnext = m_space_dexer.idx2obj<xspace_t>(pitem->m_next);
+            xspace_t* pitem = idx2space(this, item);
+            xspace_t* pprev = idx2space(this, pitem->m_prev);
+            xspace_t* pnext = idx2space(this, pitem->m_next);
             if (pprev != nullptr)
                 pprev->m_next = pitem->m_next;
             if (pnext != nullptr)
@@ -472,9 +477,17 @@ namespace xcore
             return m_spaces[space_idx].m_level_idx;
         }
 
-        void level_t::reset() { m_spaces_not_full = NIL16; }
+        struct xlevel_t
+        {
+            void  reset();
+            void* allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step);
+            void  deallocate(void* ptr, xfsadexed* node_alloc, xspaces_t* spaces);
+            u16   m_spaces_not_full; // Linked list of spaces that are not full and not empty
+        };
 
-        void* level_t::allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step)
+        void xlevel_t::reset() { m_spaces_not_full = NIL16; }
+
+        void* xlevel_t::allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step)
         {
             u16       ispace = m_spaces_not_full;
             xspace_t* pspace = nullptr;
@@ -492,7 +505,7 @@ namespace xcore
             }
             else
             {
-                pspace = spaces->idx2space(ispace);
+                pspace = idx2space(spaces, ispace);
             }
 
             // Take a node from the 'free' bst of the space
@@ -502,8 +515,7 @@ namespace xcore
             nnode_t* pnode = (nnode_t*)node_alloc->idx2ptr(inode);
 
             u64 const size_in_bytes = size_in_pages * spaces->get_page_size();
-
-            u64 const node_size_in_pages = pnode->get_page_cnt();
+            u16 const node_size_in_pages = pnode->get_page_cnt();
             if (node_size_in_pages >= lvl_size_in_pages)
             {
                 u32 const inext = pnode->m_next_addr;
@@ -539,10 +551,10 @@ namespace xcore
             return ptr;
         }
 
-        void deallocate(void* ptr, xfsadexed* node_alloc, xspaces_t* spaces)
+        void xlevel_t::deallocate(void* ptr, xfsadexed* node_alloc, xspaces_t* spaces)
         {
             u16 const  ispace   = spaces->ptr2space(ptr);
-            xspace_t*  pspace   = spaces->idx2space(ispace);
+            xspace_t*  pspace   = idx2space(spaces, ispace);
             bool const was_full = pspace->is_full();
             pspace->deallocate(ptr, node_alloc, spaces);
             bool const is_empty = pspace->is_empty();
@@ -558,15 +570,7 @@ namespace xcore
             }
         }
 
-        struct xlevel_t
-        {
-            void  reset();
-            void* allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step);
-            void  deallocate(void* ptr, xfsadexed* node_alloc, xspaces_t* spaces);
-            u16   m_spaces_not_full; // Linked list of spaces that are not full and not empty
-        };
-
-        inline u64 lvl2size_in_pages(xlevels_t* self, u16 ilvl) { return (self->m_allocsize_min + (ilvl * self->m_allocsize_step) + (self->m_pagesize - 1)) / self->m_pagesize; }
+        inline u16 lvl2size_in_pages(xlevels_t* self, u16 ilvl) { return (self->m_allocsize_min + (ilvl * self->m_allocsize_step) + (self->m_pagesize - 1)) / self->m_pagesize; }
         inline u16 ptr2lvl(xlevels_t* self, void* ptr)
         {
             u16 const level_index = self->m_spaces.ptr2level(ptr);
@@ -585,7 +589,7 @@ namespace xcore
             m_allocsize_step = allocsize_step;
             m_pagesize       = page_size;
             m_level_cnt      = (m_allocsize_max - m_allocsize_min) / m_allocsize_step;
-            m_levels         = (level_t*)m_main_alloc->allocate(sizeof(level_t) * m_level_cnt, sizeof(void*));
+            m_levels         = (xlevel_t*)m_main_alloc->allocate(sizeof(xlevel_t) * m_level_cnt, sizeof(void*));
             for (u32 i = 0; i < m_level_cnt; ++i)
             {
                 m_levels[i].reset();
@@ -617,12 +621,12 @@ namespace xcore
             ASSERT(size >= m_allocsize_min && size <= m_allocsize_max);
             ASSERT(alignment <= m_pagesize);
             u32 const aligned_size  = (size + (m_allocsize_step - 1)) & (~m_allocsize_step - 1);
-            u32 const size_in_pages = (aligned_size + (m_pagesize - 1)) / m_pagesize;
+            u16 const size_in_pages = (u16)((aligned_size + (m_pagesize - 1)) / m_pagesize);
             // TODO: I do not think the level index computation is correct
             u16 const ilevel = (aligned_size - m_allocsize_min) / m_level_cnt;
-            level_t*  plevel = &m_levels[ilevel];
-            void*     ptr    = plevel->allocate(size_in_pages, lvl2size_in_pages(ilevel), &m_spaces, m_node_alloc, m_vmem_base_addr, m_allocsize_step);
-            ASSERT(ptr2lvl(ptr) == ilevel);
+            xlevel_t*  plevel = &m_levels[ilevel];
+            void*     ptr    = plevel->allocate(size_in_pages, lvl2size_in_pages(this, ilevel), &m_spaces, m_node_alloc, m_vmem_base_addr, m_allocsize_step);
+            ASSERT(ptr2lvl(this, ptr) == ilevel);
             m_spaces.register_alloc(ptr);
             return ptr;
         }
@@ -630,7 +634,7 @@ namespace xcore
         void xlevels_t::deallocate(void* ptr)
         {
             u16 const ilevel = m_spaces.register_dealloc(ptr);
-            level_t*  plevel = &m_levels[ilevel];
+            xlevel_t*  plevel = &m_levels[ilevel];
             plevel->deallocate(ptr, m_node_alloc, &m_spaces);
         }
     } // namespace xsegregated

@@ -44,12 +44,6 @@ namespace xcore
                 return idx;
             }
 
-            inline xspace_t* idx2space(u16 idx)
-            {
-                ASSERT(idx < m_space_count);
-                return &m_spaces[idx];
-            }
-
             void      insert_space_into_list(u16& head, u16 item);
             xspace_t* remove_space_from_list(u16& head, u16 item);
             bool      obtain_space(void*& addr, u16& ispace, xspace_t*& pspace);
