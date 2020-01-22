@@ -19,13 +19,10 @@ namespace xcore
         u32* elem = (u32*)((xbyte*)page_base_address + ((u64)index * (u64)elem_size));
         return elem;
     }
+    static const u16 INDEX16_NIL = 0xffff;
 
     struct xfsapage_t
     {
-        enum
-        {
-            INDEX16_NIL = 0xffff,
-        };
 
         // Constraints:
         // - maximum number of elements is (65535-1)
@@ -61,7 +58,7 @@ namespace xcore
         // if page == nullptr then first allocate a new page for this size
         // else use the page to allocate a new element.
         // Note: page should NOT be full when calling this function!
-        if (m_free_list != xfsapage_t::INDEX16_NIL)
+        if (m_free_list != INDEX16_NIL)
         {
             u32 const ielem = m_free_list;
             ASSERT(ielem < INDEX16_NIL);
@@ -94,9 +91,9 @@ namespace xcore
         m_elem_used -= 1;
     }
 
-    struct xfspages_t
+    struct xfsapages_t
     {
-        xfspages_t(u32 page_size, xfsapage_t* const pages, u16 const cnt)
+        xfsapages_t(u32 page_size, xfsapage_t* const pages, u16 const cnt)
             : m_page_cnt(cnt)
             , m_free_page_index(0)
             , m_free_page_count(0)
@@ -110,31 +107,39 @@ namespace xcore
         void        free_page_list(u16& page_list);
 
         u32         address_to_elem_size(void* const base_address, void* const address) const;
-        xfsapage_t* address_to_block(void* const base_address, void* const address) const;
-        void*       get_block_address(void* const base_address, xfsapage_t* const block) const;
+        xfsapage_t* address_to_page(void* const base_address, void* const address) const;
+        void*       get_page_address(void* const base_address, xfsapage_t* const page) const;
 
         void*       idx2ptr(u32 const index) const;
         u32         ptr2idx(void* const ptr) const;
-        xfsapage_t* next_block(xfsapage_t* const block);
-        xfsapage_t* prev_block(xfsapage_t* const block);
-        xfsapage_t* indexto_block(u16 const block) const;
-        u16         indexof_block(xfsapage_t* const block) const;
+        xfsapage_t* next_page(xfsapage_t* const page);
+        xfsapage_t* prev_page(xfsapage_t* const page);
+        xfsapage_t* indexto_page(u16 const page) const;
+        u16         indexof_page(xfsapage_t* const page) const;
+
+        struct llnode_t
+        {
+            u16 m_prev, m_next;
+        };
+        llnode_t* next_node(llnode_t* const node);
+        llnode_t* prev_node(llnode_t* const node);
+        llnode_t* indexto_node(u16 const node) const;
+        u16       indexof_node(llnode_t* const node) const;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        u32       m_page_size;
-        u16       m_free_page_index;
-        u16       m_free_page_count;
-        u16       m_free_page_head;
-        u16 const m_page_cnt;
-        struct llnode_t
-        {
-            u16 m_prev;
-            u16 m_next;
-        };
+        void*       m_base_address;
+        u32         m_page_size;
+        u16         m_free_page_index;
+        u16         m_free_page_count;
+        u16         m_free_page_head;
+        u16 const   m_page_cnt;
         llnode_t*   m_page_list;
         xfsapage_t* m_pages;
     };
+
+    static void insert_in_list(xfsapages_t* pages, u16& head, u16 page);
+    static void remove_from_list(xfsapages_t* pages, u16& head, u16 page);
 
     xfsapage_t* xfsapages_t::alloc_page(u32 const elem_size)
     {
@@ -143,25 +148,21 @@ namespace xcore
         // virtual pages and commit the page.
         // If there are also no free virtual pages then we are out-of-memory!
         xfsapage_t* ppage = nullptr;
-        if (m_free_page_head != xvpage_t::INDEX16_NIL)
+        if (m_free_page_head != INDEX16_NIL)
         {
             // Get the page pointer and remove it from the list of virtual pages
             ppage = indexto_page(m_free_page_head);
             remove_from_list(this, m_free_page_head, m_free_page_head);
 
-            // Commit the virtual memory to physical memory
-            void* address = get_base_address(ppage);
-            m_vmem->commit(address, m_page_size, 1);
+            // Decommit the physical memory
         }
-        else if (m_free_pages_index < m_page_total_cnt)
+        else if (m_free_page_index < m_page_cnt)
         {
-            ppage = indexto_page(m_free_pages_index);
-            ppage->init();
-            m_free_pages_index += 1;
+            ppage = indexto_page(m_free_page_index);
+            ppage->init(m_page_size, elem_size);
+            m_free_page_index += 1;
 
             // Commit the virtual memory to physical memory
-            void* address = get_base_address(ppage);
-            m_vmem->commit(address, m_page_size, 1);
         }
         else
         {
@@ -169,12 +170,8 @@ namespace xcore
             return nullptr;
         }
 
-        // Page is committed, so it is physical, mark it
-        ppage->set_is_physical();
-
         // Initialize page with 'size' (alloc size)
-        init_page(ppage, m_page_size, allocsize);
-
+        ppage->init(m_page_size, elem_size);
         return ppage;
     }
 
@@ -206,4 +203,50 @@ namespace xcore
         ASSERT(ptr != nullptr);
     }
 
+    static inline void insert_in_list(xfsapages_t* pages, u16& head, u16 page)
+    {
+        // TODO: Sort the free pages by address !!
+        if (head == INDEX16_NIL)
+        {
+            xfsapages_t::llnode_t* const ppage = pages->indexto_node(page);
+            ppage->m_next                      = page;
+            ppage->m_prev                      = page;
+            head                               = page;
+        }
+        else
+        {
+            xfsapages_t::llnode_t* const phead = pages->indexto_node(head);
+            xfsapages_t::llnode_t* const pnext = pages->indexto_node(phead->m_next);
+            xfsapages_t::llnode_t* const ppage = pages->indexto_node(page);
+            ppage->m_prev                      = head;
+            ppage->m_next                      = phead->m_next;
+            phead->m_next                      = page;
+            pnext->m_prev                      = page;
+        }
+    }
+
+    static inline void remove_from_list(xfsapages_t* pages, u16& head, u16 page)
+    {
+        xfsapages_t::llnode_t* const phead = pages->indexto_node(head);
+        xfsapages_t::llnode_t* const ppage = pages->indexto_node(page);
+        xfsapages_t::llnode_t* const pprev = pages->indexto_node(ppage->m_prev);
+        xfsapages_t::llnode_t* const pnext = pages->indexto_node(ppage->m_next);
+        pprev->m_next                      = ppage->m_next;
+        pnext->m_prev                      = ppage->m_prev;
+
+        ppage->m_next = INDEX16_NIL;
+        ppage->m_prev = INDEX16_NIL;
+
+        if (phead == ppage)
+        {
+            if (pnext == ppage)
+            {
+                head = INDEX16_NIL;
+            }
+            else
+            {
+                head = pages->indexof_node(pnext);
+            }
+        }
+    }
 }; // namespace xcore
