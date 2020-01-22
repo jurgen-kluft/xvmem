@@ -15,19 +15,19 @@ namespace xcore
     {
         enum
         {
-            INDEX_NIL     = 0xffffffff,
+            //INDEX_NIL     = 0xffffffff,
             INDEX16_NIL   = 0xffff,
             PAGE_PHYSICAL = 1,
             PAGE_VIRTUAL  = 2,
         };
 
         // Constraints:
-        // - maximum number of elements is 65535 - 1
+        // - maximum number of elements is (65535-1)
         // - minimum size of an element is 4 bytes
-        // - maximum page-size is 32768 * sizeof-element
+        // - maximum page-size is (65535-1) * sizeof-element
         //
-        u32 m_next;
-        u32 m_prev;
+        u16 m_next;
+        u16 m_prev;
         u16 m_free_list;
         u16 m_free_index;
         u16 m_elem_used;
@@ -41,7 +41,7 @@ namespace xcore
         bool is_empty() const { return m_elem_used == 0; }
         bool is_physical() const { return (m_flags & PAGE_PHYSICAL) == PAGE_PHYSICAL; }
         bool is_virtual() const { return (m_flags & PAGE_VIRTUAL) == PAGE_VIRTUAL; }
-        bool is_linked() const { return !(m_next == INDEX_NIL && m_prev == INDEX_NIL); }
+        bool is_linked() const { return !(m_next == INDEX16_NIL && m_prev == INDEX16_NIL); }
 
         void set_is_virtual() { m_flags = (m_flags & ~(PAGE_PHYSICAL | PAGE_VIRTUAL)) | PAGE_VIRTUAL; }
         void set_is_physical() { m_flags = (m_flags & ~(PAGE_PHYSICAL | PAGE_VIRTUAL)) | PAGE_PHYSICAL; }
@@ -59,8 +59,8 @@ namespace xcore
 
         u64 memory_range() const;
 
-        void* allocate(u32& pagelist, u32 const allocsize);
-        void  deallocate(u32& pagelist, void* const ptr);
+        void* allocate(u16& pagelist, u32 const allocsize);
+        void  deallocate(u16& pagelist, void* const ptr);
 
         xvpage_t* alloc_page(u32 const allocsize);
         void      free_page(xvpage_t* const ppage);
@@ -75,8 +75,8 @@ namespace xcore
 
         xvpage_t* next_page(xvpage_t* const page);
         xvpage_t* prev_page(xvpage_t* const page);
-        xvpage_t* indexto_page(u32 const page) const;
-        u32       indexof_page(xvpage_t* const ppage) const;
+        xvpage_t* indexto_page(u16 const page) const;
+        u16       indexof_page(xvpage_t* const ppage) const;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
@@ -88,10 +88,10 @@ namespace xcore
         u32 const       m_page_total_cnt;
 		u32 const       m_page_cache_cnt;
 		u32             m_free_pages_index;
-        u32             m_free_pages_physical_head;
         u32             m_free_pages_physical_count;
-        u32             m_free_pages_virtual_head;
         u32             m_free_pages_virtual_count;
+        u16             m_free_pages_physical_head;
+        u16             m_free_pages_virtual_head;
         xvpage_t*       m_page_array;
     };
 

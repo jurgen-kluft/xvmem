@@ -32,41 +32,41 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce)
 		UNITTEST_TEST(coalescee_init)
 		{
 			void* mem_base = (void*)0x00ff000000000000ULL;
-			xcoalescee* c = create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
+			xcoalescee::xinstance_t* c = xcoalescee::create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
 			
-			destroy(c);
+			xcoalescee::destroy(c);
 		}
 
 		UNITTEST_TEST(coalescee_alloc_dealloc_once)
 		{
 			void* mem_base = (void*)0x00ff000000000000ULL;
-			xcoalescee* c = create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
-			destroy(c);
+			xcoalescee::xinstance_t* c = xcoalescee::create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
+			xcoalescee::destroy(c);
 
-			void* p = allocate(c, 10 * 1024, 8);
-			deallocate(c, p);
+			void* p = xcoalescee::allocate(c, 10 * 1024, 8);
+			xcoalescee::deallocate(c, p);
 
-			destroy(c);
+			xcoalescee::destroy(c);
 		}
 
 		UNITTEST_TEST(coalescee_alloc_dealloc_fixed_size_many)
 		{
 			void* mem_base = (void*)0x00ff000000000000ULL;
-			xcoalescee* c = create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
-			destroy(c);
+			xcoalescee::xinstance_t* c = xcoalescee::create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
+			xcoalescee::destroy(c);
 
 			const s32 cnt = 128;
 			void* ptrs[cnt];
 			for (s32 i=0; i<cnt; ++i)
 			{
-				ptrs[i] = allocate(c, 10 * 1024, 8);
+				ptrs[i] = xcoalescee::allocate(c, 10 * 1024, 8);
 			}
 			for (s32 i=0; i<cnt; ++i)
 			{
-				deallocate(c, ptrs[i]);
+				xcoalescee::deallocate(c, ptrs[i]);
 			}
 
-			destroy(c);
+			xcoalescee::destroy(c);
 		}
 
 	}

@@ -46,14 +46,14 @@ namespace xcore
         void*      m_memory_base;
         u64        m_memory_range;
         u32        m_page_size;
-        xcoalescee m_coalesce;
+        xcoalescee::xinstance_t* m_coalesce;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE;
     };
 
     void* xvmem_allocator_large::allocate(u32 size, u32 alignment)
     {
-        void* ptr = m_coalesce.allocate(size, alignment);
+        void* ptr = xcoalescee::allocate(m_coalesce, size, alignment);
 
         // The large allocator:
         // - commits pages on allocation
@@ -68,7 +68,7 @@ namespace xcore
     void xvmem_allocator_large::deallocate(void* p)
     {
         ASSERT(is_partof_memory_range(m_memory_base, m_memory_range, p));
-        u32 const size = m_coalesce.deallocate(p);
+        u32 const size = xcoalescee::deallocate(m_coalesce, p);
 
         u32 const page_count = (size + (m_page_size - 1)) / (m_page_size);
         m_vmem->decommit(p, m_page_size, page_count);
@@ -76,7 +76,7 @@ namespace xcore
 
     void xvmem_allocator_large::release()
     {
-        m_coalesce.release();
+        xcoalescee::destroy(m_coalesce);
         m_vmem->release(m_memory_base);
         m_main_heap->deallocate(this);
     }
@@ -94,9 +94,9 @@ namespace xcore
         large_allocator->m_memory_range = vmem_range;
         large_allocator->m_page_size    = page_size;
 
-        u32 const alloc_size_max  = 1 * 1024 * 1024 * 1024;
+		u32 const alloc_size_max  = 1 * 1024 * 1024 * 1024;
         u32 const alloc_size_step = 64 * 1024;
-        large_allocator->m_coalesce.initialize(internal_heap, node_heap, vmem_addr, vmem_range, alloc_size_min, alloc_size_max, alloc_size_step);
+		large_allocator->m_coalesce = xcoalescee::create(internal_heap, node_heap, vmem_addr, vmem_range, alloc_size_min, alloc_size_max, alloc_size_step);
 
         return large_allocator;
     }

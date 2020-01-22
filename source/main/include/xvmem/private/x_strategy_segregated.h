@@ -12,7 +12,7 @@ namespace xcore
 
     namespace xsegregated
     {
-        struct xlevels_t;
+        struct xinstance_t;
 
         // Memory Range is divided into Spaces
         //   A Space has an index to the Level that owns that Space
@@ -31,10 +31,10 @@ namespace xcore
         //   Knowing the space we can get the level index and the level.
         //   level->deallocate is called
 
-		xlevels_t* create(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 space_size, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 page_size);
-        void	   destroy(xlevels_t*);
-		void*      allocate(xlevels_t*, u32 size, u32 alignment);
-		void       deallocate(xlevels_t*, void* ptr);
+		xinstance_t* create(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 space_size, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 page_size);
+        void	   destroy(xinstance_t*);
+		void*      allocate(xinstance_t*, u32 size, u32 alignment);
+		void       deallocate(xinstance_t*, void* ptr);
     }
 }
 

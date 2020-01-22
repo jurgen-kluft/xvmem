@@ -9,12 +9,17 @@ namespace xcore
 {
 	class xalloc;
 	class xfsadexed;
-	struct xcoalescee;
 
-	xcoalescee* create(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
-    void	   destroy(xcoalescee*);
-	void*      allocate(xcoalescee*, u32 size, u32 alignment);
-	u32        deallocate(xcoalescee*, void* ptr);
+	namespace xcoalescee
+	{
+		struct xinstance_t;
+
+		u32        size_of(u32 size_min, u32 size_max, u32 size_step);
+		xinstance_t* create(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
+		void	   destroy(xinstance_t*);
+		void*      allocate(xinstance_t*, u32 size, u32 alignment);
+		u32        deallocate(xinstance_t*, void* ptr);
+	}
 
 } // namespace xcore
 

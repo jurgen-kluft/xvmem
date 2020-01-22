@@ -594,7 +594,7 @@ namespace xcore
             }
         }
 
-        struct xlevels_t
+        struct xinstance_t
         {
             xalloc*    m_main_alloc;
             xfsadexed* m_node_alloc;
@@ -610,37 +610,37 @@ namespace xcore
 			XCORE_CLASS_PLACEMENT_NEW_DELETE
         };
 
-        inline u16 lvl2size_in_pages(xlevels_t* self, u16 ilvl) { return (self->m_allocsize_min + (ilvl * self->m_allocsize_step) + (self->m_pagesize - 1)) / self->m_pagesize; }
-        inline u16 ptr2lvl(xlevels_t* self, void* ptr)
+        inline u16 lvl2size_in_pages(xinstance_t* self, u16 ilvl) { return (self->m_allocsize_min + (ilvl * self->m_allocsize_step) + (self->m_pagesize - 1)) / self->m_pagesize; }
+        inline u16 ptr2lvl(xinstance_t* self, void* ptr)
         {
             u16 const level_index = self->m_spaces->ptr2level(ptr);
             ASSERT(level_index < self->m_level_cnt);
             return level_index;
         }
 
-        xlevels_t* create(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 space_size, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 page_size)
+        xinstance_t* create(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 space_size, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 page_size)
         {
             const u32 num_levels = (allocsize_max - allocsize_min) / allocsize_step;
-			const u32 mem_size = sizeof(xlevel_t)*num_levels + sizeof(xspaces_t) + sizeof(xlevels_t);
+			const u32 mem_size = sizeof(xlevel_t)*num_levels + sizeof(xspaces_t) + sizeof(xinstance_t);
 			xbyte* mem_block = (xbyte*)main_alloc->allocate(mem_size, sizeof(void*));
 			xallocinplace aip(mem_block, mem_size);
-			xlevels_t* levels = aip.construct<xlevels_t>();
+			xinstance_t* instance = aip.construct<xinstance_t>();
 			xspaces_t* spaces = aip.construct<xspaces_t>();
 			xlevel_t* level_array = (xlevel_t*)aip.allocate(sizeof(xlevel_t) * num_levels, sizeof(void*));
 
-            levels->m_main_alloc     = main_alloc;
-            levels->m_node_alloc     = node_alloc;
-            levels->m_vmem_base_addr = vmem_address;
+            instance->m_main_alloc     = main_alloc;
+            instance->m_node_alloc     = node_alloc;
+            instance->m_vmem_base_addr = vmem_address;
 
-            levels->m_allocsize_min  = allocsize_min;
-            levels->m_allocsize_max  = allocsize_max;
-            levels->m_allocsize_step = allocsize_step;
-            levels->m_pagesize       = page_size;
-            levels->m_level_cnt      = (levels->m_allocsize_max - levels->m_allocsize_min) / levels->m_allocsize_step;
-            levels->m_levels         = level_array;
-            for (u32 i = 0; i < levels->m_level_cnt; ++i)
+            instance->m_allocsize_min  = allocsize_min;
+            instance->m_allocsize_max  = allocsize_max;
+            instance->m_allocsize_step = allocsize_step;
+            instance->m_pagesize       = page_size;
+            instance->m_level_cnt      = (instance->m_allocsize_max - instance->m_allocsize_min) / instance->m_allocsize_step;
+            instance->m_levels         = level_array;
+            for (u32 i = 0; i < instance->m_level_cnt; ++i)
             {
-                levels->m_levels[i].reset();
+                instance->m_levels[i].reset();
             }
 
             bst_size::config.m_get_key_f   = bst_size::get_key_node_f;
@@ -654,19 +654,19 @@ namespace xcore
             bst_addr::config.m_set_color_f = bst_color::set_color_node_f;
 
             // Initialize the spaces manager
-            levels->m_spaces->init(main_alloc, levels->m_vmem_base_addr, vmem_space, space_size, page_size);
+            instance->m_spaces->init(main_alloc, instance->m_vmem_base_addr, vmem_space, space_size, page_size);
 
-			return levels;
+			return instance;
         }
 
-        void destroy(xlevels_t* self)
+        void destroy(xinstance_t* self)
         {
             self->m_spaces->release(self->m_main_alloc);
             self->m_main_alloc->deallocate(self->m_levels);
             self->m_levels = nullptr;
         }
 
-        void* allocate(xlevels_t* self, u32 size, u32 alignment)
+        void* allocate(xinstance_t* self, u32 size, u32 alignment)
         {
             ASSERT(size >= self->m_allocsize_min && size <= self->m_allocsize_max);
             ASSERT(alignment <= self->m_pagesize);
@@ -681,7 +681,7 @@ namespace xcore
             return ptr;
         }
 
-        void deallocate(xlevels_t* self, void* ptr)
+        void deallocate(xinstance_t* self, void* ptr)
         {
             u16 const ilevel = self->m_spaces->register_dealloc(ptr);
             xlevel_t*  plevel = &self->m_levels[ilevel];

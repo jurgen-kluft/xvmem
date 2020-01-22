@@ -9,8 +9,8 @@ namespace xcore
 {
     void init_page(xvpage_t* const page, u32 const page_size, u32 const element_size)
     {
-        page->m_next       = xvpage_t::INDEX_NIL;
-        page->m_prev       = xvpage_t::INDEX_NIL;
+        page->m_next       = xvpage_t::INDEX16_NIL;
+        page->m_prev       = xvpage_t::INDEX16_NIL;
         page->m_flags      = xvpage_t::PAGE_PHYSICAL;
         page->m_free_list  = xvpage_t::INDEX16_NIL;
         page->m_free_index = 0;
@@ -21,8 +21,8 @@ namespace xcore
 
     static void inline page_unlink(xvpage_t* const page)
     {
-        page->m_next = xvpage_t::INDEX_NIL;
-        page->m_prev = xvpage_t::INDEX_NIL;
+        page->m_next = xvpage_t::INDEX16_NIL;
+        page->m_prev = xvpage_t::INDEX16_NIL;
     }
 
     static inline u32 index_of_elem(xvpage_t* const page, void* const page_base_address, void* const elem)
@@ -76,8 +76,8 @@ namespace xcore
 
 	void xvpage_t::init()
 	{
-        m_next       = xvpage_t::INDEX_NIL;
-        m_prev       = xvpage_t::INDEX_NIL;
+        m_next       = xvpage_t::INDEX16_NIL;
+        m_prev       = xvpage_t::INDEX16_NIL;
         m_flags      = xvpage_t::PAGE_PHYSICAL;
         m_free_list  = xvpage_t::INDEX16_NIL;
         m_free_index = 0;
@@ -96,9 +96,9 @@ namespace xcore
         , m_memory_base(memory_base)
         , m_memory_range(memory_range)
 		, m_free_pages_index(0)
-        , m_free_pages_physical_head(xvpage_t::INDEX_NIL)
+        , m_free_pages_physical_head(xvpage_t::INDEX16_NIL)
         , m_free_pages_physical_count(0)
-        , m_free_pages_virtual_head(xvpage_t::INDEX_NIL)
+        , m_free_pages_virtual_head(xvpage_t::INDEX16_NIL)
         , m_free_pages_virtual_count(0)
     {
     }
@@ -126,9 +126,9 @@ namespace xcore
 		// virtual pages and commit the page.
 		// If there are also no free virtual pages then we are out-of-memory!
         xvpage_t* ppage = nullptr;
-        if (m_free_pages_physical_head == xvpage_t::INDEX_NIL)
+        if (m_free_pages_physical_head == xvpage_t::INDEX16_NIL)
         {
-            if (m_free_pages_virtual_head != xvpage_t::INDEX_NIL)
+            if (m_free_pages_virtual_head != xvpage_t::INDEX16_NIL)
             {
                 // Get the page pointer and remove it from the list of virtual pages
                 ppage = indexto_page(m_free_pages_virtual_head);
@@ -194,7 +194,7 @@ namespace xcore
 
 	void xvpages_t::free_pages(u32& pagelist)
 	{
-		while (pagelist != xvpage_t::INDEX_NIL)
+		while (pagelist != xvpage_t::INDEX16_NIL)
 		{
 			u32 const ipage = pagelist;
             xvpage_t* ppage = indexto_page(ipage);
@@ -250,7 +250,7 @@ namespace xcore
         return &m_page_array[prev];
     }
 
-    xvpage_t* xvpages_t::indexto_page(u32 const page) const
+    xvpage_t* xvpages_t::indexto_page(u16 const page) const
     {
 		if (page >= m_page_total_cnt)
 		{
@@ -259,18 +259,18 @@ namespace xcore
         return &m_page_array[page];
     }
 
-    u32 xvpages_t::indexof_page(xvpage_t* const ppage) const
+    u16 xvpages_t::indexof_page(xvpage_t* const ppage) const
     {
         if (ppage == nullptr)
-            return xvpage_t::INDEX_NIL;
+            return xvpage_t::INDEX16_NIL;
         u32 const page = (u32)(ppage - &m_page_array[0]);
         return page;
     }
 
-    static inline void insert_in_list(xvpages_t* pages, u32& head, u32 page)
+    static inline void insert_in_list(xvpages_t* pages, u16& head, u16 page)
     {
 		// TODO: Sort the free pages by address !!
-        if (head == xvpage_t::INDEX_NIL)
+        if (head == xvpage_t::INDEX16_NIL)
         {
             xvpage_t* const ppage = pages->indexto_page(page);
             ppage->m_next         = page;
@@ -289,7 +289,7 @@ namespace xcore
         }
     }
 
-    static inline void remove_from_list(xvpages_t* pages, u32& head, u32 page)
+    static inline void remove_from_list(xvpages_t* pages, u16& head, u16 page)
     {
         xvpage_t* const phead = pages->indexto_page(head);
         xvpage_t* const ppage = pages->indexto_page(page);
@@ -303,7 +303,7 @@ namespace xcore
         {
 			if (pnext == ppage)
 			{
-				head = xvpage_t::INDEX_NIL;
+				head = xvpage_t::INDEX16_NIL;
 			}
 			else
 			{
@@ -312,24 +312,24 @@ namespace xcore
         }
     }
 
-    void* xvpages_t::allocate(u32& page_list, u32 allocsize)
+    void* xvpages_t::allocate(u16& page_list, u32 allocsize)
     {
         // If list is empty, request a new page and add it to the page_list
         // Using the page allocate a new element
         // return pointer to element
         // If page is full remove it from the list
-        u32       page  = xvpage_t::INDEX_NIL;
+        u16       ipage  = xvpage_t::INDEX16_NIL;
         xvpage_t* ppage = nullptr;
-        if (page_list == xvpage_t::INDEX_NIL)
+        if (page_list == xvpage_t::INDEX16_NIL)
         {
             ppage = alloc_page(allocsize);
-            page  = indexof_page(ppage);
-            insert_in_list(this, page_list, page);
+            ipage  = indexof_page(ppage);
+            insert_in_list(this, page_list, ipage);
         }
         else
         {
-            page  = page_list;
-            ppage = indexto_page(page);
+            ipage  = page_list;
+            ppage = indexto_page(ipage);
         }
 
         void* ptr = nullptr;
@@ -338,13 +338,13 @@ namespace xcore
             ptr = allocate_from_page(ppage, get_base_address(ppage));
             if (ppage->is_full())
             {
-                remove_from_list(this, page_list, page);
+                remove_from_list(this, page_list, ipage);
             }
         }
         return ptr;
     }
 
-    void xvpages_t::deallocate(u32& page_list, void* ptr)
+    void xvpages_t::deallocate(u16& page_list, void* ptr)
     {
         // Find page that this pointer belongs to
         // Determine element index of this pointer
@@ -353,20 +353,20 @@ namespace xcore
         // When deallocating this page, remove it from the free list
 		// When page was full then now add it back to the list of 'usable' pages
         xvpage_t* ppage = address_to_page(ptr);
-        u32 const page  = indexof_page(ppage);
+        u16 const ipage  = indexof_page(ppage);
 		bool const was_full = ppage->is_full();
         deallocate_from_page(ppage, get_base_address(ppage), ptr);
         if (ppage->is_empty())
         {
             if (ppage->is_linked())
             {
-                remove_from_list(this, page_list, page);
+                remove_from_list(this, page_list, ipage);
             }
             free_page(ppage);
         }
         else if (was_full)
         {
-            insert_in_list(this, page_list, page);
+            insert_in_list(this, page_list, ipage);
         }
     }
 
