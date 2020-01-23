@@ -8,18 +8,11 @@
 
 namespace xcore
 {
-    static inline u32 index_of_elem(u32 const elem_size, void* const page_base_address, void* const elem)
-    {
-        u32 const index = (u32)(((u64)elem - (u64)page_base_address) / elem_size);
-        return index;
-    }
-
-    static inline u32* pointer_to_elem(u32 const elem_size, void* const page_base_address, u32 const index)
-    {
-        u32* elem = (u32*)((xbyte*)page_base_address + ((u64)index * (u64)elem_size));
-        return elem;
-    }
     static const u16 INDEX16_NIL = 0xffff;
+
+    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
+    static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
+    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (size_t)((uptr)next_ptr - (uptr)ptr); }
 
     struct xfsapage_t
     {
@@ -53,6 +46,18 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
 
+    static inline u32 index_of_elem(xfsapage_t const* const page, void* const page_base_address, void* const elem)
+    {
+        u32 const index = (u32)(((u64)elem - (u64)page_base_address) / page->m_elem_size);
+        return index;
+    }
+
+    static inline u32* pointer_to_elem(xfsapage_t const* const page, void* const page_base_address, u32 const index)
+    {
+        u32* elem = (u32*)((xbyte*)page_base_address + ((u64)index * (u64)page->m_elem_size));
+        return elem;
+    }
+
     void* xfsapage_t::allocate(void* const block_base_address)
     {
         // if page == nullptr then first allocate a new page for this size
@@ -62,7 +67,7 @@ namespace xcore
         {
             u32 const ielem = m_free_list;
             ASSERT(ielem < INDEX16_NIL);
-            u32* const pelem = pointer_to_elem(m_elem_size, block_base_address, ielem);
+            u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
             m_free_list      = pelem[0];
             m_elem_used++;
             return (void*)pelem;
@@ -72,7 +77,7 @@ namespace xcore
             m_elem_used++;
             u32 const ielem = m_free_index++;
             ASSERT(ielem < INDEX16_NIL);
-            u32* const pelem = pointer_to_elem(m_elem_size, block_base_address, ielem);
+            u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
             return (void*)pelem;
         }
         else
@@ -83,9 +88,9 @@ namespace xcore
 
     void xfsapage_t::deallocate(void* const block_base_address, void* const ptr)
     {
-        u32 const ielem = index_of_elem(m_elem_size, block_base_address, ptr);
+        u32 const ielem = index_of_elem(this, block_base_address, ptr);
         ASSERT(ielem < INDEX16_NIL);
-        u32* const pelem = pointer_to_elem(m_elem_size, block_base_address, ielem);
+        u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
         pelem[0]         = m_free_list;
         m_free_list      = ielem;
         m_elem_used -= 1;
@@ -106,9 +111,9 @@ namespace xcore
         void        free_page(xfsapage_t* const ppage);
         void        free_page_list(u16& page_list);
 
-        u32         address_to_elem_size(void* const base_address, void* const address) const;
-        xfsapage_t* address_to_page(void* const base_address, void* const address) const;
-        void*       get_page_address(void* const base_address, xfsapage_t* const page) const;
+        u32         address_to_elem_size(void* const address) const;
+        xfsapage_t* address_to_page(void* const address) const;
+        void*       address_of_page(xfsapage_t* const page) const;
 
         void*       idx2ptr(u32 const index) const;
         u32         ptr2idx(void* const ptr) const;
@@ -123,6 +128,8 @@ namespace xcore
         };
         llnode_t* next_node(llnode_t* const node);
         llnode_t* prev_node(llnode_t* const node);
+        u16       next_node(u16 const node) const;
+        u16       prev_node(u16 const node) const;
         llnode_t* indexto_node(u16 const node) const;
         u16       indexof_node(llnode_t* const node) const;
 
@@ -175,14 +182,125 @@ namespace xcore
         return ppage;
     }
 
-    void xfsapages_t::free_page(xfsapage_t* const ppage) {}
+    void xfsapages_t::free_page(xfsapage_t* const ppage)
+	{
+		u16 const ipage = indexof_page(ppage);
+		insert_in_list(this, m_free_page_head, ipage);
+	}
 
-    void xfsapages_t::free_page_list(u16& page_list) {}
+    u32 xfsapages_t::address_to_elem_size(void* const address) const 
+	{
+		xfsapage_t* ppage = address_to_page(address);
+		return ppage->m_elem_size;
+	}
 
-    xfsapages_t* create(xalloc* main_allocator, u64 memory_range, u32 page_size)
+    xfsapage_t* xfsapages_t::address_to_page(void* const address) const
     {
-        ASSERT(main_allocator != nullptr);
-        return nullptr;
+        u16 const ipage = (u16)(((u64)address - (u64)m_base_address) / m_page_size);
+        return indexto_page(ipage);
+    }
+
+    void* xfsapages_t::address_of_page(xfsapage_t* const page) const
+    {
+        u64 const ipage = indexof_page(page);
+        return advance_ptr(m_base_address, ipage * m_page_size);
+    }
+
+    void* xfsapages_t::idx2ptr(u32 const index) const
+    {
+        if (index == 0xffffffff)
+            return nullptr;
+        u16 const   ipage = (index >> 16) & 0xffff;
+        u16 const   ielem = (index >> 0) & 0xffff;
+        xfsapage_t* ppage = indexto_page(ipage);
+        return pointer_to_elem(ppage, m_base_address, ielem);
+    }
+
+    u32 xfsapages_t::ptr2idx(void* const ptr) const
+    {
+        xfsapage_t* ppage = address_to_page(ptr);
+        u32 const   ipage = indexof_page(ppage);
+        void* const apage = address_of_page(ppage);
+        u32 const   ielem = index_of_elem(ppage, apage, ptr);
+        return (ipage << 16) | (ielem);
+    }
+
+    xfsapages_t::llnode_t* xfsapages_t::next_node(xfsapages_t::llnode_t* const node)
+    {
+        u16 const inext = node->m_next;
+        return indexto_node(inext);
+    }
+
+    xfsapages_t::llnode_t* xfsapages_t::prev_node(xfsapages_t::llnode_t* const node)
+    {
+        u16 const iprev = node->m_prev;
+        return indexto_node(iprev);
+    }
+
+    u16 xfsapages_t::next_node(u16 const node) const
+    {
+        if (node == INDEX16_NIL)
+            return INDEX16_NIL;
+        return m_page_list[node].m_next;
+    }
+
+    u16 xfsapages_t::prev_node(u16 const node) const
+    {
+        if (node == INDEX16_NIL)
+            return INDEX16_NIL;
+        return m_page_list[node].m_prev;
+    }
+
+    xfsapages_t::llnode_t* xfsapages_t::indexto_node(u16 const node) const
+    {
+        if (node == INDEX16_NIL)
+            return nullptr;
+        return &m_page_list[node];
+    }
+
+    u16 xfsapages_t::indexof_node(llnode_t* const node) const
+    {
+        if (node == nullptr)
+            return INDEX16_NIL;
+        u16 const index = (u16)(((u64)node - (u64)&m_page_list[0]) / sizeof(xfsapages_t::llnode_t));
+        return index;
+    }
+
+    xfsapage_t* xfsapages_t::next_page(xfsapage_t* const page)
+    {
+        if (page == nullptr)
+            return nullptr;
+        u16 const index = indexof_page(page);
+        u16 const next  = next_node(index);
+        if (next == INDEX16_NIL)
+            return nullptr;
+        return &m_pages[next];
+    }
+
+    xfsapage_t* xfsapages_t::prev_page(xfsapage_t* const page)
+    {
+        if (page == nullptr)
+            return nullptr;
+        u16 const index = indexof_page(page);
+        u16 const prev  = prev_node(index);
+        if (prev == INDEX16_NIL)
+            return nullptr;
+        return &m_pages[prev];
+    }
+
+    xfsapage_t* xfsapages_t::indexto_page(u16 const page) const
+    {
+        if (page == INDEX16_NIL)
+            return nullptr;
+        return &m_pages[page];
+    }
+
+    u16 xfsapages_t::indexof_page(xfsapage_t* const page) const
+    {
+        if (page == nullptr)
+            return INDEX16_NIL;
+        u16 const index = (u16)(((u64)page - (u64)&m_pages[0]) / sizeof(xfsapages_t::llnode_t));
+        return index;
     }
 
     void destroy(xalloc* main_allocator, xfsapages_t* pages)
@@ -202,6 +320,14 @@ namespace xcore
         ASSERT(pages != nullptr);
         ASSERT(ptr != nullptr);
     }
+
+	static inline bool is_page_linked(xfsapages_t* pages, u16 page)
+	{
+        if (page == INDEX16_NIL)
+			return false;
+        xfsapages_t::llnode_t* const ppage = pages->indexto_node(page);
+		return ppage->m_next != INDEX16_NIL || ppage->m_prev != INDEX16_NIL;
+	}
 
     static inline void insert_in_list(xfsapages_t* pages, u16& head, u16 page)
     {
@@ -249,4 +375,106 @@ namespace xcore
             }
         }
     }
+
+    xfsapages_t* create(xalloc* main_allocator, u64 memory_range, u32 page_size)
+    {
+        ASSERT(main_allocator != nullptr);
+        return nullptr;
+    }
+
+    void* alloc_page(xfsapages_t* pages, xfsapage_list_t& page_list, u32 const elem_size)
+    {
+		xfsapage_t* ppage = pages->alloc_page(elem_size);
+		u16 const ipage = pages->indexof_page(ppage);
+		insert_in_list(pages, page_list.m_list, ipage);
+		page_list.m_count += 1;
+		return pages->address_of_page(ppage);
+    }
+
+    void* free_one_page(xfsapages_t* pages, xfsapage_list_t& page_list)
+    {
+		u16 const ipage = page_list.m_list;
+		if (ipage == INDEX16_NIL)
+			return nullptr;
+		remove_from_list(pages, page_list.m_list, ipage);
+		page_list.m_count -= 1;
+		xfsapage_t* ppage = pages->indexto_page(ipage);
+		void* const apage = pages->address_of_page(ppage);
+		pages->free_page(ppage);
+		return apage;
+    }
+
+    void free_all_pages(xfsapages_t* pages, xfsapage_list_t& page_list)
+    {
+		while (page_list.m_count > 0)
+		{
+			u16 const ipage = page_list.m_list;
+			remove_from_list(pages, page_list.m_list, ipage);
+			xfsapage_t* ppage = pages->indexto_page(ipage);
+			pages->free_page(ppage);
+			page_list.m_count -= 1;
+		}
+    }
+
+    void* alloc_elem(xfsapages_t* pages, xfsapage_list_t& page_list, u32 const elem_size)
+    {
+        // If list is empty, request a new page and add it to the page_list
+        // Using the page allocate a new element
+        // return pointer to element
+        // If page is full remove it from the list
+        u16       ipage  = INDEX16_NIL;
+        xfsapage_t* ppage = nullptr;
+        if (page_list.m_list == INDEX16_NIL)
+        {
+            ppage = pages->alloc_page(elem_size);
+            ipage  = pages->indexof_page(ppage);
+            insert_in_list(pages, page_list.m_list, ipage);
+			page_list.m_count += 1;
+        }
+        else
+        {
+            ipage  = page_list.m_list;
+            ppage = pages->indexto_page(ipage);
+        }
+
+		void* const apage = pages->address_of_page(ppage);
+        void* ptr = nullptr;
+        if (ppage != nullptr)
+        {
+            ptr = ppage->allocate(apage);
+            if (ppage->is_full())
+            {
+                remove_from_list(pages, page_list.m_list, ipage);
+				page_list.m_count -= 1;
+            }
+        }
+        return ptr;    
+	}
+
+    void free_elem(xfsapages_t* pages, xfsapage_list_t& page_list, void* const ptr, xfsapage_list_t& pages_empty_list)
+    {
+        // Find page that this pointer belongs to
+        // Determine element index of this pointer
+        // Add element to free element list of the page
+        // When page is empty remove it from the free list and add it to the 'pages_empty_list'
+		// When page was full then now add it back to the list of 'usable' pages
+        xfsapage_t* ppage = pages->address_to_page(ptr);
+        u16 const ipage  = pages->indexof_page(ppage);
+		bool const was_full = ppage->is_full();
+        ppage->deallocate(pages->address_of_page(ppage), ptr);
+        if (ppage->is_empty())
+        {
+            ASSERT(is_page_linked(pages, ipage));
+            remove_from_list(pages, page_list.m_list, ipage);
+			page_list.m_count -= 1;
+			insert_in_list(pages, pages_empty_list.m_list, ipage);
+			pages_empty_list.m_count += 1;
+        }
+        else if (was_full)
+        {
+            insert_in_list(pages, page_list.m_list, ipage);
+			page_list.m_count += 1;
+        }
+    }
+
 }; // namespace xcore
