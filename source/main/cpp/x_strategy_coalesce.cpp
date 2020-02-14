@@ -175,7 +175,7 @@ namespace xcore
             xhibitset  m_size_db_occupancy;
             u32        m_addr_db;
 
-			XCORE_CLASS_PLACEMENT_NEW_DELETE
+            XCORE_CLASS_PLACEMENT_NEW_DELETE
         };
 
         void remove_from_addr_chain(xinstance_t& self, u32 inode, naddr_t* pnode);
@@ -241,7 +241,7 @@ namespace xcore
 
         xinstance_t* create(xalloc* main_alloc, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step)
         {
-			xinstance_t* self = nullptr;
+            xinstance_t* self = nullptr;
 
             const u32 size_db_cnt   = 1 + ((size_max - size_min) / size_step);
             const u32 memblock_size = size_db_cnt * sizeof(u32) + xhibitset::size_in_dwords(size_db_cnt) * sizeof(u32) + sizeof(xinstance_t);
@@ -304,7 +304,7 @@ namespace xcore
             main_node->set_size(mem_size, self->m_alloc_size_step);
             add_to_size_db(*self, main_inode, main_node);
 
-			return self;
+            return self;
         }
 
         void destroy(xinstance_t* self)

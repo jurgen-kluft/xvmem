@@ -98,12 +98,17 @@ namespace xcore
 
     struct xfsapages_t
     {
-        xfsapages_t(u32 page_size, xfsapage_t* const pages, u16 const cnt)
-            : m_page_cnt(cnt)
+        struct llnode_t;
+
+        xfsapages_t(void* base_address, u32 page_size, u16 const page_cnt, llnode_t* llnode_array, xfsapage_t* const page_array)
+            : m_base_address(base_address)
+            , m_page_size(page_size)
             , m_free_page_index(0)
             , m_free_page_count(0)
             , m_free_page_head(0)
-            , m_pages(pages)
+            , m_page_cnt(page_cnt)
+            , m_page_list(llnode_array)
+            , m_pages(page_array)
         {
         }
 
@@ -183,16 +188,16 @@ namespace xcore
     }
 
     void xfsapages_t::free_page(xfsapage_t* const ppage)
-	{
-		u16 const ipage = indexof_page(ppage);
-		insert_in_list(this, m_free_page_head, ipage);
-	}
+    {
+        u16 const ipage = indexof_page(ppage);
+        insert_in_list(this, m_free_page_head, ipage);
+    }
 
-    u32 xfsapages_t::address_to_elem_size(void* const address) const 
-	{
-		xfsapage_t* ppage = address_to_page(address);
-		return ppage->m_elem_size;
-	}
+    u32 xfsapages_t::address_to_elem_size(void* const address) const
+    {
+        xfsapage_t* ppage = address_to_page(address);
+        return ppage->m_elem_size;
+    }
 
     xfsapage_t* xfsapages_t::address_to_page(void* const address) const
     {
@@ -321,13 +326,13 @@ namespace xcore
         ASSERT(ptr != nullptr);
     }
 
-	static inline bool is_page_linked(xfsapages_t* pages, u16 page)
-	{
+    static inline bool is_page_linked(xfsapages_t* pages, u16 page)
+    {
         if (page == INDEX16_NIL)
-			return false;
+            return false;
         xfsapages_t::llnode_t* const ppage = pages->indexto_node(page);
-		return ppage->m_next != INDEX16_NIL || ppage->m_prev != INDEX16_NIL;
-	}
+        return ppage->m_next != INDEX16_NIL || ppage->m_prev != INDEX16_NIL;
+    }
 
     static inline void insert_in_list(xfsapages_t* pages, u16& head, u16 page)
     {
@@ -376,44 +381,55 @@ namespace xcore
         }
     }
 
-    xfsapages_t* create(xalloc* main_allocator, u64 memory_range, u32 page_size)
+    xfsapages_t* create(xalloc* main_allocator, void* base_address, u64 memory_range, u32 page_size)
     {
         ASSERT(main_allocator != nullptr);
-        return nullptr;
+        u32 const              page_cnt     = memory_range / page_size;
+        xfsapage_t*            page_array   = (xfsapage_t*)main_allocator->allocate(sizeof(xfsapage_t) * page_cnt, sizeof(void*));
+        xfsapages_t::llnode_t* llnode_array = (xfsapages_t::llnode_t*)main_allocator->allocate(sizeof(xfsapages_t::llnode_t) * page_cnt, sizeof(void*));
+        xfsapages_t*           pages        = main_allocator->construct<xfsapages_t>(base_address, page_size, page_cnt, llnode_array, page_array);
+        return pages;
+    }
+
+    void destroy(xalloc* main_allocator, xfsapages_t* pages)
+    {
+        main_allocator->deallocate(pages->m_page_list);
+        main_allocator->deallocate(pages->m_pages);
+        main_allocator->deallocate(pages);
     }
 
     void* alloc_page(xfsapages_t* pages, xfsapage_list_t& page_list, u32 const elem_size)
     {
-		xfsapage_t* ppage = pages->alloc_page(elem_size);
-		u16 const ipage = pages->indexof_page(ppage);
-		insert_in_list(pages, page_list.m_list, ipage);
-		page_list.m_count += 1;
-		return pages->address_of_page(ppage);
+        xfsapage_t* ppage = pages->alloc_page(elem_size);
+        u16 const   ipage = pages->indexof_page(ppage);
+        insert_in_list(pages, page_list.m_list, ipage);
+        page_list.m_count += 1;
+        return pages->address_of_page(ppage);
     }
 
     void* free_one_page(xfsapages_t* pages, xfsapage_list_t& page_list)
     {
-		u16 const ipage = page_list.m_list;
-		if (ipage == INDEX16_NIL)
-			return nullptr;
-		remove_from_list(pages, page_list.m_list, ipage);
-		page_list.m_count -= 1;
-		xfsapage_t* ppage = pages->indexto_page(ipage);
-		void* const apage = pages->address_of_page(ppage);
-		pages->free_page(ppage);
-		return apage;
+        u16 const ipage = page_list.m_list;
+        if (ipage == INDEX16_NIL)
+            return nullptr;
+        remove_from_list(pages, page_list.m_list, ipage);
+        page_list.m_count -= 1;
+        xfsapage_t* ppage = pages->indexto_page(ipage);
+        void* const apage = pages->address_of_page(ppage);
+        pages->free_page(ppage);
+        return apage;
     }
 
     void free_all_pages(xfsapages_t* pages, xfsapage_list_t& page_list)
     {
-		while (page_list.m_count > 0)
-		{
-			u16 const ipage = page_list.m_list;
-			remove_from_list(pages, page_list.m_list, ipage);
-			xfsapage_t* ppage = pages->indexto_page(ipage);
-			pages->free_page(ppage);
-			page_list.m_count -= 1;
-		}
+        while (page_list.m_count > 0)
+        {
+            u16 const ipage = page_list.m_list;
+            remove_from_list(pages, page_list.m_list, ipage);
+            xfsapage_t* ppage = pages->indexto_page(ipage);
+            pages->free_page(ppage);
+            page_list.m_count -= 1;
+        }
     }
 
     void* alloc_elem(xfsapages_t* pages, xfsapage_list_t& page_list, u32 const elem_size)
@@ -422,34 +438,34 @@ namespace xcore
         // Using the page allocate a new element
         // return pointer to element
         // If page is full remove it from the list
-        u16       ipage  = INDEX16_NIL;
+        u16         ipage = INDEX16_NIL;
         xfsapage_t* ppage = nullptr;
         if (page_list.m_list == INDEX16_NIL)
         {
             ppage = pages->alloc_page(elem_size);
-            ipage  = pages->indexof_page(ppage);
+            ipage = pages->indexof_page(ppage);
             insert_in_list(pages, page_list.m_list, ipage);
-			page_list.m_count += 1;
+            page_list.m_count += 1;
         }
         else
         {
-            ipage  = page_list.m_list;
+            ipage = page_list.m_list;
             ppage = pages->indexto_page(ipage);
         }
 
-		void* const apage = pages->address_of_page(ppage);
-        void* ptr = nullptr;
+        void* const apage = pages->address_of_page(ppage);
+        void*       ptr   = nullptr;
         if (ppage != nullptr)
         {
             ptr = ppage->allocate(apage);
             if (ppage->is_full())
             {
                 remove_from_list(pages, page_list.m_list, ipage);
-				page_list.m_count -= 1;
+                page_list.m_count -= 1;
             }
         }
-        return ptr;    
-	}
+        return ptr;
+    }
 
     void free_elem(xfsapages_t* pages, xfsapage_list_t& page_list, void* const ptr, xfsapage_list_t& pages_empty_list)
     {
@@ -457,23 +473,23 @@ namespace xcore
         // Determine element index of this pointer
         // Add element to free element list of the page
         // When page is empty remove it from the free list and add it to the 'pages_empty_list'
-		// When page was full then now add it back to the list of 'usable' pages
-        xfsapage_t* ppage = pages->address_to_page(ptr);
-        u16 const ipage  = pages->indexof_page(ppage);
-		bool const was_full = ppage->is_full();
+        // When page was full then now add it back to the list of 'usable' pages
+        xfsapage_t* ppage    = pages->address_to_page(ptr);
+        u16 const   ipage    = pages->indexof_page(ppage);
+        bool const  was_full = ppage->is_full();
         ppage->deallocate(pages->address_of_page(ppage), ptr);
         if (ppage->is_empty())
         {
             ASSERT(is_page_linked(pages, ipage));
             remove_from_list(pages, page_list.m_list, ipage);
-			page_list.m_count -= 1;
-			insert_in_list(pages, pages_empty_list.m_list, ipage);
-			pages_empty_list.m_count += 1;
+            page_list.m_count -= 1;
+            insert_in_list(pages, pages_empty_list.m_list, ipage);
+            pages_empty_list.m_count += 1;
         }
         else if (was_full)
         {
             insert_in_list(pages, page_list.m_list, ipage);
-			page_list.m_count += 1;
+            page_list.m_count += 1;
         }
     }
 

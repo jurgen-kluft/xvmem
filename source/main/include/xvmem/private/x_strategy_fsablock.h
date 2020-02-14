@@ -25,6 +25,7 @@ namespace xcore
     void*        free_one_page(xfsapages_t* pages, xfsapage_list_t& page_list);
     void         free_all_pages(xfsapages_t* pages, xfsapage_list_t& page_list);
     void*        alloc_elem(xfsapages_t* pages, xfsapage_list_t& page_list, u32 const elem_size);
+    u32          sizeof_elem(xfsapages_t* pages, void* const ptr);
     void         free_elem(xfsapages_t* pages, xfsapage_list_t& page_list, void* const ptr, xfsapage_list_t& pages_empty_list);
 
     // Usage:
