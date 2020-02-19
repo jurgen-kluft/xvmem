@@ -43,15 +43,26 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Fast [+]
 - Difficult to detect memory corruption [-]
 
-## Coalesce Allocator
+## Coalesce Allocator A
 
 - Can use more than one instance
-- Size example: 8 KB < Size < 128 KB
+- Size range: 8 KB < Size < 128 KB
 - Size alignment: 256
-- A reserved memory range of contiguous virtual pages
+- A reserved memory range (768MB) of contiguous virtual pages
 - Releases pages back to its underlying page allocator
 - Best-Fit strategy
 - Suitable for GPU memory
+
+## Coalesce Allocator B
+
+- Can use more than one instance
+- Size range: 128 KB < Size < 640 KB
+- Size alignment: 1024
+- A reserved memory range (768MB) of contiguous virtual pages
+- Releases pages back to its underlying page allocator
+- Best-Fit strategy
+- Suitable for GPU memory
+
 
 ## Segregated Allocator [WIP]
 
@@ -65,6 +76,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
   - A space is managing free and used blocks using a BST
   - A deallocated block can coalesce with it's next and prev block
   - The allocation is aligned to Level:Size but will only commit used pages
+- A reserved memory range (128GB) of virtual pages
 - Can use more than one instance
 - Sizes to go here, example 640 KB < Size <= 32 MB
   Sizes; 1 MB, 2 MB, 3 MB, 4 MB ... 32 MB
@@ -110,9 +122,9 @@ protected:
 
 ## Large Size Allocator
 
-- Sizes > 32 MB
+- Sizes >= 32 MB
 - Size alignment is page size
-- Small number of allocations
+- Small number of allocations (<32)
 - Allocation tracking is done with levels + BST
   - Could easily track if a level is empty and free it back to main
 - Reserves huge virtual address space (~128 GB)

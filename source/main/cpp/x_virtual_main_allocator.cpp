@@ -19,50 +19,38 @@ namespace xcore
         virtual void  deallocate(void* ptr);
         virtual void  release();
 
-        xalloc* m_internal_heap;
-
-        // Very small allocator, size < 1 KB
-        u32              m_fvsa_min_size;   // 8
-        u32              m_fvsa_step_size;  // 8
-        u32              m_fvsa_max_size;   // 1 KB
-        void*            m_fvsa_mem_base;   // A memory base pointer
-        u64              m_fvsa_mem_range;  // 1 GB
-        xfsapage_list_t* m_fvsa_pages_list; // 127 allocators
-
-        // Small allocator, 1 KB < size <= 8 KB
-        u32              m_fsa_min_size;   // 1 KB
-        u32              m_fsa_step_size;  // 64
-        u32              m_fsa_max_size;   // 8 KB
-        void*            m_fsa_mem_base;   // A memory base pointer
-        u64              m_fsa_mem_range;  // 1 GB
-        xfsapage_list_t* m_fsa_pages_list; // 112 allocators
-
-        // The page manager for fvsa and fsa
-        u32             m_fsa_page_size; // 64 KB
-        xfsapage_list_t m_fsa_freepages_list;
-        xfsapages_t*    m_fsa_pages;
-
-        // Medium allocator
-        u32                      m_med_min_size;  // 8 KB
-        u32                      m_med_step_size; // 256 (size alignment)
-        u32                      m_med_max_size;  // 640 KB
-        void*                    m_med_mem_base;  // A memory base pointer
-        u64                      m_med_mem_range; // 768 MB
-        xcoalescee::xinstance_t* m_med_allocator;
-
-        // Segregated allocator
+        xalloc*                   m_internal_heap;
+        u32                       m_fvsa_min_size;   // 8
+        u32                       m_fvsa_step_size;  // 8
+        u32                       m_fvsa_max_size;   // 1 KB
+        void*                     m_fvsa_mem_base;   // A memory base pointer
+        u64                       m_fvsa_mem_range;  // 1 GB
+        xfsapage_list_t*          m_fvsa_pages_list; // 127 allocators
+        u32                       m_fsa_min_size;    // 1 KB
+        u32                       m_fsa_step_size;   // 64
+        u32                       m_fsa_max_size;    // 8 KB
+        void*                     m_fsa_mem_base;    // A memory base pointer
+        u64                       m_fsa_mem_range;   // 1 GB
+        xfsapage_list_t*          m_fsa_pages_list;  // 112 allocators
+        u32                       m_fsa_page_size;   // 64 KB
+        xfsapage_list_t           m_fsa_freepages_list;
+        xfsapages_t*              m_fsa_pages;
+        u32                       m_med_min_size;  // 8 KB
+        u32                       m_med_step_size; // 256 (size alignment)
+        u32                       m_med_max_size;  // 640 KB
+        void*                     m_med_mem_base;  // A memory base pointer
+        u64                       m_med_mem_range; // 768 MB
+        xcoalescee::xinstance_t*  m_med_allocator;
         u32                       m_seg_min_size;  // 640 KB
         u32                       m_seg_max_size;  // 32 MB
         void*                     m_seg_mem_base;  // A memory base pointer
         u64                       m_seg_mem_range; // 128 GB
         u64                       m_seg_mem_subrange;
         xsegregated::xinstance_t* m_seg_allocator;
-
-        // Large allocator
-        u32     m_large_min_size;  // 32MB
-        void*   m_large_mem_base;  // A memory base pointer
-        u64     m_large_mem_range; //
-        xalloc* m_large_allocator;
+        u32                       m_large_min_size;  // 32MB
+        void*                     m_large_mem_base;  // A memory base pointer
+        u64                       m_large_mem_range; //
+        xalloc*                   m_large_allocator;
     };
 
     void* xvmem_allocator::allocate(u32 size, u32 align)
@@ -200,6 +188,12 @@ namespace xcore
         m_seg_mem_range    = (u64)128 * 1024 * 1024 * 1024; // 128 GB
         m_seg_mem_subrange = (u64)1 * 1024 * 1024 * 1024;   // 1 GB
         m_seg_allocator    = xsegregated::create(internal_allocator, node_heap_32, m_seg_mem_base, m_seg_mem_range, m_seg_mem_subrange, m_seg_min_size, m_seg_max_size, m_seg_step_size, page_size);
+
+        // TODO: Reserve virtual memory for the large allocator
+        m_large_min_size  = (u32)32 * 1024 * 1024;         // 32 MB
+        m_large_mem_base  = nullptr;                       // A memory base pointer
+        m_large_mem_range = (u64)128 * 1024 * 1024 * 1024; // 128 GB
+        m_large_allocator = ;
     }
 
     xalloc* gCreateVmAllocator(xalloc* internal_allocator)
