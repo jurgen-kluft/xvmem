@@ -7,6 +7,7 @@
 #include "xvmem/private/x_strategy_fsablock.h"
 #include "xvmem/private/x_strategy_coalesce.h"
 #include "xvmem/private/x_strategy_segregated.h"
+#include "xvmem/private/x_strategy_large.h"
 #include "xvmem/x_virtual_memory.h"
 
 namespace xcore
@@ -40,17 +41,18 @@ namespace xcore
         u32                       m_med_max_size;  // 640 KB
         void*                     m_med_mem_base;  // A memory base pointer
         u64                       m_med_mem_range; // 768 MB
-        xcoalescee::xinstance_t*  m_med_allocator;
+        xcoalescestrat::xinstance_t*  m_med_allocator;
         u32                       m_seg_min_size;  // 640 KB
         u32                       m_seg_max_size;  // 32 MB
+        u32                       m_seg_step_size;  // 1 MB
         void*                     m_seg_mem_base;  // A memory base pointer
         u64                       m_seg_mem_range; // 128 GB
         u64                       m_seg_mem_subrange;
-        xsegregated::xinstance_t* m_seg_allocator;
+        xsegregatedstrat::xinstance_t* m_seg_allocator;
         u32                       m_large_min_size;  // 32MB
         void*                     m_large_mem_base;  // A memory base pointer
         u64                       m_large_mem_range; //
-        xalloc*                   m_large_allocator;
+        xlargestrat::xinstance_t*      m_large_allocator;
     };
 
     void* xvmem_allocator::allocate(u32 size, u32 align)
@@ -85,11 +87,11 @@ namespace xcore
         {
             if (size < m_med_min_size)
                 size = m_med_min_size;
-            return m_med_allocator->allocate(size, align);
+            return xcoalescestrat::allocate(m_med_allocator, size, align);
         }
         else
         {
-            return m_large_allocator->allocate(size, align);
+            return xlargestrat::allocate(m_large_allocator, size, align);
         }
     }
 
@@ -126,11 +128,11 @@ namespace xcore
         }
         else if (helper_is_in_memrange(m_med_mem_base, m_med_mem_range, ptr))
         {
-            m_med_allocator->deallocate(ptr);
+            xcoalescestrat::deallocate(m_med_allocator, ptr);
         }
         else if (helper_is_in_memrange(m_large_mem_base, m_large_mem_range, ptr))
         {
-            m_large_allocator->deallocate(ptr);
+            xlargestrat::deallocate(m_large_allocator, ptr);
         }
         else
         {
@@ -178,8 +180,8 @@ namespace xcore
         m_med_step_size = 256;
         m_med_max_size  = 640 * 1024;
 
-        u32 const sizeof_coalesce_strategy = xcoalescee::size_of(m_med_min_size, m_med_max_size, m_med_step_size);
-        m_med_allocator                    = xcoalescee::create(internal_allocator, node_heap_32, m_med_mem_base, m_med_mem_range, m_med_min_size, m_med_max_size, m_med_step_size);
+        u32 const sizeof_coalesce_strategy = xcoalescestrat::size_of(m_med_min_size, m_med_max_size, m_med_step_size);
+        m_med_allocator                    = xcoalescestrat::create(internal_allocator, node_heap_32, m_med_mem_base, m_med_mem_range, m_med_min_size, m_med_max_size, m_med_step_size);
 
         // TODO: Reserve virtual memory for the segregated allocator
         m_seg_min_size     = (u32)640 * 1024;       // 640 KB
@@ -187,13 +189,14 @@ namespace xcore
         m_seg_mem_base     = nullptr;
         m_seg_mem_range    = (u64)128 * 1024 * 1024 * 1024; // 128 GB
         m_seg_mem_subrange = (u64)1 * 1024 * 1024 * 1024;   // 1 GB
-        m_seg_allocator    = xsegregated::create(internal_allocator, node_heap_32, m_seg_mem_base, m_seg_mem_range, m_seg_mem_subrange, m_seg_min_size, m_seg_max_size, m_seg_step_size, page_size);
+        m_seg_allocator    = xsegregatedstrat::create(internal_allocator, node_heap_32, m_seg_mem_base, m_seg_mem_range, m_seg_mem_subrange, m_seg_min_size, m_seg_max_size, m_seg_step_size, page_size);
 
         // TODO: Reserve virtual memory for the large allocator
         m_large_min_size  = (u32)32 * 1024 * 1024;         // 32 MB
         m_large_mem_base  = nullptr;                       // A memory base pointer
         m_large_mem_range = (u64)128 * 1024 * 1024 * 1024; // 128 GB
-        m_large_allocator = ;
+		const u32 max_num_large_allocations = 64;
+        m_large_allocator = xlargestrat::create(internal_allocator, m_large_mem_base, m_large_mem_range, m_large_min_size, max_num_large_allocations);
     }
 
     xalloc* gCreateVmAllocator(xalloc* internal_allocator)

@@ -19,13 +19,15 @@ namespace xcore
         u16 m_list;
     };
 
-    xfsapages_t* create(xalloc* main_allocator, u64 memory_range, u32 page_size);
+    xfsapages_t* create(xalloc* main_allocator, void* base_address, u64 memory_range, u32 page_size);
     void         destroy(xalloc* main_allocator, xfsapages_t* pages);
     void*        alloc_page(xfsapages_t* pages, xfsapage_list_t& page_list, u32 const elem_size);
     void*        free_one_page(xfsapages_t* pages, xfsapage_list_t& page_list);
     void         free_all_pages(xfsapages_t* pages, xfsapage_list_t& page_list);
     void*        alloc_elem(xfsapages_t* pages, xfsapage_list_t& page_list, u32 const elem_size);
     u32          sizeof_elem(xfsapages_t* pages, void* const ptr);
+	u32          idx_of_elem(xfsapages_t* pages, void* const ptr);
+	void*        ptr_of_elem(xfsapages_t* pages, u32 const index);
     void         free_elem(xfsapages_t* pages, xfsapage_list_t& page_list, void* const ptr, xfsapage_list_t& pages_empty_list);
 
     // Usage:

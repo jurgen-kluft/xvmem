@@ -467,6 +467,22 @@ namespace xcore
         return ptr;
     }
 
+	u32          sizeof_elem(xfsapages_t* pages, void* const ptr)
+	{
+        xfsapage_t* ppage    = pages->address_to_page(ptr);
+		return ppage->m_elem_size;
+	}
+
+	u32          idx_of_elem(xfsapages_t* pages, void* const ptr)
+	{
+        return pages->ptr2idx(ptr);
+	}
+	
+	void*        ptr_of_elem(xfsapages_t* pages, u32 const index)
+	{
+		return pages->idx2ptr(index);
+	}
+
     void free_elem(xfsapages_t* pages, xfsapage_list_t& page_list, void* const ptr, xfsapage_list_t& pages_empty_list)
     {
         // Find page that this pointer belongs to

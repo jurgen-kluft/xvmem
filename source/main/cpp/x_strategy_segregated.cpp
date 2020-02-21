@@ -6,14 +6,13 @@
 #include "xbase/x_hibitset.h"
 
 #include "xvmem/x_virtual_allocator.h"
-#include "xvmem/x_virtual_pages.h"
 #include "xvmem/x_virtual_memory.h"
 #include "xvmem/private/x_binarysearch_tree.h"
 #include "xvmem/private/x_strategy_segregated.h"
 
 namespace xcore
 {
-    namespace xsegregated
+    namespace xsegregatedstrat
     {
         static inline u64   get_size_addr_key(u32 size, u32 addr) { return ((u64)size << 32) | (u64)addr; }
         static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
@@ -620,7 +619,9 @@ namespace xcore
 
         xinstance_t* create(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 space_size, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 page_size)
         {
-            const u32 num_levels = (allocsize_max - allocsize_min) / allocsize_step;
+			// Example: min=640KB, max=32MB, step=1MB
+			// Levels -> 1MB, 2MB, 3MB ... 30MB 31MB 32MB, in total 32 levels
+            const u32 num_levels = ((allocsize_max + (allocsize_step - 1) - allocsize_min) / allocsize_step);
 			const u32 mem_size = sizeof(xlevel_t)*num_levels + sizeof(xspaces_t) + sizeof(xinstance_t);
 			xbyte* mem_block = (xbyte*)main_alloc->allocate(mem_size, sizeof(void*));
 			xallocinplace aip(mem_block, mem_size);
@@ -636,7 +637,7 @@ namespace xcore
             instance->m_allocsize_max  = allocsize_max;
             instance->m_allocsize_step = allocsize_step;
             instance->m_pagesize       = page_size;
-            instance->m_level_cnt      = (instance->m_allocsize_max - instance->m_allocsize_min) / instance->m_allocsize_step;
+            instance->m_level_cnt      = num_levels;
             instance->m_levels         = level_array;
             for (u32 i = 0; i < instance->m_level_cnt; ++i)
             {

@@ -1,5 +1,5 @@
-#ifndef _X_ALLOCATOR_COALESCE_H_
-#define _X_ALLOCATOR_COALESCE_H_
+#ifndef _X_ALLOCATOR_STRATEGY_COALESCE_H_
+#define _X_ALLOCATOR_STRATEGY_COALESCE_H_
 #include "xbase/x_target.h"
 #ifdef USE_PRAGMA_ONCE
 #pragma once
@@ -10,7 +10,7 @@ namespace xcore
 	class xalloc;
 	class xfsadexed;
 
-	namespace xcoalescee
+	namespace xcoalescestrat
 	{
 		struct xinstance_t;
 
@@ -23,4 +23,4 @@ namespace xcore
 
 } // namespace xcore
 
-#endif // _X_ALLOCATOR_COALESCE_H_
+#endif // _X_ALLOCATOR_STRATEGY_COALESCE_H_

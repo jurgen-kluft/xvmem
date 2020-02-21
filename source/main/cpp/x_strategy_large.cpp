@@ -8,9 +8,9 @@
 
 namespace xcore
 {
-    static u32 INDEX32_NIL = 0xffffffff;
+    static const u32 INDEX32_NIL = 0xffffffff;
 
-    namespace xlarge
+    namespace xlargestrat
     {
         struct xinstance_t
         {

@@ -159,7 +159,7 @@ namespace xcore
         return out_size;
     }
 
-    namespace xcoalescee
+    namespace xcoalescestrat
     {
         struct xinstance_t
         {

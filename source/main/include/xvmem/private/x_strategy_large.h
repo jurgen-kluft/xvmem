@@ -1,5 +1,5 @@
-#ifndef _X_ALLOCATOR_LARGE_STRATEGY_H_
-#define _X_ALLOCATOR_LARGE_STRATEGY_H_
+#ifndef _X_ALLOCATOR_STRATEGY_LARGE_H_
+#define _X_ALLOCATOR_STRATEGY_LARGE_H_
 #include "xbase/x_target.h"
 #ifdef USE_PRAGMA_ONCE
 #pragma once
@@ -9,7 +9,7 @@ namespace xcore
 {
     class xalloc;
 
-    namespace xlarge
+    namespace xlargestrat
     {
         struct xinstance_t;
 
@@ -21,4 +21,4 @@ namespace xcore
 
 } // namespace xcore
 
-#endif // _X_ALLOCATOR_LARGE_STRATEGY_H_
+#endif // _X_ALLOCATOR_STRATEGY_LARGE_H_
