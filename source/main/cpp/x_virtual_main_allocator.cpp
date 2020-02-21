@@ -20,38 +20,38 @@ namespace xcore
         virtual void  deallocate(void* ptr);
         virtual void  release();
 
-        xalloc*                   m_internal_heap;
-        u32                       m_fvsa_min_size;   // 8
-        u32                       m_fvsa_step_size;  // 8
-        u32                       m_fvsa_max_size;   // 1 KB
-        void*                     m_fvsa_mem_base;   // A memory base pointer
-        u64                       m_fvsa_mem_range;  // 1 GB
-        xfsapage_list_t*          m_fvsa_pages_list; // 127 allocators
-        u32                       m_fsa_min_size;    // 1 KB
-        u32                       m_fsa_step_size;   // 64
-        u32                       m_fsa_max_size;    // 8 KB
-        void*                     m_fsa_mem_base;    // A memory base pointer
-        u64                       m_fsa_mem_range;   // 1 GB
-        xfsapage_list_t*          m_fsa_pages_list;  // 112 allocators
-        u32                       m_fsa_page_size;   // 64 KB
-        xfsapage_list_t           m_fsa_freepages_list;
-        xfsapages_t*              m_fsa_pages;
-        u32                       m_med_min_size;  // 8 KB
-        u32                       m_med_step_size; // 256 (size alignment)
-        u32                       m_med_max_size;  // 640 KB
-        void*                     m_med_mem_base;  // A memory base pointer
-        u64                       m_med_mem_range; // 768 MB
-        xcoalescestrat::xinstance_t*  m_med_allocator;
-        u32                       m_seg_min_size;  // 640 KB
-        u32                       m_seg_max_size;  // 32 MB
-        u32                       m_seg_step_size;  // 1 MB
-        void*                     m_seg_mem_base;  // A memory base pointer
-        u64                       m_seg_mem_range; // 128 GB
-        u64                       m_seg_mem_subrange;
+        xalloc*                        m_internal_heap;
+        u32                            m_fvsa_min_size;   // 8
+        u32                            m_fvsa_step_size;  // 8
+        u32                            m_fvsa_max_size;   // 1 KB
+        void*                          m_fvsa_mem_base;   // A memory base pointer
+        u64                            m_fvsa_mem_range;  // 1 GB
+        xfsapage_list_t*               m_fvsa_pages_list; // 127 allocators
+        u32                            m_fsa_min_size;    // 1 KB
+        u32                            m_fsa_step_size;   // 64
+        u32                            m_fsa_max_size;    // 8 KB
+        void*                          m_fsa_mem_base;    // A memory base pointer
+        u64                            m_fsa_mem_range;   // 1 GB
+        xfsapage_list_t*               m_fsa_pages_list;  // 112 allocators
+        u32                            m_fsa_page_size;   // 64 KB
+        xfsapage_list_t                m_fsa_freepages_list;
+        xfsapages_t*                   m_fsa_pages;
+        u32                            m_med_min_size;  // 8 KB
+        u32                            m_med_step_size; // 256 (size alignment)
+        u32                            m_med_max_size;  // 640 KB
+        void*                          m_med_mem_base;  // A memory base pointer
+        u64                            m_med_mem_range; // 768 MB
+        xcoalescestrat::xinstance_t*   m_med_allocator;
+        u32                            m_seg_min_size;  // 640 KB
+        u32                            m_seg_max_size;  // 32 MB
+        u32                            m_seg_step_size; // 1 MB
+        void*                          m_seg_mem_base;  // A memory base pointer
+        u64                            m_seg_mem_range; // 128 GB
+        u64                            m_seg_mem_subrange;
         xsegregatedstrat::xinstance_t* m_seg_allocator;
-        u32                       m_large_min_size;  // 32MB
-        void*                     m_large_mem_base;  // A memory base pointer
-        u64                       m_large_mem_range; //
+        u32                            m_large_min_size;  // 32MB
+        void*                          m_large_mem_base;  // A memory base pointer
+        u64                            m_large_mem_range; //
         xlargestrat::xinstance_t*      m_large_allocator;
     };
 
@@ -140,16 +140,19 @@ namespace xcore
         }
     }
 
+	void xvmem_allocator::release()
+    {
+
+	}
+
     void xvmem_allocator::init(xalloc* internal_allocator)
     {
-        u32 const page_size    = 64 * 1024;
-        u64 const memory_range = (u64)256 * 1024 * 1024;
-        m_fsa_pages            = create(internal_allocator, memory_range, page_size);
+        u32 const   page_size      = 64 * 1024;
 
         // TODO: Reserve virtual memory for the fsa pages
         m_fvsa_mem_range    = (u64)256 * 1024 * 1024;
-        void* fvsa_mem_base = nullptr;
-        m_fvsa_mem_base     = fvsa_mem_base; // A memory base pointer
+        m_fvsa_mem_base     = nullptr; // A memory base pointer
+        m_fsa_pages                = create(internal_allocator, m_fvsa_mem_base, m_fvsa_mem_range, page_size);
 
         // FVSA
         m_fvsa_min_size           = 8;
@@ -192,11 +195,11 @@ namespace xcore
         m_seg_allocator    = xsegregatedstrat::create(internal_allocator, node_heap_32, m_seg_mem_base, m_seg_mem_range, m_seg_mem_subrange, m_seg_min_size, m_seg_max_size, m_seg_step_size, page_size);
 
         // TODO: Reserve virtual memory for the large allocator
-        m_large_min_size  = (u32)32 * 1024 * 1024;         // 32 MB
-        m_large_mem_base  = nullptr;                       // A memory base pointer
-        m_large_mem_range = (u64)128 * 1024 * 1024 * 1024; // 128 GB
-		const u32 max_num_large_allocations = 64;
-        m_large_allocator = xlargestrat::create(internal_allocator, m_large_mem_base, m_large_mem_range, m_large_min_size, max_num_large_allocations);
+        m_large_min_size                    = (u32)32 * 1024 * 1024;         // 32 MB
+        m_large_mem_base                    = nullptr;                       // A memory base pointer
+        m_large_mem_range                   = (u64)128 * 1024 * 1024 * 1024; // 128 GB
+        const u32 max_num_large_allocations = 64;
+        m_large_allocator                   = xlargestrat::create(internal_allocator, m_large_mem_base, m_large_mem_range, m_large_min_size, max_num_large_allocations);
     }
 
     xalloc* gCreateVmAllocator(xalloc* internal_allocator)

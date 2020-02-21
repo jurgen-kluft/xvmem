@@ -10,10 +10,6 @@
 
 namespace xcore
 {
-	// This is a utility allocator that can manage a memory range and deal with allocations and deallocations purely
-	// on a variable level. Nothing else is done here except managing a memory range.
-	extern xalloc*	gCreateCoalesceUtilAllocator(xalloc* main_heap, xfsadexed* node_heap, void* mem_base, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
-
 	// This is a virtual memory based allocator that is based on the coalesce strategy.
 	// It can manage multiple 'regions' with a size that is provided by the user.
 	extern xalloc*	gCreateVMemCoalesceBasedAllocator(xalloc* main_heap, xfsadexed* node_heap, xvmem* vmem, u64 region_mem_size, u32 size_min, u32 size_max, u32 size_step);
