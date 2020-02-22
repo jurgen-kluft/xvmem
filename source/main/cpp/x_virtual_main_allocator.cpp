@@ -15,7 +15,7 @@ namespace xcore
     class xvmem_allocator : public xalloc
     {
     public:
-        void          init(xalloc*);
+        void          init(xalloc* heap_allocator, xvmem* vmem);
         virtual void* allocate(u32 size, u32 align);
         virtual void  deallocate(void* ptr);
         virtual void  release();
@@ -140,19 +140,18 @@ namespace xcore
         }
     }
 
-	void xvmem_allocator::release()
+    void xvmem_allocator::release() {}
+
+    void xvmem_allocator::init(xalloc* internal_allocator, xvmem* vmem)
     {
+        u32 const page_size = 64 * 1024;
 
-	}
-
-    void xvmem_allocator::init(xalloc* internal_allocator)
-    {
-        u32 const   page_size      = 64 * 1024;
-
-        // TODO: Reserve virtual memory for the fsa pages
-        m_fvsa_mem_range    = (u64)256 * 1024 * 1024;
-        m_fvsa_mem_base     = nullptr; // A memory base pointer
-        m_fsa_pages                = create(internal_allocator, m_fvsa_mem_base, m_fvsa_mem_range, page_size);
+        m_fvsa_mem_range         = (u64)256 * 1024 * 1024;
+        m_fvsa_mem_base          = nullptr; // A memory base pointer
+        u32       fvsa_page_size = 0;
+        u32 const fvsa_mem_attrs = 0; // Page/Memory attributes
+        vmem->reserve(m_fvsa_mem_range, fvsa_page_size, fvsa_mem_attrs, m_fvsa_mem_base);
+        m_fsa_pages = create(internal_allocator, m_fvsa_mem_base, m_fvsa_mem_range);
 
         // FVSA
         m_fvsa_min_size           = 8;
