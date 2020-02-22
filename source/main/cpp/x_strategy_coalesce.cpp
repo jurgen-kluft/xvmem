@@ -12,6 +12,9 @@ namespace xcore
 {
     using namespace xbst::index_based;
 
+    // This is both a red-black tree node as well as a doubly linked list node
+    // It furthermore contains field necessary for storing size and allocation information.
+    // The size of this node is 32 bytes in both a 32-bit and a 64-bit environment.
     struct naddr_t : public node_t
     {
         static u32 const NIL            = 0xffffffff;
@@ -549,6 +552,6 @@ namespace xcore
             }
             return false;
         }
-    } // namespace xcoalescee
+    } // namespace xcoalescestrat
 
 }; // namespace xcore
