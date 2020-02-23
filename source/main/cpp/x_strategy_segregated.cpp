@@ -5,7 +5,6 @@
 #include "xbase/x_integer.h"
 #include "xbase/x_hibitset.h"
 
-#include "xvmem/x_virtual_allocator.h"
 #include "xvmem/x_virtual_memory.h"
 #include "xvmem/private/x_binarysearch_tree.h"
 #include "xvmem/private/x_strategy_segregated.h"
@@ -20,6 +19,8 @@ namespace xcore
         static u16 const NIL16 = 0xffff;
         static u32 const NIL32 = 0xffffffff;
 
+        // Node to link memory blocks in a doubly linked list as well as a binary search tree node for
+        // managing it either in the ``allocation`` or ``size`` tree.
         struct nnode_t : public xbst::index_based::node_t
         {
             static u32 const FLAG_COLOR_RED = 0x40000000;
@@ -158,15 +159,15 @@ namespace xcore
             static tree_t config;
         } // namespace bst_size
 
-		struct xspace_t;
+        struct xspace_t;
         struct xspaces_t
         {
-            void*        m_mem_address;
-            u64          m_space_size;  // The size of a range (e.g. 1 GiB)
-            u32          m_space_count; // The full address range is divided into 'n' spaces
-            u32          m_page_size;
-            u16          m_freelist; // The doubly linked list spaces that are 'empty'
-            xspace_t*    m_spaces;   // The array of memory spaces that make up the full address range
+            void*     m_mem_address;
+            u64       m_space_size;  // The size of a range (e.g. 1 GiB)
+            u32       m_space_count; // The full address range is divided into 'n' spaces
+            u32       m_page_size;
+            u16       m_freelist; // The doubly linked list spaces that are 'empty'
+            xspace_t* m_spaces;   // The array of memory spaces that make up the full address range
 
             void init(xalloc* main_heap, void* mem_address, u64 mem_range, u64 space_size, u32 page_size);
             void release(xalloc* main_heap);
@@ -195,8 +196,8 @@ namespace xcore
             void      register_alloc(void* addr);
             u16       register_dealloc(void* addr);
 
-			XCORE_CLASS_PLACEMENT_NEW_DELETE
-		};
+            XCORE_CLASS_PLACEMENT_NEW_DELETE
+        };
 
         struct xspace_t
         {
@@ -354,7 +355,6 @@ namespace xcore
             u16 m_prev;
         };
 
-
         void xspaces_t::init(xalloc* main_heap, void* mem_address, u64 mem_range, u64 space_size, u32 page_size)
         {
             m_mem_address = mem_address;
@@ -375,14 +375,14 @@ namespace xcore
                 pcurr->m_next   = inext;
                 pnext->m_prev   = icurr;
             }
-            m_freelist    = 0;
+            m_freelist = 0;
         }
 
-		inline xspace_t* idx2space(xspaces_t* self, u16 idx)
-		{
-			ASSERT(idx < self->m_space_count);
-			return &self->m_spaces[idx];
-		}
+        inline xspace_t* idx2space(xspaces_t* self, u16 idx)
+        {
+            ASSERT(idx < self->m_space_count);
+            return &self->m_spaces[idx];
+        }
 
         void xspaces_t::release(xalloc* main_heap)
         {
@@ -537,7 +537,7 @@ namespace xcore
             xbst::index_based::find(pspace->m_free_bst, &bst_size::config, node_alloc, key, inode);
             nnode_t* pnode = (nnode_t*)node_alloc->idx2ptr(inode);
 
-            u64 const size_in_bytes = size_in_pages * spaces->get_page_size();
+            u64 const size_in_bytes      = size_in_pages * spaces->get_page_size();
             u16 const node_size_in_pages = pnode->get_page_cnt();
             if (node_size_in_pages >= lvl_size_in_pages)
             {
@@ -606,7 +606,7 @@ namespace xcore
             xlevel_t*  m_levels;
             xspaces_t* m_spaces;
 
-			XCORE_CLASS_PLACEMENT_NEW_DELETE
+            XCORE_CLASS_PLACEMENT_NEW_DELETE
         };
 
         inline u16 lvl2size_in_pages(xinstance_t* self, u16 ilvl) { return (self->m_allocsize_min + (ilvl * self->m_allocsize_step) + (self->m_pagesize - 1)) / self->m_pagesize; }
@@ -619,15 +619,15 @@ namespace xcore
 
         xinstance_t* create(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 space_size, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 page_size)
         {
-			// Example: min=640KB, max=32MB, step=1MB
-			// Levels -> 1MB, 2MB, 3MB ... 30MB 31MB 32MB, in total 32 levels
-            const u32 num_levels = ((allocsize_max + (allocsize_step - 1) - allocsize_min) / allocsize_step);
-			const u32 mem_size = sizeof(xlevel_t)*num_levels + sizeof(xspaces_t) + sizeof(xinstance_t);
-			xbyte* mem_block = (xbyte*)main_alloc->allocate(mem_size, sizeof(void*));
-			xallocinplace aip(mem_block, mem_size);
-			xinstance_t* instance = aip.construct<xinstance_t>();
-			xspaces_t* spaces = aip.construct<xspaces_t>();
-			xlevel_t* level_array = (xlevel_t*)aip.allocate(sizeof(xlevel_t) * num_levels, sizeof(void*));
+            // Example: min=640KB, max=32MB, step=1MB
+            // Levels -> 1MB, 2MB, 3MB ... 30MB 31MB 32MB, in total 32 levels
+            const u32     num_levels = ((allocsize_max + (allocsize_step - 1) - allocsize_min) / allocsize_step);
+            const u32     mem_size   = sizeof(xlevel_t) * num_levels + sizeof(xspaces_t) + sizeof(xinstance_t);
+            xbyte*        mem_block  = (xbyte*)main_alloc->allocate(mem_size, sizeof(void*));
+            xallocinplace aip(mem_block, mem_size);
+            xinstance_t*  instance    = aip.construct<xinstance_t>();
+            xspaces_t*    spaces      = aip.construct<xspaces_t>();
+            xlevel_t*     level_array = (xlevel_t*)aip.allocate(sizeof(xlevel_t) * num_levels, sizeof(void*));
 
             instance->m_main_alloc     = main_alloc;
             instance->m_node_alloc     = node_alloc;
@@ -657,7 +657,7 @@ namespace xcore
             // Initialize the spaces manager
             instance->m_spaces->init(main_alloc, instance->m_vmem_base_addr, vmem_space, space_size, page_size);
 
-			return instance;
+            return instance;
         }
 
         void destroy(xinstance_t* self)
@@ -675,7 +675,7 @@ namespace xcore
             u16 const size_in_pages = (u16)((aligned_size + (self->m_pagesize - 1)) / self->m_pagesize);
             // TODO: I do not think the level index computation is correct
             u16 const ilevel = (aligned_size - self->m_allocsize_min) / self->m_level_cnt;
-            xlevel_t*  plevel = &self->m_levels[ilevel];
+            xlevel_t* plevel = &self->m_levels[ilevel];
             void*     ptr    = plevel->allocate(size_in_pages, lvl2size_in_pages(self, ilevel), self->m_spaces, self->m_node_alloc, self->m_vmem_base_addr, self->m_allocsize_step);
             ASSERT(ptr2lvl(self, ptr) == ilevel);
             self->m_spaces->register_alloc(ptr);
@@ -685,8 +685,8 @@ namespace xcore
         void deallocate(xinstance_t* self, void* ptr)
         {
             u16 const ilevel = self->m_spaces->register_dealloc(ptr);
-            xlevel_t*  plevel = &self->m_levels[ilevel];
+            xlevel_t* plevel = &self->m_levels[ilevel];
             plevel->deallocate(ptr, self->m_node_alloc, self->m_spaces);
         }
-    } // namespace xsegregated
+    } // namespace xsegregatedstrat
 } // namespace xcore

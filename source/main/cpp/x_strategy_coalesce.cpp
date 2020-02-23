@@ -235,13 +235,6 @@ namespace xcore
             self->m_addr_db         = (0);
         }
 
-        u32 size_of(u32 size_min, u32 size_max, u32 size_step)
-        {
-            const u32 size_db_cnt = 1 + ((size_max - size_min) / size_step);
-            const u32 mem_size    = size_db_cnt * sizeof(u32) + xhibitset::size_in_dwords(size_db_cnt) * sizeof(u32) + sizeof(xinstance_t);
-            return mem_size;
-        }
-
         xinstance_t* create(xalloc* main_alloc, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step)
         {
             xinstance_t* self = nullptr;

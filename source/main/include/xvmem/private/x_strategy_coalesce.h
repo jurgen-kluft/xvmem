@@ -7,19 +7,18 @@
 
 namespace xcore
 {
-	class xalloc;
-	class xfsadexed;
+    class xalloc;
+    class xfsadexed;
 
-	namespace xcoalescestrat
-	{
-		struct xinstance_t;
+    namespace xcoalescestrat
+    {
+        struct xinstance_t;
 
-		u32        size_of(u32 size_min, u32 size_max, u32 size_step);
-		xinstance_t* create(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
-		void	   destroy(xinstance_t*);
-		void*      allocate(xinstance_t*, u32 size, u32 alignment);
-		u32        deallocate(xinstance_t*, void* ptr);
-	}
+        xinstance_t* create(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step);
+        void         destroy(xinstance_t*);
+        void*        allocate(xinstance_t*, u32 size, u32 alignment);
+        u32          deallocate(xinstance_t*, void* ptr);
+    } // namespace xcoalescestrat
 
 } // namespace xcore
 
