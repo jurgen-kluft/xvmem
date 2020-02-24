@@ -21,6 +21,8 @@ namespace xcore
         virtual void  deallocate(void* ptr);
         virtual void  release();
 
+		XCORE_CLASS_PLACEMENT_NEW_DELETE
+
         xalloc*                        m_internal_heap;
         u32                            m_fvsa_min_size;  // 8
         u32                            m_fvsa_step_size; // 8
@@ -28,15 +30,15 @@ namespace xcore
         void*                          m_fvsa_mem_base;  // A memory base pointer
         u64                            m_fvsa_mem_range; // 1 GB
         u32                            m_fvsa_pages_list_size;
-        xfsapage_list_t*               m_fvsa_pages_list; // 127 allocators
+        xfsastrat::xlist_t*               m_fvsa_pages_list; // 127 allocators
         u32                            m_fsa_min_size;    // 1 KB
         u32                            m_fsa_step_size;   // 64
         u32                            m_fsa_max_size;    // 8 KB
         u32                            m_fsa_pages_list_size;
-        xfsapage_list_t*               m_fsa_pages_list; // 112 allocators
+        xfsastrat::xlist_t*               m_fsa_pages_list; // 112 allocators
         u32                            m_fsa_page_size;  // 64 KB
-        xfsapage_list_t                m_fsa_freepages_list;
-        xfsapages_t*                   m_fsa_pages;
+        xfsastrat::xlist_t                m_fsa_freepages_list;
+        xfsastrat::xpages_t*                   m_fsa_pages;
         u32                            m_med_min_size;   // 8 KB
         u32                            m_med_step_size;  // 256 (size alignment)
         u32                            m_med_max_size;   // 640 KB
@@ -70,7 +72,7 @@ namespace xcore
                 size = m_fvsa_min_size;
             u32 const        alloc_size  = (size + (m_fvsa_step_size - 1)) & ~(m_fvsa_step_size - 1);
             s32 const        alloc_index = (alloc_size - m_fvsa_min_size) / m_fvsa_step_size;
-            xfsapage_list_t& page_list   = m_fvsa_pages_list[alloc_index];
+            xfsastrat::xlist_t& page_list   = m_fvsa_pages_list[alloc_index];
             return alloc_elem(m_fsa_pages, page_list, alloc_size);
         }
 
@@ -80,7 +82,7 @@ namespace xcore
                 size = m_fsa_min_size;
             u32 const        alloc_size  = (size + (m_fsa_step_size - 1)) & ~(m_fsa_step_size - 1);
             s32 const        alloc_index = (alloc_size - m_fsa_min_size) / m_fsa_step_size;
-            xfsapage_list_t& page_list   = m_fsa_pages_list[alloc_index];
+            xfsastrat::xlist_t& page_list   = m_fsa_pages_list[alloc_index];
             return alloc_elem(m_fsa_pages, page_list, alloc_size);
         }
 
@@ -111,13 +113,13 @@ namespace xcore
             if (alloc_size >= m_fvsa_min_size && alloc_size <= m_fvsa_max_size)
             {
                 u32 const        alloc_index = (alloc_size - m_fvsa_min_size) / m_fvsa_step_size;
-                xfsapage_list_t& page_list   = m_fvsa_pages_list[alloc_index];
+                xfsastrat::xlist_t& page_list   = m_fvsa_pages_list[alloc_index];
                 free_elem(m_fsa_pages, page_list, ptr, m_fsa_freepages_list);
             }
             else if (alloc_size >= m_fsa_min_size && alloc_size <= m_fsa_max_size)
             {
                 u32 const        alloc_index = (alloc_size - m_fsa_min_size) / m_fsa_step_size;
-                xfsapage_list_t& page_list   = m_fsa_pages_list[alloc_index];
+                xfsastrat::xlist_t& page_list   = m_fsa_pages_list[alloc_index];
                 free_elem(m_fsa_pages, page_list, ptr, m_fsa_freepages_list);
             }
             else
@@ -161,7 +163,7 @@ namespace xcore
         // TODO: release all reserved virtual memory
 
         m_node_allocator->release();
-        destroy(m_internal_heap, m_fsa_pages);
+        xfsastrat::destroy(m_fsa_pages);
     }
 
     void xvmem_allocator::init(xalloc* internal_allocator, xvmem* vmem)
@@ -175,21 +177,21 @@ namespace xcore
         u32       fvsa_page_size = 0;
         u32 const fvsa_mem_attrs = 0; // Page/Memory attributes
         vmem->reserve(m_fvsa_mem_range, fvsa_page_size, fvsa_mem_attrs, m_fvsa_mem_base);
-        m_fsa_pages = create(internal_allocator, m_fvsa_mem_base, m_fvsa_mem_range, fvsa_page_size);
+        m_fsa_pages = xfsastrat::create(internal_allocator, m_fvsa_mem_base, m_fvsa_mem_range, fvsa_page_size);
 
         // FVSA, every size has it's own 'used pages' list
         m_fvsa_min_size        = 8;
         m_fvsa_step_size       = 8;
         m_fvsa_max_size        = 1024;
         m_fvsa_pages_list_size = (m_fvsa_max_size - m_fvsa_min_size) / m_fvsa_step_size;
-        m_fvsa_pages_list      = (xfsapage_list_t*)internal_allocator->allocate(sizeof(xfsapage_list_t) * m_fvsa_pages_list_size, sizeof(void*));
+        m_fvsa_pages_list      = (xfsastrat::xlist_t*)internal_allocator->allocate(sizeof(xfsastrat::xlist_t) * m_fvsa_pages_list_size, sizeof(void*));
 
         // FSA, also every size has it's own 'used pages' list
         m_fsa_min_size           = 1024;
         m_fsa_step_size          = 64;
         m_fsa_max_size           = 8192;
-        u32 const fsa_size_slots = (m_fsa_max_size - m_fsa_min_size) / m_fsa_step_size;
-        m_fsa_pages_list         = (xfsapage_list_t*)internal_allocator->allocate(sizeof(xfsapage_list_t) * fvsa_size_slots, sizeof(void*));
+        m_fsa_pages_list_size    = (m_fsa_max_size - m_fsa_min_size) / m_fsa_step_size;
+        m_fsa_pages_list         = (xfsastrat::xlist_t*)internal_allocator->allocate(sizeof(xfsastrat::xlist_t) * m_fsa_pages_list_size, sizeof(void*));
 
         // Create node heap for nodes with size 32B
         // We prefer to create a separate virtual memory based FSA allocator.
@@ -205,7 +207,7 @@ namespace xcore
         u32       med_page_size = 0;
         u32 const med_mem_attrs = 0; // Page/Memory attributes
         vmem->reserve(m_med_mem_range, med_page_size, med_mem_attrs, m_med_mem_base);
-        vmem->commit(m_med_mem_base, med_page_size, m_med_mem_range / med_page_size);
+        vmem->commit(m_med_mem_base, med_page_size, (u32)(m_med_mem_range / med_page_size));
 
         m_med_allocator    = xcoalescestrat::create(internal_allocator, m_node_allocator, m_med_mem_base, m_med_mem_range, m_med_min_size, m_med_max_size, m_med_step_size);
         m_seg_min_size     = (u32)640 * 1024;       // 640 KB

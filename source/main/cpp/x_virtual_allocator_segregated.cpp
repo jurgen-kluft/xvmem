@@ -3,7 +3,6 @@
 #include "xbase/x_allocator.h"
 #include "xbase/x_integer.h"
 
-#include "xvmem/x_virtual_allocator.h"
 #include "xvmem/x_virtual_memory.h"
 #include "xvmem/private/x_strategy_segregated.h"
 #include "xvmem/private/x_binarysearch_tree.h"

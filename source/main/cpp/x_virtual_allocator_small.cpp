@@ -14,7 +14,7 @@ namespace xcore
     class xvfsa : public xfsa
     {
     public:
-        inline xvfsa(xalloc* main_heap, xfsapages_t* pages, u32 allocsize)
+        inline xvfsa(xalloc* main_heap, xfsastrat::xpages_t* pages, u32 allocsize)
             : m_main_heap(main_heap)
             , m_pages(pages)
             , m_pages_list()
@@ -38,13 +38,13 @@ namespace xcore
 
     protected:
         xalloc*            m_main_heap;
-        xfsapages_t* const m_pages;
-        xfsapage_list_t    m_pages_list;
-        xfsapage_list_t    m_empty_pages_list;
+        xfsastrat::xpages_t* const m_pages;
+        xfsastrat::xlist_t    m_pages_list;
+        xfsastrat::xlist_t    m_empty_pages_list;
         u32 const          m_alloc_size;
     };
 
-    xfsa* gCreateVMemBasedFsa(xalloc* main_allocator, xfsapages_t* vpages, u32 allocsize)
+    xfsa* gCreateVMemBasedFsa(xalloc* main_allocator, xfsastrat::xpages_t* vpages, u32 allocsize)
     {
         xvfsa* fsa = main_allocator->construct<xvfsa>(main_allocator, vpages, allocsize);
         return fsa;
@@ -56,7 +56,7 @@ namespace xcore
     class xvfsa_dexed : public xfsadexed
     {
     public:
-        inline xvfsa_dexed(xalloc* main_heap, xfsapages_t* pages, u32 allocsize)
+        inline xvfsa_dexed(xalloc* main_heap, xfsastrat::xpages_t* pages, u32 allocsize)
             : m_main_heap(main_heap)
             , m_pages(pages)
             , m_pages_notfull_list()
@@ -88,15 +88,15 @@ namespace xcore
 
     protected:
         xalloc*            m_main_heap;
-        xfsapages_t* const m_pages;
-        xfsapage_list_t    m_pages_notfull_list;
-        xfsapage_list_t    m_pages_empty_list;
+        xfsastrat::xpages_t* const m_pages;
+        xfsastrat::xlist_t    m_pages_notfull_list;
+        xfsastrat::xlist_t    m_pages_empty_list;
         u32 const          m_alloc_size;
     };
 
     // Constraints:
     // - xvpages is not allowed to manage a memory range more than (4G * allocsize) (32-bit indices)
-    xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_allocator, xfsapages_t* vpages, u32 allocsize)
+    xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_allocator, xfsastrat::xpages_t* vpages, u32 allocsize)
     {
         xvfsa_dexed* fsa = main_allocator->construct<xvfsa_dexed>(main_allocator, vpages, allocsize);
         return fsa;

@@ -7,9 +7,10 @@
 
 UNITTEST_SUITE_LIST(xVMemUnitTest);
 
-//UNITTEST_SUITE_DECLARE(xVMemUnitTest, binarysearch_tree);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, binarysearch_tree);
 //UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce);
-UNITTEST_SUITE_DECLARE(xVMemUnitTest, virtual_pages);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_segregated);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa);
 
 namespace xcore
 {
