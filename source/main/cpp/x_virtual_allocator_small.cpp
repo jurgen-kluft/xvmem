@@ -22,12 +22,12 @@ namespace xcore
         {
         }
 
-        virtual u32 size() const X_FINAL { return m_alloc_size; }
+        virtual u32 v_size() const X_FINAL { return m_alloc_size; }
 
-        virtual void* allocate() X_FINAL { return alloc_elem(m_pages, m_pages_list, m_alloc_size); }
-        virtual void  deallocate(void* ptr) X_FINAL { return free_elem(m_pages, m_pages_list, ptr, m_empty_pages_list); }
+        virtual void* v_allocate() X_FINAL { return alloc_elem(m_pages, m_pages_list, m_alloc_size); }
+        virtual void  v_deallocate(void* ptr) X_FINAL { return free_elem(m_pages, m_pages_list, ptr, m_empty_pages_list); }
 
-        virtual void release()
+        virtual void v_release()
         {
             free_all_pages(m_pages, m_pages_list);
             free_all_pages(m_pages, m_empty_pages_list);
@@ -64,10 +64,10 @@ namespace xcore
         {
         }
 
-        virtual u32 size() const X_FINAL { return m_alloc_size; }
+        virtual u32 v_size() const X_FINAL { return m_alloc_size; }
 
-        virtual void* allocate() X_FINAL { return alloc_elem(m_pages, m_pages_notfull_list, m_alloc_size); }
-        virtual void  deallocate(void* ptr) X_FINAL
+        virtual void* v_allocate() X_FINAL { return alloc_elem(m_pages, m_pages_notfull_list, m_alloc_size); }
+        virtual void  v_deallocate(void* ptr) X_FINAL
         {
             free_elem(m_pages, m_pages_notfull_list, ptr, m_pages_empty_list);
 
@@ -79,10 +79,10 @@ namespace xcore
             }
         }
 
-        virtual void* idx2ptr(u32 index) const X_FINAL { return ptr_of_elem(m_pages, index); }
-        virtual u32   ptr2idx(void* ptr) const X_FINAL { return idx_of_elem(m_pages, ptr); }
+        virtual void* v_idx2ptr(u32 index) const X_FINAL { return ptr_of_elem(m_pages, index); }
+        virtual u32   v_ptr2idx(void* ptr) const X_FINAL { return idx_of_elem(m_pages, ptr); }
 
-        virtual void release() { m_main_heap->deallocate(this); }
+        virtual void v_release() { m_main_heap->deallocate(this); }
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 

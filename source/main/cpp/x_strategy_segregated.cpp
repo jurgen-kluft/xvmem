@@ -206,14 +206,17 @@ namespace xcore
                 m_free_bst  = NIL32;
                 m_alloc_bst = NIL32;
                 m_alloc_cnt = 0;
-                m_level_idx = 0xffff;
-                m_next      = 0xffff;
-                m_prev      = 0xffff;
+                m_level_idx = NIL16;
+                m_next      = NIL16;
+                m_prev      = NIL16;
             }
 
             bool is_unused() const { return m_alloc_cnt == 0; }
             bool is_empty() const { return m_alloc_cnt == 0; }
             bool is_full() const { return m_free_bst == NIL32; }
+			
+			void set_link(u16 p, u16 n) { m_prev = p; m_next = n; }
+			bool is_linked(u16 i) const { return (m_prev==i) && (m_next==i); }
 
             void register_alloc() { m_alloc_cnt += 1; }
             void register_dealloc()
@@ -361,20 +364,18 @@ namespace xcore
             m_page_size   = page_size;
             m_space_size  = space_size;
             m_space_count = (u32)(mem_range / space_size);
-            m_spaces      = (xspace_t*)main_heap->allocate(sizeof(u16) * m_space_count, sizeof(void*));
+            m_spaces      = (xspace_t*)main_heap->allocate(sizeof(xspace_t) * m_space_count, sizeof(void*));
             for (u32 i = 0; i < m_space_count; i++)
             {
                 m_spaces[i].reset();
             }
-            for (u32 i = 1; i < m_space_count; i++)
+
+			m_spaces[0].set_link(m_space_count-1, 1);
+			for (u32 i = 1; i < m_space_count; i++)
             {
-                u16       icurr = i - 1;
-                u16       inext = i;
-                xspace_t* pcurr = &m_spaces[icurr];
-                xspace_t* pnext = &m_spaces[inext];
-                pcurr->m_next   = inext;
-                pnext->m_prev   = icurr;
+				m_spaces[i].set_link(i-1, i+1);
             }
+			m_spaces[m_space_count-1].set_link(m_space_count-2, 0);
             m_freelist = 0;
         }
 
@@ -389,7 +390,7 @@ namespace xcore
             m_mem_address = nullptr;
             m_space_size  = 0;
             m_space_count = 0;
-            m_freelist    = 0xffff;
+            m_freelist    = NIL16;
             main_heap->deallocate(m_spaces);
         }
 
@@ -415,15 +416,15 @@ namespace xcore
         bool xspaces_t::obtain_space(void*& addr, u16& ispace, xspace_t*& pspace)
         {
             // Do we still have some free spaces ?
-            if (m_freelist != 0xffff)
+            if (m_freelist != NIL16)
             {
                 u16 const item  = m_freelist;
                 xspace_t* pcurr = &m_spaces[item];
                 remove_space_from_list(m_freelist, m_freelist);
                 m_freelist         = pcurr->m_next;
-                pcurr->m_level_idx = 0xffff;
-                pcurr->m_next      = 0xffff;
-                pcurr->m_prev      = 0xffff;
+                pcurr->m_level_idx = NIL16;
+                pcurr->m_next      = NIL16;
+                pcurr->m_prev      = NIL16;
                 addr               = (void*)((u64)m_mem_address + (m_space_size * item));
                 return true;
             }
@@ -432,25 +433,39 @@ namespace xcore
 
         void xspaces_t::insert_space_into_list(u16& head, u16 item)
         {
-            xspace_t* pcurr = idx2space(this, head);
-            pcurr->m_prev   = item;
+			if (head == NIL16)
+			{
+				head = item;
+				return;
+			}
+
+            xspace_t* phead = idx2space(this, head);
+			xspace_t* pprev = idx2space(this, phead->m_prev);
             xspace_t* pitem = idx2space(this, item);
-            pitem->m_prev   = 0xffff;
+            pitem->m_prev   = phead->m_prev;
             pitem->m_next   = head;
+            phead->m_prev   = item;
+			pprev->m_next   = item;
             head            = item;
         }
 
         xspace_t* xspaces_t::remove_space_from_list(u16& head, u16 item)
         {
             xspace_t* pitem = idx2space(this, item);
+			if (pitem->is_linked(item))
+			{
+				ASSERT(head == item);
+				head = NIL16;
+				pitem->set_link(item, item);
+				return pitem;
+			}
+
             xspace_t* pprev = idx2space(this, pitem->m_prev);
             xspace_t* pnext = idx2space(this, pitem->m_next);
-            if (pprev != nullptr)
-                pprev->m_next = pitem->m_next;
-            if (pnext != nullptr)
-                pnext->m_prev = pitem->m_prev;
-            if (head == item)
-                head = pitem->m_next;
+            pprev->m_next = pitem->m_next;
+            pnext->m_prev = pitem->m_prev;
+			head = pitem->m_next;
+			pitem->set_link(item, item);
             return pitem;
         }
 
@@ -459,21 +474,21 @@ namespace xcore
             // Put this space back into the free-list !
             u32 const iitem    = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
             xspace_t* pitem    = &m_spaces[iitem];
-            pitem->m_level_idx = 0xffff;
+            pitem->m_level_idx = NIL16;
             insert_space_into_list(m_freelist, iitem);
         }
 
         void xspaces_t::release_space(u16 ispace, xspace_t* pspace)
         {
             // Put this space back into the free-list !
-            pspace->m_level_idx = 0xffff;
+            pspace->m_level_idx = NIL16;
             insert_space_into_list(m_freelist, ispace);
         }
 
         u16 xspaces_t::ptr2level(void* ptr) const
         {
             u16 const space_idx = (u16)(((uptr)ptr - (uptr)m_mem_address) / (uptr)m_space_size);
-            ASSERT(m_spaces[space_idx].m_level_idx != 0xffff);
+            ASSERT(m_spaces[space_idx].m_level_idx != NIL16);
             return m_spaces[space_idx].m_level_idx;
         }
 
@@ -623,11 +638,11 @@ namespace xcore
             // Levels -> 1MB, 2MB, 3MB ... 30MB 31MB 32MB, in total 32 levels
             const u32     num_levels = ((allocsize_max + (allocsize_step - 1) - allocsize_min) / allocsize_step);
             const u32     mem_size   = sizeof(xlevel_t) * num_levels + sizeof(xspaces_t) + sizeof(xinstance_t);
-            xbyte*        mem_block  = (xbyte*)main_alloc->allocate(mem_size, sizeof(void*));
+            xbyte*        mem_block  = (xbyte*)main_alloc->allocate(mem_size);
             xallocinplace aip(mem_block, mem_size);
             xinstance_t*  instance    = aip.construct<xinstance_t>();
             xspaces_t*    spaces      = aip.construct<xspaces_t>();
-            xlevel_t*     level_array = (xlevel_t*)aip.allocate(sizeof(xlevel_t) * num_levels, sizeof(void*));
+            xlevel_t*     level_array = (xlevel_t*)aip.allocate(sizeof(xlevel_t) * num_levels);
 
             instance->m_main_alloc     = main_alloc;
             instance->m_node_alloc     = node_alloc;
@@ -639,6 +654,7 @@ namespace xcore
             instance->m_pagesize       = page_size;
             instance->m_level_cnt      = num_levels;
             instance->m_levels         = level_array;
+			instance->m_spaces         = spaces;
             for (u32 i = 0; i < instance->m_level_cnt; ++i)
             {
                 instance->m_levels[i].reset();
@@ -663,8 +679,9 @@ namespace xcore
         void destroy(xinstance_t* self)
         {
             self->m_spaces->release(self->m_main_alloc);
-            self->m_main_alloc->deallocate(self->m_levels);
+            self->m_spaces = nullptr;
             self->m_levels = nullptr;
+            self->m_main_alloc->deallocate(self);
         }
 
         void* allocate(xinstance_t* self, u32 size, u32 alignment)

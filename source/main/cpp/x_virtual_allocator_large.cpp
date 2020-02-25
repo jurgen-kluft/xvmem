@@ -35,9 +35,9 @@ namespace xcore
         {
         }
 
-        virtual void* allocate(u32 size, u32 alignment);
-        virtual void  deallocate(void* p);
-        virtual void  release();
+        virtual void* v_allocate(u32 size, u32 alignment);
+        virtual void  v_deallocate(void* p);
+        virtual void  v_release();
 
         xalloc*    m_main_heap;
         xvmem*     m_vmem;
@@ -49,7 +49,7 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE;
     };
 
-    void* xvmem_allocator_large::allocate(u32 size, u32 alignment)
+    void* xvmem_allocator_large::v_allocate(u32 size, u32 alignment)
     {
         void* ptr = xcoalescestrat::allocate(m_coalesce, size, alignment);
 
@@ -63,7 +63,7 @@ namespace xcore
         return ptr;
     }
 
-    void xvmem_allocator_large::deallocate(void* p)
+    void xvmem_allocator_large::v_deallocate(void* p)
     {
         ASSERT(is_partof_memory_range(m_memory_base, m_memory_range, p));
         u32 const size = xcoalescestrat::deallocate(m_coalesce, p);
@@ -72,7 +72,7 @@ namespace xcore
         m_vmem->decommit(p, m_page_size, page_count);
     }
 
-    void xvmem_allocator_large::release()
+    void xvmem_allocator_large::v_release()
     {
         xcoalescestrat::destroy(m_coalesce);
         m_vmem->release(m_memory_base);

@@ -19,9 +19,9 @@ namespace xcore
         {
         }
 
-        virtual void* allocate(u32 size, u32 alignment);
-        virtual void  deallocate(void* p);
-        virtual void  release();
+        virtual void* v_allocate(u32 size, u32 alignment);
+        virtual void  v_deallocate(void* p);
+        virtual void  v_release();
 
         xvmem*     m_vmem;
 		void* m_memory_addr;
@@ -30,10 +30,10 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
 
-    void* xvmem_allocator_coalesce::allocate(u32 size, u32 alignment) { return xcoalescestrat::allocate(m_coalescee, size, alignment); }
-    void xvmem_allocator_coalesce::deallocate(void* p) { xcoalescestrat::deallocate(m_coalescee, p); }
+    void* xvmem_allocator_coalesce::v_allocate(u32 size, u32 alignment) { return xcoalescestrat::allocate(m_coalescee, size, alignment); }
+    void xvmem_allocator_coalesce::v_deallocate(void* p) { xcoalescestrat::deallocate(m_coalescee, p); }
 
-    void xvmem_allocator_coalesce::release()
+    void xvmem_allocator_coalesce::v_release()
     {
 		m_vmem->release(m_memory_addr);
         xcoalescestrat::destroy(m_coalescee);

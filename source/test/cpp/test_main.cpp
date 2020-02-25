@@ -8,7 +8,7 @@
 UNITTEST_SUITE_LIST(xVMemUnitTest);
 
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, binarysearch_tree);
-//UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_segregated);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa);
 
@@ -51,19 +51,19 @@ namespace xcore
 
 		virtual const char*	name() const										{ return "xbase unittest test heap allocator"; }
 
-		virtual void*		allocate(u32 size, u32 alignment)
+		virtual void*		v_allocate(u32 size, u32 alignment)
 		{
 			UnitTest::IncNumAllocations();
 			return mAllocator->allocate(size, alignment);
 		}
 
-		virtual void		deallocate(void* mem)
+		virtual void		v_deallocate(void* mem)
 		{
 			UnitTest::DecNumAllocations();
 			mAllocator->deallocate(mem);
 		}
 
-		virtual void		release()
+		virtual void		v_release()
 		{
 			mAllocator->release();
 			mAllocator = NULL;

@@ -223,31 +223,32 @@ namespace xcore
 
         void reset(xinstance_t* self)
         {
-            self->m_main_heap       = (nullptr);
-            self->m_node_heap       = (nullptr);
-            self->m_memory_addr     = (nullptr);
-            self->m_memory_size     = (0);
-            self->m_alloc_size_min  = (0);
-            self->m_alloc_size_max  = (0);
-            self->m_alloc_size_step = (0);
-            self->m_size_db_cnt     = (0);
-            self->m_size_db         = (nullptr);
-            self->m_addr_db         = (0);
+            self->m_main_heap       = nullptr;
+            self->m_node_heap       = nullptr;
+            self->m_memory_addr     = nullptr;
+            self->m_memory_size     = 0;
+            self->m_alloc_size_min  = 0;
+            self->m_alloc_size_max  = 0;
+            self->m_alloc_size_step = 0;
+            self->m_size_db_cnt     = 0;
+            self->m_size_db         = nullptr;
+            self->m_addr_db         = naddr_t::NIL;
         }
 
         xinstance_t* create(xalloc* main_alloc, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step)
         {
             xinstance_t* self = nullptr;
 
-            const u32 size_db_cnt   = 1 + ((size_max - size_min) / size_step);
-            const u32 memblock_size = size_db_cnt * sizeof(u32) + xhibitset::size_in_dwords(size_db_cnt) * sizeof(u32) + sizeof(xinstance_t);
-            xbyte*    memblock      = (xbyte*)main_alloc->allocate(memblock_size, sizeof(void*));
+            const u32 size_db_cnt   = xalignUp(1 + ((size_max - size_min) / size_step), 2);
+            const u32 memblock_size = sizeof(xinstance_t) + size_db_cnt * sizeof(u32) + xhibitset::size_in_dwords(size_db_cnt) * sizeof(u32);
+            xbyte*    memblock      = (xbyte*)main_alloc->allocate(memblock_size);
 
             xallocinplace aip(memblock, memblock_size);
             self          = aip.construct<xinstance_t>();
-            u32* hibitset = (u32*)aip.allocate(sizeof(u32) * xhibitset::size_in_dwords(size_db_cnt), sizeof(void*));
-            u32* size_db  = (u32*)aip.allocate(sizeof(u32) * size_db_cnt, sizeof(void*));
+            u32* hibitset = (u32*)aip.allocate(sizeof(u32) * xhibitset::size_in_dwords(size_db_cnt));
+            u32* size_db  = (u32*)aip.allocate(sizeof(u32) * size_db_cnt);
 
+			reset(self);
             self->m_main_heap       = main_alloc;
             self->m_node_heap       = node_heap;
             self->m_memory_addr     = mem_addr;
@@ -264,6 +265,7 @@ namespace xcore
             }
 
             // Which sizes are available in 'm_size_db' is known through this hierarchical set of bits.
+			x_memset(hibitset, 0, sizeof(u32) + xhibitset::size_in_dwords(size_db_cnt));
             self->m_size_db_occupancy.init(hibitset, self->m_size_db_cnt);
 
             // The last db contains all sizes larger than m_alloc_size_max
@@ -326,8 +328,10 @@ namespace xcore
         {
             // Align the size up with 'm_alloc_size_step'
             // Align the alignment up with 'm_alloc_size_step'
-            u32 size      = xalignUp(_size, self->m_alloc_size_step);
-            u32 alignment = xmax(_alignment, self->m_alloc_size_step);
+            u32 const size      = xalignUp(_size, self->m_alloc_size_step);
+            u32 const alignment = xmax(_alignment, self->m_alloc_size_step);
+
+			// TODO: Refactor below to also take alignment into account
 
             // Find the node in the size db that has the same or larger size
             naddr_t* pnode;
@@ -341,8 +345,6 @@ namespace xcore
             remove_from_size_db(*self, inode, pnode);
 
             void* ptr = pnode->get_addr(self->m_memory_addr, self->m_alloc_size_step);
-            pnode->set_addr(self->m_memory_addr, self->m_alloc_size_step, align_ptr(ptr, alignment));
-
             split_node(*self, inode, pnode, size);
 
             // Mark our node as used
@@ -350,11 +352,10 @@ namespace xcore
 
             // Insert our alloc node into the address tree so that we can find it when
             // deallocate is called.
-            pnode->clear();
-            insert(self->m_addr_db, &bst_addr::config, self->m_node_heap, pnode->get_key(), inode);
+			insert(self->m_addr_db, &bst_addr::config, self->m_node_heap, pnode->get_key(), inode);
 
             // Done...
-            return pnode->get_addr(self->m_memory_addr, self->m_alloc_size_step);
+            return ptr;
         }
 
         // Return the size of the allocation that was freed
@@ -377,7 +378,7 @@ namespace xcore
             //   Build the size node with the correct size and reference the 'merged' addr node
             //   Add the size node to the size DB
             //   Done
-            u32 const size = pnode_curr->get_size(self->m_alloc_size_step);
+            u64 const size = pnode_curr->get_size(self->m_alloc_size_step);
 
             u32      inode_prev = pnode_curr->m_prev_addr;
             u32      inode_next = pnode_curr->m_next_addr;
@@ -436,7 +437,8 @@ namespace xcore
                 add_to_size_db(*self, inode_curr, pnode_curr);
             }
 
-            return size;
+			ASSERT(size < 0x7fffffff);
+            return (u32)size;
         }
 
         void remove_from_addr_chain(xinstance_t& self, u32 idx, naddr_t* pnode)
@@ -492,7 +494,7 @@ namespace xcore
 
         void split_node(xinstance_t& self, u32 inode_curr, naddr_t* pnode_curr, u64 size)
         {
-            if ((pnode_curr->get_size(self.m_alloc_size_step) - size) > self.m_alloc_size_step)
+            if ((pnode_curr->get_size(self.m_alloc_size_step) - size) >= self.m_alloc_size_min)
             {
                 // Construct new naddr node and link it into the physical address doubly linked list
                 naddr_t* pnode_after = self.m_node_heap->construct<naddr_t>();
@@ -503,12 +505,13 @@ namespace xcore
                 pnode_curr->m_size       = (u32)(size / self.m_alloc_size_step);
                 pnode_after->m_prev_addr = inode_curr;
                 pnode_after->m_next_addr = pnode_curr->m_next_addr;
-                pnode_curr->m_next_addr  = inode_after;
                 naddr_t* pnode_next      = idx2naddr(self, pnode_curr->m_next_addr);
+                pnode_curr->m_next_addr  = inode_after;
                 pnode_next->m_prev_addr  = inode_after;
-                void* node_addr          = pnode_curr->get_addr(self.m_memory_addr, self.m_memory_size);
+                void* node_addr          = pnode_curr->get_addr(self.m_memory_addr, self.m_alloc_size_step);
                 void* rest_addr          = advance_ptr(node_addr, size);
-                pnode_after->set_addr(self.m_memory_addr, self.m_memory_size, rest_addr);
+                pnode_after->set_addr(self.m_memory_addr, self.m_alloc_size_step, rest_addr);
+				add_to_size_db(self, inode_after, pnode_after);
             }
         }
 

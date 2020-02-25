@@ -27,6 +27,7 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce)
         UNITTEST_FIXTURE_TEARDOWN()
 		{
 			gTestAllocator->deallocate(sNodeData);
+			gTestAllocator->destruct(sNodeHeap);
 		}
 
 		UNITTEST_TEST(coalescee_init)
@@ -40,7 +41,6 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce)
 		{
 			void* mem_base = (void*)0x00ff000000000000ULL;
 			xcoalescestrat::xinstance_t* c = xcoalescestrat::create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
-			xcoalescestrat::destroy(c);
 
 			void* p = xcoalescestrat::allocate(c, 10 * 1024, 8);
 			xcoalescestrat::deallocate(c, p);
@@ -52,7 +52,6 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce)
 		{
 			void* mem_base = (void*)0x00ff000000000000ULL;
 			xcoalescestrat::xinstance_t* c = xcoalescestrat::create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
-			xcoalescestrat::destroy(c);
 
 			const s32 cnt = 128;
 			void* ptrs[cnt];

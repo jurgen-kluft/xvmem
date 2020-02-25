@@ -17,9 +17,10 @@ namespace xcore
     {
     public:
         void          init(xalloc* heap_allocator, xvmem* vmem);
-        virtual void* allocate(u32 size, u32 align);
-        virtual void  deallocate(void* ptr);
-        virtual void  release();
+
+        virtual void* v_allocate(u32 size, u32 align);
+        virtual void  v_deallocate(void* ptr);
+        virtual void  v_release();
 
 		XCORE_CLASS_PLACEMENT_NEW_DELETE
 
@@ -59,7 +60,7 @@ namespace xcore
         xlargestrat::xinstance_t*      m_large_allocator;
     };
 
-    void* xvmem_allocator::allocate(u32 size, u32 align)
+    void* xvmem_allocator::v_allocate(u32 size, u32 align)
     {
         // If the size request is less than the alignment request we will adjust
         // size to at least be the same size as the alignment request.
@@ -105,7 +106,7 @@ namespace xcore
         return p >= begin && p < end;
     }
 
-    void xvmem_allocator::deallocate(void* ptr)
+    void xvmem_allocator::v_deallocate(void* ptr)
     {
         if (helper_is_in_memrange(m_fvsa_mem_base, m_fvsa_mem_range, ptr))
         {
@@ -143,7 +144,7 @@ namespace xcore
         }
     }
 
-    void xvmem_allocator::release()
+    void xvmem_allocator::v_release()
     {
         for (u32 i = 0; i < m_fvsa_pages_list_size; i++)
         {
