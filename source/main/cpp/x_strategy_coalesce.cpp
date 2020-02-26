@@ -42,8 +42,10 @@ namespace xcore
 
         inline void* get_addr(void* baseaddr, u64 size_step) const { return (void*)((u64)baseaddr + ((u64)m_addr * size_step)); }
         inline void  set_addr(void* baseaddr, u64 size_step, void* addr) { m_addr = (u32)(((u64)addr - (u64)baseaddr) / size_step); }
+        inline void* get_next_addr(void* baseaddr, u64 size_step) const { return (void*)((u64)baseaddr + ((u64)m_addr * size_step) + get_size(size_step)); }
         inline u64   get_size(u64 size_step) const { return (u64)m_size * size_step; }
         inline void  set_size(u64 size, u64 size_step) { m_size = (u32)(size / size_step); }
+        inline u64   reduce_size(u64 size, u64 size_step) const { u64 const leftover = ((u64)m_size * size_step) - size; return leftover; }
 
         inline void set_locked() { m_flags = m_flags | FLAG_LOCKED; }
         inline void set_used(bool used) { m_flags = m_flags | FLAG_USED; }
@@ -451,6 +453,16 @@ namespace xcore
             pnode->m_next_addr      = naddr_t::NIL;
         }
 
+		void insert_into_addr_chain(xinstance_t& self, u32 icurrent, naddr_t* pcurrent, u32 inode, naddr_t* pnode)
+		{
+			u32 const inext       = pcurrent->m_next_addr;
+            naddr_t* pnext        = idx2naddr(self, pcurrent->m_next_addr);
+            pcurrent->m_next_addr = inode;
+			pnode->m_prev_addr    = icurrent;
+			pnext->m_prev_addr    = inode;
+			pnode->m_next_addr    = inext;
+		}
+
         void add_to_addr_db(xinstance_t& self, u32 inode, naddr_t* pnode)
         {
             u64 const key = pnode->m_addr;
@@ -497,20 +509,15 @@ namespace xcore
             if ((pnode_curr->get_size(self.m_alloc_size_step) - size) >= self.m_alloc_size_min)
             {
                 // Construct new naddr node and link it into the physical address doubly linked list
-                naddr_t* pnode_after = self.m_node_heap->construct<naddr_t>();
-                u32      inode_after = self.m_node_heap->ptr2idx(pnode_after);
-
+                naddr_t* const pnode_after = self.m_node_heap->construct<naddr_t>();
+                u32      const inode_after = self.m_node_heap->ptr2idx(pnode_after);
                 pnode_after->init();
-                pnode_after->m_size      = pnode_curr->m_size - (u32)(size / self.m_alloc_size_step);
-                pnode_curr->m_size       = (u32)(size / self.m_alloc_size_step);
-                pnode_after->m_prev_addr = inode_curr;
-                pnode_after->m_next_addr = pnode_curr->m_next_addr;
-                naddr_t* pnode_next      = idx2naddr(self, pnode_curr->m_next_addr);
-                pnode_curr->m_next_addr  = inode_after;
-                pnode_next->m_prev_addr  = inode_after;
-                void* node_addr          = pnode_curr->get_addr(self.m_memory_addr, self.m_alloc_size_step);
-                void* rest_addr          = advance_ptr(node_addr, size);
-                pnode_after->set_addr(self.m_memory_addr, self.m_alloc_size_step, rest_addr);
+				insert_into_addr_chain(self, inode_curr, pnode_curr, inode_after, pnode_after);
+
+				u64 const size_after     = pnode_curr->reduce_size(size, self.m_alloc_size_step);
+				pnode_after->set_size(size_after, self.m_alloc_size_step);
+				void* const addr_after   = pnode_curr->get_next_addr(self.m_memory_addr, self.m_alloc_size_step);
+                pnode_after->set_addr(self.m_memory_addr, self.m_alloc_size_step, addr_after);
 				add_to_size_db(self, inode_after, pnode_after);
             }
         }
