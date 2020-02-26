@@ -20,7 +20,7 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce)
 		{
 			const s32 sizeof_node = 32;
 			const s32 countof_node = 16384;
-			sNodeData = gTestAllocator->allocate(sizeof_node * countof_node, 8);
+			sNodeData = gTestAllocator->allocate(sizeof_node * countof_node);
 			sNodeHeap = gTestAllocator->construct<xfsadexed_array>(sNodeData, sizeof_node, countof_node);
 		}
 
@@ -37,13 +37,35 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce)
 			xcoalescestrat::destroy(c);
 		}
 
-		UNITTEST_TEST(coalescee_alloc_dealloc_once)
+		UNITTEST_TEST(coalescee_alloc_dealloc_pairs)
 		{
 			void* mem_base = (void*)0x00ff000000000000ULL;
 			xcoalescestrat::xinstance_t* c = xcoalescestrat::create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
 
-			void* p = xcoalescestrat::allocate(c, 10 * 1024, 8);
-			xcoalescestrat::deallocate(c, p);
+			void* p1 = xcoalescestrat::allocate(c, 10 * 1024, 8);
+			xcoalescestrat::deallocate(c, p1);
+
+			void* p2 = xcoalescestrat::allocate(c, 10 * 1024, 8);
+			xcoalescestrat::deallocate(c, p2);
+
+			void* p3 = xcoalescestrat::allocate(c, 10 * 1024, 8);
+			xcoalescestrat::deallocate(c, p3);
+
+			xcoalescestrat::destroy(c);
+		}
+
+		UNITTEST_TEST(coalescee_alloc_dealloc_3_times)
+		{
+			void* mem_base = (void*)0x00ff000000000000ULL;
+			xcoalescestrat::xinstance_t* c = xcoalescestrat::create(gTestAllocator, sNodeHeap, mem_base, (u64)128 * 1024 * 1024 * 1024, 8*1024, 640 * 1024, 256);
+
+			void* p1 = xcoalescestrat::allocate(c, 8 * 1024, 8);
+			void* p2 = xcoalescestrat::allocate(c, 8 * 1024, 8);
+			void* p3 = xcoalescestrat::allocate(c, 8 * 1024, 8);
+
+			xcoalescestrat::deallocate(c, p1);
+			xcoalescestrat::deallocate(c, p2);
+			xcoalescestrat::deallocate(c, p3);
 
 			xcoalescestrat::destroy(c);
 		}

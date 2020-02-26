@@ -251,13 +251,13 @@ namespace xcore
 
                             grandparent = helper_get_grandparent(iter);
                             grandparent->set_color_red(tree);
-                            if (!uncle_is_left)
+                            if (uncle_is_left)
                             {
-                                helper_rotate_right(root, grandparent);
+                                helper_rotate_left(root, grandparent);
                             }
                             else
                             {
-                                helper_rotate_left(root, grandparent);
+                                helper_rotate_right(root, grandparent);
                             }
                         }
                     }
@@ -986,9 +986,9 @@ namespace xcore
                             igrandparent = helper_get_grandparent(iter, iiter, tree, dexer);
                             grandparent  = idx2ptr(dexer, igrandparent);
                             grandparent->set_color_red(tree);
-                            if (!uncle_is_left)
+                            if (uncle_is_left)
                             {
-                                helper_rotate_right(root, iroot, grandparent, igrandparent, tree, dexer);
+                                helper_rotate_left(root, iroot, grandparent, igrandparent, tree, dexer);
                             }
                             else
                             {
