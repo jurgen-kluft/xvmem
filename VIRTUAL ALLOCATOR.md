@@ -63,23 +63,22 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Best-Fit strategy
 - Suitable for GPU memory
 
-
 ## Segregated Allocator [WIP]
 
 - Segregated:
-  - A large address range is divided into 'spaces', for example 256 MB
+  - A large address range is divided into 'segment', for example 256 MB
   - A 'level' is a specific allocation size
-  - A 'level' can obtain multiple 'spaces'
-  - A 'level' can release 'spaces'
+  - A 'level' can obtain multiple 'segment'
+  - A 'level' can release 'segment'
   - Upon allocation the necessary pages are committed
   - Upon deallocation the pages are decommitted
-  - A space is managing free and used blocks using a BST
-  - A deallocated block can coalesce with it's next and prev block
   - The allocation is aligned to Level:Size but will only commit used pages
 - A reserved memory range (128GB) of virtual pages
 - Can use more than one instance
-- Sizes to go here, example 640 KB < Size <= 32 MB
-  Sizes; 1 MB, 2 MB, 3 MB, 4 MB ... 32 MB
+- Sizes to go here, example 64 KB < Size <=  1 MB
+  Sizes; 64 KB, 128 KB, 256 KB, 512 KB, 1024 KB
+- Sizes to go here, example  1 MB < Size <= 32 MB
+  Sizes; 1 MB, 2 MB, 4 MB ... 32 MB
 - Size-Alignment = Page-Size (64 KB)
 - Suitable for GPU memory
 

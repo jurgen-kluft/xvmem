@@ -1011,8 +1011,6 @@ namespace xcore
                 ASSERT(node != nullptr);
                 node->clear();
 
-                node_t* root = idx2ptr(dexer, iroot);
-
                 // Case 1: Simplest case -- tree is empty
                 if (iroot == node_t::NIL)
                 {
@@ -1068,6 +1066,7 @@ namespace xcore
                 node->set_parent(ind);
 
                 // Rebalance the tree about the node we just added
+                node_t* root = idx2ptr(dexer, iroot);
                 helper_insert_rebalance(tree, dexer, root, iroot, node, inode);
 
                 ret = true;
