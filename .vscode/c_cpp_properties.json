@@ -20,7 +20,7 @@
             "cppStandard": "c++17",
             "intelliSenseMode": "${default}",
             "forcedInclude": [
-                "/Users/obnosis1/Library/Arduino15/packages/AZ3166/hardware/stm32f4/1.6.0/cores/arduino/Arduino.h"
+                "~/Library/Arduino15/packages/AZ3166/hardware/stm32f4/1.6.0/cores/arduino/Arduino.h"
             ]
         }
     ],

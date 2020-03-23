@@ -11,444 +11,423 @@
 
 namespace xcore
 {
-	// Two different versions of segregated:
-	// 1. Size 64 KB to 1 MB (64,128,256,512,1024)
-	// In this size range it is easy to manage the free and used pages by mere bits.
-	// struct xmedseg_t
-	// {
-    //     u32  m_page_bits;  // The bits that track used/free pages
-    //     u16  m_alloc_cnt;  // The number of allocations that are active
-    //     u16  m_level_idx;  // Which level is using us
-	// };
-	// struct xseg_t
-	// {
-	//     u16  m_next;
-	//     u16  m_prev;
-	// };
-	// 
-	// 2. Size 1 MB to 32 MB (1,2,4,8,16,32)
-	// In the size range it is necessary for every allocation to track the number of
-	// pages that are actually committed.
-	// struct xbigseg_t
-	// {
-    //     u32  m_page_bits;  // The bits that track used/free pages
-    //     u16  m_alloc_cnt;  // The number of allocations that are active
-    //     u16  m_level_idx;  // Which level is using us
-	// };
-
-    namespace xsegregatedstrat
+    namespace xsegregatedstrat2
     {
-        static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
 
-        static u16 const NIL16 = 0xffff;
-        static u32 const NIL32 = 0xffffffff;
+        const u32 INDEX_NIL    = 0xffffffff;
+        const s32 LIST_NEXT    = 0;
+        const s32 LIST_PREV    = 1;
+        const s32 LIST_SIBLING = 2;
 
-        struct xspace_t;
-        struct xspaces_t
+        struct xmspace_t
         {
-            void*     m_mem_address;
-            u64       m_space_size;  // The size of a range (e.g. 1 GiB)
-            u32       m_space_count; // The full address range is divided into 'n' spaces
-            u32       m_page_size;
-            u16       m_freelist; // The doubly linked list spaces that are 'empty'
-            xspace_t* m_spaces;   // The array of memory spaces that make up the full address range
-
-            void init(xalloc* main_heap, void* mem_address, u64 mem_range, u64 space_size, u32 page_size);
-            void release(xalloc* main_heap);
-
-            bool         is_space_empty(void* addr) const;
-            bool         is_space_full(void* addr) const;
-            inline void* get_base_address() const { return m_mem_address; }
-            inline u32   get_page_size() const { return m_page_size; }
-            inline u64   get_space_size() const { return m_space_size; }
-            void*        get_space_addr(void* addr) const;
-
-            inline u16 ptr2addr(void* p) const
-            {
-                u16 const idx = (u16)(((u64)p - (u64)get_space_addr(p)) / get_page_size());
-                ASSERT(idx < m_space_count);
-                return idx;
-            }
-
-            void      insert_space_into_list(u16& head, u16 item);
-            xspace_t* remove_space_from_list(u16& head, u16 item);
-            bool      obtain_space(void*& addr, u16& ispace, xspace_t*& pspace);
-            void      release_space(void*& addr);
-            void      release_space(u16 ispace, xspace_t* pspace);
-            u16       ptr2level(void* ptr) const;
-            u16       ptr2space(void* ptr) const;
-            void      register_alloc(void* addr);
-            u16       register_dealloc(void* addr);
-
-            XCORE_CLASS_PLACEMENT_NEW_DELETE
+            u32 m_alloc_info;    // The allocation info (w,b) managed by this space
+            u16 m_alloc_count;   // Number of allocation done in this space
+            u16 m_alloc_max;     // Maximum number of allocation that this space can hold
+            u8  m_word_count;    // How many words used to track allocations
+            u32 m_word_free;     // One bit says if a word is full '1' or can be used '0'
+            u32 m_word_array[1]; // The array of words that follow this structure in memory
         };
 
-		// Note: We can also simplify this by not using a BST but just a single 64-bit integer.
-		// This means that the size of a space is kinda fixed: ``basesize * 64``
-		// Example:
-		//    - minimumsize =  2.5 MB
-		//    - maximumsize = 32   MB
-		//    - stepsize    =  2   MB
-		//  Calculate 
-		//    -> basesize  =  2.5 MB aligned down with 2 MB = 2 MB
-		//    -> spacesize =  64 * 2 MB = 128 MB
-		//
-		// Also, the maximumsize has to be smaller that the spacesize, in this case we can fit
-		// 4 maximumsize allocations in a single space.
-		// 
-
-        struct xspace_t
+        struct xmlist_t
         {
-            void reset()
-            {
-                m_block_bits = 0;
-                m_alloc_cnt = 0;
-                m_level_idx = NIL16;
-                m_next      = NIL16;
-                m_prev      = NIL16;
-            }
-
-            bool is_unused() const { return m_alloc_cnt == 0; }
-            bool is_empty() const { return m_alloc_cnt == 0; }
-            bool is_full() const { return m_block_bits == (u64)0xffffffffffffffffUL; }
-			
-			void set_link(u16 p, u16 n) { m_prev = p; m_next = n; }
-			bool is_linked(u16 i) const { return (m_prev==i) && (m_next==i); }
-
-            void register_alloc() { m_alloc_cnt += 1; }
-            void register_dealloc()
-            {
-                ASSERT(m_alloc_cnt > 0);
-                m_alloc_cnt -= 1;
-            }
-
-            void init(void* vmem_base_addr, u64 allocsize_step, void* range_base_addr, u64 space_size, u32 page_size)
-            {
-				// Find '0' bit and compute address
-				// Set bit to '1'
-                
-            }
-
-			void* allocate(u32 size)
-			{
-				return nullptr;
-			}
-
-            void deallocate(void* ptr, xfsadexed* nodes, xspaces_t* spaces)
-            {
-                
-                
-            }
-
-            u32 m_block_bits; // The bits that track used/free blocks
-            u16 m_alloc_cnt;  // The number of allocations that are active
-            u16 m_level_idx;  // Which level is using us
-            u16 m_next;       // Used by level to keep track of spaces that are not full
-            u16 m_prev;
+            u16 m_next; // Next element after this element
+            u16 m_prev; // Previous element before this element
         };
 
-        void xspaces_t::init(xalloc* main_heap, void* mem_address, u64 mem_range, u64 space_size, u32 page_size)
+        struct xmspaces_t
         {
-            m_mem_address = mem_address;
-            m_page_size   = page_size;
-            m_space_size  = space_size;
-            m_space_count = (u32)(mem_range / space_size);
-            m_spaces      = (xspace_t*)main_heap->allocate(sizeof(xspace_t) * m_space_count, sizeof(void*));
-            for (u32 i = 0; i < m_space_count; i++)
-            {
-                m_spaces[i].reset();
-            }
-
-			m_spaces[0].set_link(m_space_count-1, 1);
-			for (u32 i = 1; i < m_space_count; i++)
-            {
-				m_spaces[i].set_link(i-1, i+1);
-            }
-			m_spaces[m_space_count-1].set_link(m_space_count-2, 0);
-            m_freelist = 0;
-        }
-
-        inline xspace_t* idx2space(xspaces_t* self, u16 idx)
-        {
-            ASSERT(idx < self->m_space_count);
-            return &self->m_spaces[idx];
-        }
-
-        void xspaces_t::release(xalloc* main_heap)
-        {
-            m_mem_address = nullptr;
-            m_space_size  = 0;
-            m_space_count = 0;
-            m_freelist    = NIL16;
-            main_heap->deallocate(m_spaces);
-        }
-
-        bool xspaces_t::is_space_empty(void* addr) const
-        {
-            u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
-            return m_spaces[idx].is_unused();
-        }
-
-        bool xspaces_t::is_space_full(void* addr) const
-        {
-            u32 const idx = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
-            return m_spaces[idx].is_full();
-        }
-
-        void* xspaces_t::get_space_addr(void* addr) const
-        {
-            u64 const space_idx = (u64)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
-            ASSERT(space_idx < m_space_count);
-            return advance_ptr(m_mem_address, (space_idx * m_space_size));
-        }
-
-        bool xspaces_t::obtain_space(void*& addr, u16& ispace, xspace_t*& pspace)
-        {
-            // Do we still have some free spaces ?
-            if (m_freelist != NIL16)
-            {
-                ispace = m_freelist;
-				pspace = idx2space(this, ispace);
-                remove_space_from_list(m_freelist, ispace);
-                pspace->m_level_idx = NIL16;
-                pspace->m_next      = NIL16;
-                pspace->m_prev      = NIL16;
-                addr                = (void*)((u64)m_mem_address + (m_space_size * ispace));
-                return true;
-            }
-			else
-			{
-				ispace = NIL16;
-				pspace = nullptr;
-				return false;
-			}
-        }
-
-        void xspaces_t::insert_space_into_list(u16& head, u16 item)
-        {
-            xspace_t* pitem = idx2space(this, item);
-			ASSERT(pitem != nullptr);
-
-			if (head == NIL16)
-			{
-				head = item;
-				pitem->set_link(item, item);
-				return;
-			}
-
-            xspace_t* phead = idx2space(this, head);
-			xspace_t* pprev = idx2space(this, phead->m_prev);
-            pitem->m_prev   = phead->m_prev;
-            pitem->m_next   = head;
-            phead->m_prev   = item;
-			pprev->m_next   = item;
-            head            = item;
-        }
-
-        xspace_t* xspaces_t::remove_space_from_list(u16& head, u16 item)
-        {
-            xspace_t* pitem = idx2space(this, item);
-			if (pitem->is_linked(item))
-			{
-				ASSERT(head == item);
-				head = NIL16;
-				return pitem;
-			}
-
-            xspace_t* pprev = idx2space(this, pitem->m_prev);
-            xspace_t* pnext = idx2space(this, pitem->m_next);
-            pprev->m_next = pitem->m_next;
-            pnext->m_prev = pitem->m_prev;
-			head = pitem->m_next;
-			pitem->set_link(NIL16, NIL16);
-            return pitem;
-        }
-
-        void xspaces_t::release_space(void*& addr)
-        {
-            // Put this space back into the free-list !
-            u32 const ispace = (u32)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
-            xspace_t* pspace = idx2space(this, ispace);
-            pspace->m_level_idx = NIL16;
-            insert_space_into_list(m_freelist, ispace);
-        }
-
-        void xspaces_t::release_space(u16 ispace, xspace_t* pspace)
-        {
-            // Put this space back into the free-list !
-            pspace->m_level_idx = NIL16;
-            insert_space_into_list(m_freelist, ispace);
-        }
-
-        u16 xspaces_t::ptr2level(void* ptr) const
-        {
-            u16 const ispace = (u16)(((uptr)ptr - (uptr)m_mem_address) / (uptr)m_space_size);
-            ASSERT(m_spaces[ispace].m_level_idx != NIL16);
-            return m_spaces[ispace].m_level_idx;
-        }
-
-        u16 xspaces_t::ptr2space(void* addr) const
-        {
-            u16 const ispace = (u16)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
-            return ispace;
-        }
-
-        // We register allocations and de-allocations on every space to know if
-        // it is stil used. We are interested to know when a space is free
-        // so that we can release it back.
-        void xspaces_t::register_alloc(void* addr)
-        {
-            u16 const ispace = (u16)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
-            m_spaces[ispace].register_alloc();
-        }
-
-        // Returns the level index
-        u16 xspaces_t::register_dealloc(void* addr)
-        {
-            u16 const ispace = (u16)(((uptr)addr - (uptr)m_mem_address) / (uptr)m_space_size);
-            m_spaces[ispace].register_dealloc();
-            return m_spaces[ispace].m_level_idx;
-        }
-
-        struct xlevel_t
-        {
-            void  reset();
-            void* allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, void* vmem_base_addr, u32 allocsize_step);
-            void  deallocate(void* ptr, xfsadexed* node_alloc, xspaces_t* spaces);
-            u16   m_spaces_not_full; // Linked list of spaces that are not full and not empty
+            void*      m_address_base;             // Address base
+            u64        m_address_range;            // Address range
+            xalloc*    m_node_alloc;               // An indexed based allocator
+            xmspace_t* m_mspaces_array;            // Address range is divided into mspaces
+            xmlist_t*  m_mspaces_list;             // List nodes belonging to mspaces
+            u16        m_mspaces_count;            // The number of mspaces managed
+            u16        m_mspaces_free;             // The head index of free mspaces
+            u16        m_mspaces_free_by_size[16]; // Free and empty nodes
+            u16        m_mspaces_used_by_size[16]; // Used and not yet full/empty
+            u16        m_mspaces_full_by_size[16]; // Full nodes
         };
 
-        void xlevel_t::reset() { m_spaces_not_full = NIL16; }
+        static void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
+        static u32   allocsize_powerof2(u32 allocsize);
+        static u32   allocsize_to_info(u32 allocsize);
+        static u32   allocsize_to_bits(u32 allocsize);
+        static u64   allocsize_to_nodesize(u32 allocsize);
+        static bool  has_empty_slot(u32 slot, u32 w);
+        static u32   find_empty_slot(u32 slot, u32 w);
 
-        void* xlevel_t::allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, void* vmem_base_addr, u32 allocsize_step)
+        static void*      allocate(xmspace_t* n, void* base_address, u32 allocsize);
+        static void*      allocate(xmspaces_t* t, u32 allocsize);
+        static u32        deallocate(xmspace_t* node, void* baseaddress, void* ptr);
+        static u32        deallocate(xmspaces_t* t, void* ptr);
+        static bool       is_full(xmspace_t* n);
+        static bool       is_empty(xmspace_t* n);
+        static xmspace_t* idx2space(xmspaces_t* t, u32 i);
+        static xmspace_t* find_space(xmspaces_t* t, u32 allocsize);
+        static xmspace_t* allocspace(xmspaces_t* t, u32 allocsize);
+
+        static void remove_from_full_list(xmspaces_t* t, xmspace_t* n) {}
+        static void remove_from_used_list(xmspaces_t* t, xmspace_t* n) {}
+        static void remove_from_empty_list(xmspaces_t* t, xmspace_t* n) {}
+        static void remove_from_list(xmspaces_t* t, xmspace_t* n) {}
+        static void add_to_full_list(xmspaces_t* t, xmspace_t* n) {}
+        static void add_to_used_list(xmspaces_t* t, xmspace_t* n) {}
+        static void add_to_empty_list(xmspaces_t* t, xmspace_t* n) {}
+
+        void* allocate(xmspace_t* n, void* baseaddress, u32 allocsize)
         {
-            u16 const  ispace   = spaces->ptr2space(ptr);
-            xspace_t*  pspace   = idx2space(spaces, ispace);
+            u32 const z = allocsize_to_bits(allocsize);
+            u32 const w = (n->m_alloc_info >> 8) & 0xff;
+            u32 const b = (n->m_alloc_info >> 0) & 0xff;
+            u32 const i = n->m_word_free;
+            const u32 e = find_empty_slot(n->m_word_array[i], w);
+            const u32 m = (2 << w) - 1;
+            n->m_word_array[i] |= z << (e * w);
+            n->m_alloc_count += 1;
+            return advance_ptr(baseaddress, e * (1 << b) * (64 * 1024));
+        }
 
+        void* allocate(xmspaces_t* t, u32 allocsize)
+        {
+            xmspace_t* s = find_space(t, allocsize);
+            if (s == nullptr)
+                return nullptr;
+            remove_from_list(t, s);
+            void* ptr = allocate(s, t->m_address_base, allocsize);
+            if (is_full(s))
+            {
+                add_to_full_list(t, s);
+            }
+            else
+            {
+                add_to_used_list(t, s);
+            }
             return ptr;
         }
 
-        void xlevel_t::deallocate(void* ptr, xfsadexed* node_alloc, xspaces_t* spaces)
+        u32 deallocate(xmspace_t* s, void* baseaddress, void* ptr)
         {
-            u16 const  ispace   = spaces->ptr2space(ptr);
-            xspace_t*  pspace   = idx2space(spaces, ispace);
-            bool const was_full = pspace->is_full();
-            pspace->deallocate(ptr, node_alloc, spaces);
-            bool const is_empty = pspace->is_empty();
-            if (was_full)
+            u64 const d        = (u64)ptr - (u64)baseaddress;
+            u32 const b        = (s->m_alloc_info >> 0) & 0xff; // Bit-Width of one element
+            u32 const w        = (s->m_alloc_info >> 8) & 0xff; // Power-Of-2-Bit-Width of one element
+            u32 const m        = (2 << w) - 1;                  // Mask of one element
+            u32 const s        = (1 << b) * (64 * 1024);        // Size of one element
+            u32 const e        = d / s;                         // Index of the element
+            u32 const u        = 32 / w;                        // Number of elements in one word
+            u32 const i        = e / u;                         // Word Index of element
+            u32 const n        = (s->m_word_array[i] >> (e & (u - 1))) & m;
+            s->m_word_array[i] = s->m_word_array[i] & ~(m << (e & (u - 1)));
+            s->m_alloc_count -= 1;
+            return n; // Return the number of pages that where actually committed
+        }
+
+        u32 deallocate(xmspaces_t* t, void* ptr)
+        {
+            u64 const  d = ((u64)ptr - (u64)t->m_address_base);
+            u64        w = t->m_address_range / t->m_mspaces_count;
+            u64        i = d / w;
+            u64        o = i * w;
+            xmspace_t* s = idx2space(t, i);
+            return deallocate(s, (void*)o, ptr);
+        }
+
+        bool is_full(xmspace_t* s)
+        {
+            u16 const cnt = s->m_alloc_count;
+            u16 const max = s->m_alloc_max;
+            return cnt == max;
+        }
+
+        bool is_empty(xmspace_t* s)
+        {
+            u16 const cnt = s->m_alloc_count;
+            return cnt == 0;
+        }
+
+        xmspace_t* allocspace(xmspaces_t* t, u32 allocsize)
+        {
+            u32 const  m     = t->m_address_range / t->m_mspaces_count;
+            u32 const  k     = (m / allocsize_powerof2(allocsize));
+            u32 const  c     = (k / 32);
+            xmspace_t* s     = t->m_node_alloc->placement<xmspace_t, c>();
+            s->m_alloc_info  = allocsize_to_info(allocsize);
+            s->m_alloc_count = 0;
+            s->m_alloc_max   = k;
+            s->m_word_count  = c + 1;
+            s->m_word_free   = 0;
+
+            return s;
+        }
+
+        u32 find_node_slot(xmspaces_t* t, u32 allocsize)
+        {
+            // Find node slot that contains a node we can use to allocate from
+
+            return INDEX_NIL;
+        }
+
+        bool has_empty_slot(u32 slot, u32 w)
+        {
+            switch (w)
             {
-                spaces->insert_space_into_list(m_spaces_not_full, ispace);
+                case 1: return (slot & 0xffffffff) != 0xffffffff;
+                case 2: return (slot & 0xaaaaaaaa) != 0xaaaaaaaa;
+                case 4: return (slot & 0x88888888) != 0x88888888;
+                case 8: return (slot & 0x80808080) != 0x80808080;
+                case 16: return (slot & 0x80008000) != 0x80008000;
             }
-            else if (is_empty)
+            return false;
+        }
+
+        u32 find_empty_slot(u32 slot, u32 w)
+        {
+            u32 b = 0;
+            if (w == 1)
             {
-                spaces->remove_space_from_list(m_spaces_not_full, ispace);
-                spaces->release_space(ispace, pspace);
+                if ((slot & 0x0000ffff) == 0xffff)
+                {
+                    slot = slot >> 16;
+                    b += 16;
+                }
+                if ((slot & 0x000000ff) == 0xff)
+                {
+                    slot = slot >> 8;
+                    b += 8;
+                }
+                if ((slot & 0x0000000f) == 0xf)
+                {
+                    slot = slot >> 4;
+                    b += 4;
+                }
+                if ((slot & 0x00000003) == 0x3)
+                {
+                    slot = slot >> 2;
+                    b += 2;
+                }
+                if ((slot & 0x00000001) == 0x1)
+                {
+                    slot = slot >> 1;
+                    b += 1;
+                }
             }
-        }
-
-        struct xinstance_t
-        {
-            xalloc*    m_main_alloc;
-            xfsadexed* m_node_alloc;
-            void*      m_vmem_base_addr;
-            u32        m_allocsize_min;
-            u32        m_allocsize_max;
-            u32        m_allocsize_step;
-            u32        m_pagesize;
-            u32        m_level_cnt;
-            xlevel_t*  m_levels;
-            xspaces_t* m_spaces;
-
-            XCORE_CLASS_PLACEMENT_NEW_DELETE
-        };
-
-        inline u16 lvl2size_in_pages(xinstance_t* self, u16 ilevel) 
-		{
-            ASSERT(ilevel < self->m_level_cnt);
-			return (((ilevel+1) * self->m_allocsize_step) + (self->m_pagesize - 1)) / self->m_pagesize; 
-		}
-
-        inline u16 ptr2lvl(xinstance_t* self, void* ptr)
-        {
-            u16 const ilevel = self->m_spaces->ptr2level(ptr);
-            ASSERT(ilevel < self->m_level_cnt);
-            return ilevel;
-        }
-
-        inline xlevel_t* idx2lvl(xinstance_t* self, u16 ilevel)
-        {
-            ASSERT(ilevel < self->m_level_cnt);
-            return &self->m_levels[ilevel];
-        }
-
-        xinstance_t* create(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 space_size, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 page_size)
-        {
-			ASSERT(xispo2(allocsize_step));
-			ASSERT(xispo2(page_size));
-
-            // Example: min=640KB, max=32MB, step=1MB
-            // Levels -> 1MB, 2MB, 3MB ... 30MB 31MB 32MB, in total 32 levels
-			const u32     base_size  = xalignDown(allocsize_min, allocsize_step);
-            const u32     num_levels = ((allocsize_max + (allocsize_step - 1) - base_size) / allocsize_step);
-            const u32     mem_size   = sizeof(xlevel_t) * num_levels + sizeof(xspaces_t) + sizeof(xinstance_t);
-            xbyte*        mem_block  = (xbyte*)main_alloc->allocate(mem_size);
-            xallocinplace aip(mem_block, mem_size);
-            xinstance_t*  instance    = aip.construct<xinstance_t>();
-            xspaces_t*    spaces      = aip.construct<xspaces_t>();
-            xlevel_t*     level_array = (xlevel_t*)aip.allocate(sizeof(xlevel_t) * num_levels);
-
-            instance->m_main_alloc     = main_alloc;
-            instance->m_node_alloc     = node_alloc;
-            instance->m_vmem_base_addr = vmem_address;
-
-            instance->m_allocsize_min  = allocsize_min;
-            instance->m_allocsize_max  = allocsize_max;
-            instance->m_allocsize_step = allocsize_step;
-            instance->m_pagesize       = page_size;
-            instance->m_level_cnt      = num_levels;
-            instance->m_levels         = level_array;
-			instance->m_spaces         = spaces;
-            for (u32 i = 0; i < instance->m_level_cnt; ++i)
+            else if (w == 2)
             {
-                instance->m_levels[i].reset();
+                if ((slot & 0x0000aaaa) == 0xaaaa)
+                {
+                    slot = slot >> 16;
+                    b += 8;
+                }
+                if ((slot & 0x000000aa) == 0xaa)
+                {
+                    slot = slot >> 8;
+                    b += 4;
+                }
+                if ((slot & 0x0000000a) == 0xa)
+                {
+                    slot = slot >> 4;
+                    b += 2;
+                }
+                if ((slot & 0x00000002) == 0x2)
+                {
+                    slot = slot >> 2;
+                    b += 1;
+                }
             }
-
-            // Initialize the spaces manager
-            instance->m_spaces->init(main_alloc, instance->m_vmem_base_addr, vmem_space, space_size, page_size);
-
-            return instance;
+            else if (w == 4)
+            {
+                if ((slot & 0x00008888) == 0x8888)
+                {
+                    slot = slot >> 16;
+                    b += 4;
+                }
+                if ((slot & 0x00000088) == 0x88)
+                {
+                    slot = slot >> 8;
+                    b += 2;
+                }
+                if ((slot & 0x00000008) == 0x8)
+                {
+                    slot = slot >> 4;
+                    b += 1;
+                }
+            }
+            else if (w == 8)
+            {
+                if ((slot & 0x00008080) == 0x8080)
+                {
+                    slot = slot >> 16;
+                    b += 2;
+                }
+                if ((slot & 0x00000080) == 0x80)
+                {
+                    slot = slot >> 8;
+                    b += 1;
+                }
+            }
+            else if (w == 16)
+            {
+                if ((slot & 0x00008000) == 0x8000)
+                {
+                    slot = slot >> 16;
+                    b += 1;
+                }
+            }
         }
 
-        void destroy(xinstance_t* self)
+        // R = 128 GB
+        // N = 4096
+        // S = R / N = 32 MB
+        // xmspaces_t, sizeof == 208 + N * 4
+        // xmspace_t, sizeof == 28 + M * 4
+        // xmnode_t, sizeof == 32
+
+        //    64 KB * 512 => 32 MB, 16 words
+        //   128 KB * 256 => 32 MB, 16 words
+        //   256 KB * 128 => 32 MB, 16 words
+        //   512 KB *  64 => 32 MB,  8 words
+        //  1024 KB *  32 => 32 MB,  8 words
+        //  2048 KB *  16 => 32 MB,  4
+        //  4096 KB *   8 => 32 MB,  2
+        //  8192 KB *   4 => 32 MB,  1
+        // 16384 KB *   2 => 32 MB,  1
+        // 32768 KB *   1 => 32 MB,  1
+
+        // allocsize_powerof2
+        // this will compute the power-of-2 ceiling of the incoming
+        // allocsize using page-size as the alignment.
+        u32 allocsize_powerof2(u32 allocsize)
         {
-            self->m_spaces->release(self->m_main_alloc);
-            self->m_spaces = nullptr;
-            self->m_levels = nullptr;
-            self->m_main_alloc->deallocate(self);
+            u32 p = (allocsize / (64 * 1024));
+            u32 s = p == 0 ? 0 : 1;
+            if (p & 0xff00)
+            {
+                s += 8;
+                p = p >> 8;
+            }
+            if (p & 0x00f0)
+            {
+                s += 4;
+                p = p >> 4;
+            }
+            if (p & 0x000c)
+            {
+                s += 2;
+                p = p >> 2;
+            }
+            if (p & 0x0002)
+            {
+                s += 1;
+                // p = p >> 1;
+            }
+            return (64 * 1024) * (1 << s);
         }
 
-
-        void* allocate(xinstance_t* self, u32 size, u32 alignment)
+        u32 allocsize_to_bits(u32 allocsize)
         {
-            ASSERT(size >= self->m_allocsize_min && size <= self->m_allocsize_max);
-            ASSERT(alignment <= self->m_allocsize_step);
-			u32 const base_size = xalignDown(self->m_allocsize_min, self->m_allocsize_step);
-            u16 const ilevel = ((size - base_size) / self->m_allocsize_step);
-			xlevel_t* plevel = idx2lvl(self, ilevel);
-            u16 const size_in_pages = (u16)((size + (self->m_pagesize - 1)) / self->m_pagesize);
-            void*     ptr    = plevel->allocate(size_in_pages, lvl2size_in_pages(self, ilevel), self->m_spaces, self->m_vmem_base_addr, self->m_allocsize_step);
-            ASSERT(ptr2lvl(self, ptr) == ilevel);
-            self->m_spaces->register_alloc(ptr);
-            return ptr;
+            u32 p = (allocsize / (64 * 1024));
+            u32 s = p == 0 ? 0 : 1;
+            if (p & 0xff00)
+            {
+                s += 8;
+                p = p >> 8;
+            }
+            if (p & 0x00f0)
+            {
+                s += 4;
+                p = p >> 4;
+            }
+            if (p & 0x000c)
+            {
+                s += 2;
+                p = p >> 2;
+            }
+            if (p & 0x0002)
+            {
+                s += 1;
+                // p = p >> 1;
+            }
+            p = (allocsize / (64 * 1024));
+            return (1 << s) | p;
         }
 
-        void deallocate(xinstance_t* self, void* ptr)
+        u64 allocsize_to_nodesize(u32 allocsize)
         {
-            u16 const ilevel = self->m_spaces->register_dealloc(ptr);
-			ASSERT(ilevel < self->m_level_cnt);
-            xlevel_t* plevel = &self->m_levels[ilevel];
-            plevel->deallocate(ptr, self->m_node_alloc, self->m_spaces);
+            u32 p = (allocsize / (64 * 1024));
+            u32 s = 1;
+            if (p & 0xff00)
+            {
+                s += 8;
+                p = p >> 8;
+            }
+            if (p & 0x00f0)
+            {
+                s += 4;
+                p = p >> 4;
+            }
+            if (p & 0x000c)
+            {
+                s += 2;
+                p = p >> 2;
+            }
+            if (p & 0x0002)
+            {
+                s += 1;
+                // p = p >> 1;
+            }
+            s = (1 << s);
+
+            u32 c = 1;
+            if (s & 0xff00)
+                c = 16;
+            else if (s & 0x00f0)
+                c = 8;
+            else if (s & 0x000c)
+                c = 4;
+            else if (s & 0x0002)
+                c = 2;
+            u32 const n = 128 / c;
+
+            return n * s * (64 * 1024);
         }
-    } // namespace xsegregatedstrat
+
+        u32 allocsize_to_info(u32 allocsize)
+        {
+            u32 p = (allocsize / (64 * 1024));
+            u32 w;
+            if (p & 0xff00)
+                w = 16;
+            else if (p & 0x00f0)
+                w = 8;
+            else if (p & 0x000c)
+                w = 4;
+            else if (p & 0x0002)
+                w = 2;
+            else if (p & 0x0001)
+                w = 1;
+
+            u32 b = 1;
+            if (p & 0xff00)
+            {
+                b += 8;
+                p = p >> 8;
+            }
+            if (p & 0x00f0)
+            {
+                b += 4;
+                p = p >> 4;
+            }
+            if (p & 0x000c)
+            {
+                b += 2;
+                p = p >> 2;
+            }
+            if (p & 0x0002)
+            {
+                b += 1;
+                // p = p >> 1;
+            }
+            return (w << 8) | (b);
+        }
+    } // namespace xsegregatedstrat2
 } // namespace xcore
-

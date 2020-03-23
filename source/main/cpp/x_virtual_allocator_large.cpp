@@ -13,10 +13,9 @@ namespace xcore
     // - Allocations commit pages
     // - Deallocations decommit pages
     //
-    // Note: Re-use the coalesce policy to manage the allocations!
-    // Allocation step size (size alignment) is 64KiB
+    // Allocation step size (size alignment) is 1 MB
     // Address range is 128 GiB
-    // Uses xcoalescee allocator
+    // Uses xcoalescee strategy
 
     static inline bool is_partof_memory_range(void* mem_base, u64 mem_range, void* ptr)
     {
@@ -93,7 +92,7 @@ namespace xcore
         large_allocator->m_page_size    = page_size;
 
 		u32 const alloc_size_max  = 1 * 1024 * 1024 * 1024;
-        u32 const alloc_size_step = 64 * 1024;
+        u32 const alloc_size_step = 1 * 1024 * 1024;
 		large_allocator->m_coalesce = xcoalescestrat::create(internal_heap, node_heap, vmem_addr, vmem_range, alloc_size_min, alloc_size_max, alloc_size_step);
 
         return large_allocator;
