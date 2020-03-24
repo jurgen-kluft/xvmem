@@ -13,42 +13,83 @@ namespace xcore
 {
     namespace xsegregatedstrat2
     {
-
-        const u32 INDEX_NIL    = 0xffffffff;
-        const s32 LIST_NEXT    = 0;
-        const s32 LIST_PREV    = 1;
-        const s32 LIST_SIBLING = 2;
+        const u16 INDEX_NIL = 0xffff;
 
         struct xmspace_t
         {
             u32 m_alloc_info;    // The allocation info (w,b) managed by this space
             u16 m_alloc_count;   // Number of allocation done in this space
             u16 m_alloc_max;     // Maximum number of allocation that this space can hold
-            u8  m_word_count;    // How many words used to track allocations
             u32 m_word_free;     // One bit says if a word is full '1' or can be used '0'
             u32 m_word_array[1]; // The array of words that follow this structure in memory
         };
 
         struct xmlist_t
         {
+            xmlist_t()
+                : m_next(INDEX_NIL)
+                , m_prev(INDEX_NIL)
+            {
+            }
             u16 m_next; // Next element after this element
             u16 m_prev; // Previous element before this element
         };
 
+        static void add_to_list(xmlist_t* list, u16& head, u16 item)
+        {
+            if (head == INDEX_NIL)
+            {
+                head              = item;
+                list[head].m_next = head;
+                list[head].m_prev = head;
+            }
+            else
+            {
+                u16 const prev    = list[head].m_prev;
+                list[item].m_next = head;
+                list[item].m_prev = prev;
+                list[prev].m_next = item;
+                list[head].m_prev = item;
+            }
+        }
+
+        static void remove_from_list(xmlist_t* list, u16& head, u16 item)
+        {
+            if (head == item)
+            {
+                head = list[head].m_next;
+            }
+            u16 const next    = list[item].m_next;
+            u16 const prev    = list[item].m_prev;
+            list[prev].m_next = next;
+            list[next].m_prev = prev;
+        }
+
         struct xmspaces_t
         {
-            void*      m_address_base;             // Address base
-            u64        m_address_range;            // Address range
-            xalloc*    m_node_alloc;               // An indexed based allocator
-            xmspace_t* m_mspaces_array;            // Address range is divided into mspaces
-            xmlist_t*  m_mspaces_list;             // List nodes belonging to mspaces
-            u16        m_mspaces_count;            // The number of mspaces managed
-            u16        m_mspaces_free;             // The head index of free mspaces
-            u16        m_mspaces_free_by_size[16]; // Free and empty nodes
-            u16        m_mspaces_used_by_size[16]; // Used and not yet full/empty
-            u16        m_mspaces_full_by_size[16]; // Full nodes
+            xmspaces_t()
+                : m_address_base(nullptr)
+                , m_address_range(0)
+                , m_alloc(nullptr)
+                , m_mspaces_array(nullptr)
+                , m_mspaces_list(nullptr)
+                , m_mspaces_count(0)
+                , m_mspaces_free(0)
+            {
+            }
+            void*       m_address_base;             // Address base
+            u64         m_address_range;            // Address range
+            xalloc*     m_alloc;                    // Internal allocator
+            xmspace_t** m_mspaces_array;            // Address range is divided into mspaces
+            xmlist_t*   m_mspaces_list;             // List nodes belonging to mspaces
+            u16         m_mspaces_count;            // The number of mspaces managed
+            u16         m_mspaces_free;             // The head index of free mspaces
+            u16         m_mspaces_free_by_size[16]; // Free and empty nodes
+            u16         m_mspaces_used_by_size[16]; // Used and not yet full/empty
+            u16         m_mspaces_full_by_size[16]; // Full nodes
         };
 
+        void         init_mspaces(xmspaces_t* ms);
         static void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
         static u32   allocsize_powerof2(u32 allocsize);
         static u32   allocsize_to_info(u32 allocsize);
@@ -64,10 +105,10 @@ namespace xcore
         static bool       is_full(xmspace_t* n);
         static bool       was_full(xmspace_t* n);
         static bool       is_empty(xmspace_t* n);
-        static xmspace_t* idx2space(xmspaces_t* t, u32 i);
-        static xmspace_t* find_space(xmspaces_t* t, u32 allocsize);
-        static xmspace_t* allocspace(xmspaces_t* t, u32 allocsize);
-        static void       freespace(xmspaces_t* t, xmspace_t* s);
+        static xmspace_t* get_space_at(xmspaces_t* t, u32 i);
+        static xmspace_t* obtain_space(xmspaces_t* t, u32 allocsize);
+        static xmspace_t* alloc_space(xmspaces_t* t, u32 allocsize);
+        static void       free_space_at(xmspaces_t* t, u32 i);
 
         static void remove_from_full_list(xmspaces_t* t, xmspace_t* n) {}
         static void remove_from_used_list(xmspaces_t* t, xmspace_t* n) {}
@@ -76,6 +117,56 @@ namespace xcore
         static void add_to_full_list(xmspaces_t* t, xmspace_t* n) {}
         static void add_to_used_list(xmspaces_t* t, xmspace_t* n) {}
         static void add_to_empty_list(xmspaces_t* t, xmspace_t* n) {}
+
+        void init_mspaces(xmspaces_t* ms, xalloc* allocator, void* address_base, u64 address_range)
+        {
+            ms->m_address_base  = address_base;
+            ms->m_address_range = address_range;
+            ms->m_alloc         = allocator;
+
+            ms->m_mspaces_count = (address_range / 1024) / (64 * 1024);
+            ms->m_mspaces_free  = 0;
+
+            u32 const c         = ms->m_mspaces_count;
+            ms->m_mspaces_array = (xmspace_t**)allocator->allocate(sizeof(xmspace_t*) * c);
+            ms->m_mspaces_list  = (xmlist_t*)allocator->allocate(sizeof(xmlist_t) * c);
+
+            for (u32 i = 0; i < c; ++i)
+            {
+                ms->m_mspaces_array[i]       = nullptr;
+                ms->m_mspaces_list[i].m_next = i + 1;
+                ms->m_mspaces_list[i].m_prev = i - 1;
+            }
+            ms->m_mspaces_list[0].m_prev     = INDEX_NIL;
+            ms->m_mspaces_list[c - 1].m_next = INDEX_NIL;
+
+            for (s32 i = 0; i < 16; ++i)
+            {
+                ms->m_mspaces_free_by_size[i] = INDEX_NIL;
+                ms->m_mspaces_used_by_size[i] = INDEX_NIL;
+                ms->m_mspaces_full_by_size[i] = INDEX_NIL;
+            }
+        }
+
+        void destroy_mspaces(xmspaces_t* ms)
+        {
+            if (ms->m_alloc != nullptr)
+            {
+                u32 const c = ms->m_mspaces_count;
+                for (u32 i = 0; i < c; ++i)
+                {
+                    if (ms->m_mspaces_array[i] != nullptr)
+                    {
+                        ms->m_alloc->deallocate(ms->m_mspaces_array[i]);
+                        ms->m_mspaces_array[i] = nullptr;
+                    }
+                }
+                ms->m_alloc->deallocate(ms->m_mspaces_array);
+                ms->m_alloc->deallocate(ms->m_mspaces_list);
+
+                ms->m_alloc = nullptr;
+            }
+        }
 
         void* allocate(xmspace_t* n, void* baseaddress, u32 allocsize)
         {
@@ -98,7 +189,7 @@ namespace xcore
 
         void* allocate(xmspaces_t* t, u32 allocsize)
         {
-            xmspace_t* s = find_space(t, allocsize);
+            xmspace_t* s = obtain_space(t, allocsize);
             if (s == nullptr)
                 return nullptr;
             remove_from_list(t, s);
@@ -136,7 +227,7 @@ namespace xcore
             u64        w = t->m_address_range / t->m_mspaces_count;
             u64        i = d / w;
             u64        o = i * w;
-            xmspace_t* s = idx2space(t, i);
+            xmspace_t* s = get_space_at(t, i);
             u32 const  n = deallocate(s, (void*)o, ptr);
             if (was_full(s))
             {
@@ -148,7 +239,7 @@ namespace xcore
                 if (is_empty(s))
                 {
                     remove_from_used_list(t, s);
-                    freespace(t, s);
+                    free_space_at(t, i);
                 }
             }
             return n;
@@ -174,27 +265,26 @@ namespace xcore
             return cnt == 0;
         }
 
-        xmspace_t* allocspace(xmspaces_t* t, u32 allocsize)
+        xmspace_t* get_space_at(xmspaces_t* t, u32 i)
+        {
+            ASSERT(i < t->m_mspaces_count);
+            ASSERT(t->m_mspaces_array[i] != nullptr);
+        }
+
+        xmspace_t* alloc_space(xmspaces_t* t, u32 allocsize)
         {
             u32 const  m     = t->m_address_range / t->m_mspaces_count;
             u32 const  k     = (m / allocsize_powerof2(allocsize));
             u32 const  extra = (k / 32); // xmspace_t already has 1 entry
-            xmspace_t* s     = t->m_node_alloc->placement<xmspace_t>(extra);
+            xmspace_t* s     = t->m_alloc->placement<xmspace_t>(extra * sizeof(u32));
             s->m_alloc_info  = allocsize_to_info(allocsize);
             s->m_alloc_count = 0;
             s->m_alloc_max   = k;
-            s->m_word_count  = extra + 1;
             s->m_word_free   = 0;
-
             return s;
         }
 
-        u32 find_node_slot(xmspaces_t* t, u32 allocsize)
-        {
-            // Find node slot that contains a node we can use to allocate from
-
-            return INDEX_NIL;
-        }
+        void free_space(xmspaces_t* t, xmspace_t* s) { t->m_alloc->deallocate(s); }
 
         bool has_empty_slot(u32 slot, u32 w)
         {
@@ -303,24 +393,6 @@ namespace xcore
                 }
             }
         }
-
-        // R = 128 GB
-        // N = 4096
-        // S = R / N = 32 MB
-        // xmspaces_t, sizeof == 208 + N * 4
-        // xmspace_t, sizeof == 28 + M * 4
-        // xmnode_t, sizeof == 32
-
-        //    64 KB * 512 => 32 MB, 16 words
-        //   128 KB * 256 => 32 MB, 16 words
-        //   256 KB * 128 => 32 MB, 16 words
-        //   512 KB *  64 => 32 MB,  8 words
-        //  1024 KB *  32 => 32 MB,  8 words
-        //  2048 KB *  16 => 32 MB,  4
-        //  4096 KB *   8 => 32 MB,  2
-        //  8192 KB *   4 => 32 MB,  1
-        // 16384 KB *   2 => 32 MB,  1
-        // 32768 KB *   1 => 32 MB,  1
 
         // allocsize_powerof2
         // this will compute the power-of-2 ceiling of the incoming
