@@ -62,10 +62,12 @@ namespace xcore
         static u32        deallocate(xmspace_t* node, void* baseaddress, void* ptr);
         static u32        deallocate(xmspaces_t* t, void* ptr);
         static bool       is_full(xmspace_t* n);
+        static bool       was_full(xmspace_t* n);
         static bool       is_empty(xmspace_t* n);
         static xmspace_t* idx2space(xmspaces_t* t, u32 i);
         static xmspace_t* find_space(xmspaces_t* t, u32 allocsize);
         static xmspace_t* allocspace(xmspaces_t* t, u32 allocsize);
+        static void       freespace(xmspaces_t* t, xmspace_t* s);
 
         static void remove_from_full_list(xmspaces_t* t, xmspace_t* n) {}
         static void remove_from_used_list(xmspaces_t* t, xmspace_t* n) {}
@@ -80,10 +82,16 @@ namespace xcore
             u32 const z = allocsize_to_bits(allocsize);
             u32 const w = (n->m_alloc_info >> 8) & 0xff;
             u32 const b = (n->m_alloc_info >> 0) & 0xff;
-            u32 const i = n->m_word_free;
-            const u32 e = find_empty_slot(n->m_word_array[i], w);
+            u32 const i = xfindFirstBit(~n->m_word_free);
+            u32 const s = n->m_word_array[i];
+            const u32 e = find_empty_slot(s, w);
             const u32 m = (2 << w) - 1;
-            n->m_word_array[i] |= z << (e * w);
+            const u32 t = s | (z << (e * w));
+            if (!has_empty_slot(t, w))
+            {
+                n->m_word_free |= 1 << i; // Mark slot as full
+            }
+            n->m_word_array[i] = t;
             n->m_alloc_count += 1;
             return advance_ptr(baseaddress, e * (1 << b) * (64 * 1024));
         }
@@ -108,16 +116,16 @@ namespace xcore
 
         u32 deallocate(xmspace_t* s, void* baseaddress, void* ptr)
         {
-            u64 const d        = (u64)ptr - (u64)baseaddress;
-            u32 const b        = (s->m_alloc_info >> 0) & 0xff; // Bit-Width of one element
-            u32 const w        = (s->m_alloc_info >> 8) & 0xff; // Power-Of-2-Bit-Width of one element
-            u32 const m        = (2 << w) - 1;                  // Mask of one element
-            u32 const s        = (1 << b) * (64 * 1024);        // Size of one element
-            u32 const e        = d / s;                         // Index of the element
-            u32 const u        = 32 / w;                        // Number of elements in one word
-            u32 const i        = e / u;                         // Word Index of element
-            u32 const n        = (s->m_word_array[i] >> (e & (u - 1))) & m;
-            s->m_word_array[i] = s->m_word_array[i] & ~(m << (e & (u - 1)));
+            u64 const d         = (u64)ptr - (u64)baseaddress;
+            u32 const eb        = (s->m_alloc_info >> 0) & 0xff; // Bit-Width of one element
+            u32 const ew        = (s->m_alloc_info >> 8) & 0xff; // Power-Of-2-Bit-Width of one element
+            u32 const em        = (2 << ew) - 1;                 // Mask of one element
+            u32 const es        = (1 << eb) * (64 * 1024);       // Size of one element
+            u32 const ei        = d / es;                        // Index of the element
+            u32 const eu        = 32 / ew;                       // Number of elements in one word
+            u32 const wi        = ei / eu;                       // Word Index of element
+            u32 const n         = (s->m_word_array[wi] >> (ei & (eu - 1))) & em;
+            s->m_word_array[wi] = s->m_word_array[wi] & ~(em << (ei & (eu - 1)));
             s->m_alloc_count -= 1;
             return n; // Return the number of pages that where actually committed
         }
@@ -129,7 +137,21 @@ namespace xcore
             u64        i = d / w;
             u64        o = i * w;
             xmspace_t* s = idx2space(t, i);
-            return deallocate(s, (void*)o, ptr);
+            u32 const  n = deallocate(s, (void*)o, ptr);
+            if (was_full(s))
+            {
+                remove_from_full_list(t, s);
+                add_to_used_list(t, s);
+            }
+            else
+            {
+                if (is_empty(s))
+                {
+                    remove_from_used_list(t, s);
+                    freespace(t, s);
+                }
+            }
+            return n;
         }
 
         bool is_full(xmspace_t* s)
@@ -137,6 +159,13 @@ namespace xcore
             u16 const cnt = s->m_alloc_count;
             u16 const max = s->m_alloc_max;
             return cnt == max;
+        }
+
+        bool was_full(xmspace_t* s)
+        {
+            u16 const cnt = s->m_alloc_count;
+            u16 const max = s->m_alloc_max;
+            return (cnt + 1) == max;
         }
 
         bool is_empty(xmspace_t* s)
@@ -149,12 +178,12 @@ namespace xcore
         {
             u32 const  m     = t->m_address_range / t->m_mspaces_count;
             u32 const  k     = (m / allocsize_powerof2(allocsize));
-            u32 const  c     = (k / 32);
-            xmspace_t* s     = t->m_node_alloc->placement<xmspace_t, c>();
+            u32 const  extra = (k / 32); // xmspace_t already has 1 entry
+            xmspace_t* s     = t->m_node_alloc->placement<xmspace_t>(extra);
             s->m_alloc_info  = allocsize_to_info(allocsize);
             s->m_alloc_count = 0;
             s->m_alloc_max   = k;
-            s->m_word_count  = c + 1;
+            s->m_word_count  = extra + 1;
             s->m_word_free   = 0;
 
             return s;
