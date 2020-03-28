@@ -17,6 +17,8 @@ namespace xcore
 
         struct xmspace_t
         {
+			XCORE_CLASS_PLACEMENT_NEW_DELETE
+				
             u16 m_array_index;   // The index of this space for mapping back into the array
             u16 m_alloc_info;    // The allocation info (w,b) managed by this space
             u16 m_alloc_count;   // Number of allocation done in this space
@@ -215,7 +217,7 @@ namespace xcore
             u32 const ei         = d / es;                         // Index of the element
             u32 const eu         = 32 / ew;                        // Number of elements in one word
             u32 const wi         = ei / eu;                        // Word Index of element
-            u32 const n          = (s->m_word_array[wi] >> (ei & (eu - 1))) & em;
+            u32 const n          = (ms->m_word_array[wi] >> (ei & (eu - 1))) & em;
             ms->m_word_array[wi] = ms->m_word_array[wi] & ~(em << (ei & (eu - 1)));
             ms->m_alloc_count -= 1;
             return n; // Return the number of pages that where actually committed
@@ -482,7 +484,7 @@ namespace xcore
 
         u32 allocsize_to_info(u32 allocsize)
         {
-            u32 p = ((allocsize + (64 * 1024) - 1) / (64 * 1024));
+            u32 const p = ((allocsize + (64 * 1024) - 1) / (64 * 1024));
             u32 w;
             if (p & 0xff00)
                 w = 16;
@@ -495,7 +497,8 @@ namespace xcore
             else if (p & 0x0001)
                 w = 1;
 
-            u32 b = alloc return (w << 8) | (b);
+            u32 const b = allocsize_to_bits(allocsize);
+			return (w << 8) | (b);
         }
     } // namespace xsegregatedstrat2
 } // namespace xcore
