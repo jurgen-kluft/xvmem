@@ -11,6 +11,14 @@ Let's say an APP has 640 GB of address space and it has the following behaviour:
 2. CPU and GPU allocations (different calls, different page settings, VirtualAlloc/XMemAlloc)
 3. Categories of GPU resources have different min/max size, alignment requirements, count and frequency
 
+## Implementations
+
+- Fixed Size Allocator (intrusive) :white_check_mark:
+- Coalesce Strategy :white_check_mark:
+- Segregated Strategy :white_check_mark:
+- Large Strategy :white_check_mark:
+- Temporal Strategy :soon:
+
 ## Fixed Size Allocator [Ok]
 
 ### Multi Threading
