@@ -55,7 +55,7 @@ namespace xcore
             }
             inline void set_addr_from_full_address(void* baseaddr, u64 page_size, void* addr)
             {
-                m_addr = (u32)(((u64)m_addr - (u64)baseaddr) / page_size);
+                m_addr = (u32)(((u64)addr - (u64)baseaddr) / page_size);
             }
             inline u16  get_page_cnt() const { return (u16)m_pages_range; }
             inline void set_page_cnt(u16 page_cnt) { m_pages_range = page_cnt; }
@@ -252,8 +252,9 @@ namespace xcore
                 m_alloc_cnt -= 1;
             }
 
-            void init(xfsadexed* node_alloc, void* vmem_base_addr, u64 allocsize_step, void* range_base_addr, u64 space_size, u32 page_size)
+            void init(u16 lvl_idx, xfsadexed* node_alloc, void* vmem_base_addr, u64 allocsize_step, void* range_base_addr, u64 space_size, u32 page_size)
             {
+				m_level_idx = lvl_idx;
                 // Create a new nnode_t for this range and add it
                 nnode_t* pnode = (nnode_t*)node_alloc->allocate();
                 u32      inode = node_alloc->ptr2idx(pnode);
@@ -556,14 +557,14 @@ namespace xcore
         struct xlevel_t
         {
             void  reset();
-            void* allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step);
+            void* allocate(u32 size_in_pages, u16 lvl_idx, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step);
             void  deallocate(void* ptr, xfsadexed* node_alloc, xspaces_t* spaces);
             u16   m_spaces_not_full; // Linked list of spaces that are not full and not empty
         };
 
         void xlevel_t::reset() { m_spaces_not_full = NIL16; }
 
-        void* xlevel_t::allocate(u32 size_in_pages, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step)
+        void* xlevel_t::allocate(u32 size_in_pages, u16 lvl_idx, u32 lvl_size_in_pages, xspaces_t* spaces, xfsadexed* node_alloc, void* vmem_base_addr, u32 allocsize_step)
         {
             u16       ispace = m_spaces_not_full;
             xspace_t* pspace = nullptr;
@@ -576,7 +577,7 @@ namespace xcore
                 }
 
                 // Initialize the newly obtained space
-                pspace->init(node_alloc, vmem_base_addr, allocsize_step, space_base_addr, spaces->get_space_size(), spaces->get_page_size());
+                pspace->init(lvl_idx, node_alloc, vmem_base_addr, allocsize_step, space_base_addr, spaces->get_space_size(), spaces->get_page_size());
                 spaces->insert_space_into_list(m_spaces_not_full, ispace);
             }
             else
@@ -765,7 +766,7 @@ namespace xcore
             u16 const ilevel = ((size - base_size) / self->m_allocsize_step);
 			xlevel_t* plevel = idx2lvl(self, ilevel);
             u16 const size_in_pages = (u16)((size + (self->m_pagesize - 1)) / self->m_pagesize);
-            void*     ptr    = plevel->allocate(size_in_pages, lvl2size_in_pages(self, ilevel), self->m_spaces, self->m_node_alloc, self->m_vmem_base_addr, self->m_allocsize_step);
+            void*     ptr    = plevel->allocate(size_in_pages, ilevel, lvl2size_in_pages(self, ilevel), self->m_spaces, self->m_node_alloc, self->m_vmem_base_addr, self->m_allocsize_step);
             ASSERT(ptr2lvl(self, ptr) == ilevel);
             self->m_spaces->register_alloc(ptr);
             return ptr;

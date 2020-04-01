@@ -2,7 +2,7 @@
 #include "xbase/x_integer.h"
 
 #include "xvmem/x_virtual_memory.h"
-#include "xvmem/private/x_strategy_fsablock.h"
+#include "xvmem/private/x_strategy_fsa_small.h"
 
 #include "xunittest/xunittest.h"
 
@@ -57,7 +57,7 @@ public:
 
 };
 
-UNITTEST_SUITE_BEGIN(strategy_fsa)
+UNITTEST_SUITE_BEGIN(strategy_fsa_small)
 {
     UNITTEST_FIXTURE(main)
     {

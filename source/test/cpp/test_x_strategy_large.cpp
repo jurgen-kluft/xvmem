@@ -36,7 +36,8 @@ UNITTEST_SUITE_BEGIN(strategy_large)
             xlargestrat::xinstance_t* inst     = xlargestrat::create(gTestAllocator, mem_base, sMemoryRange, sMinumSize, sMemoryRange / sMaximumSize);
 
             void* p1 = xlargestrat::allocate(inst, sMinumSize, 1024);
-            xlargestrat::deallocate(inst, p1);
+            u64 const s1 = xlargestrat::deallocate(inst, p1);
+			CHECK_EQUAL(sMinumSize, s1);
 
             xlargestrat::destroy(inst);
         }

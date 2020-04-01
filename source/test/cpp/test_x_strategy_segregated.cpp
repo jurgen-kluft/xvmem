@@ -25,8 +25,8 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
 
         UNITTEST_FIXTURE_SETUP()
 		{
-			const s32 sizeof_node = 32;
-			const s32 countof_node = 16384;
+			const u32 sizeof_node = 32;
+			const u32 countof_node = 16384;
 			sNodeData = gTestAllocator->allocate(sizeof_node * countof_node, 8);
 			sNodeHeap = gTestAllocator->construct<xfsadexed_array>(sNodeData, sizeof_node, countof_node);
 		}

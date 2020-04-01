@@ -16,23 +16,15 @@ namespace xcore
         {
             struct entry_t
             {
-                entry_t()
-                    : m_address(nullptr)
-                    , m_size(0)
-                    , m_next(INDEX32_NIL)
-                    , m_prev(INDEX32_NIL)
-                {
-                }
+                XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-				XCORE_CLASS_PLACEMENT_NEW_DELETE
-
-				void* m_address;
-                u64   m_size;
+                u32   m_index;
+                u32   m_size;
                 u32   m_next;
                 u32   m_prev;
             };
 
-			XCORE_CLASS_PLACEMENT_NEW_DELETE
+            XCORE_CLASS_PLACEMENT_NEW_DELETE
 
             xalloc*  m_main_heap;
             void*    m_mem_base;
@@ -70,25 +62,23 @@ namespace xcore
             xinstance_t::entry_t* entry = helper_idx2entry(self, i);
             if (i == head)
             {
-                head          = entry->m_next;
-                entry->m_prev = INDEX32_NIL;
+                head = entry->m_next;
             }
-            else
+
+            xinstance_t::entry_t* next = helper_idx2entry(self, entry->m_next);
+            xinstance_t::entry_t* prev = helper_idx2entry(self, entry->m_prev);
+            if (next != nullptr)
             {
-                xinstance_t::entry_t* next = helper_idx2entry(self, entry->m_next);
-                xinstance_t::entry_t* prev = helper_idx2entry(self, entry->m_prev);
-                if (next != nullptr)
-                {
-                    next->m_prev = entry->m_prev;
-                }
-                if (prev != nullptr)
-                {
-                    prev->m_next = entry->m_next;
-                }
+                next->m_prev = entry->m_prev;
             }
+            if (prev != nullptr)
+            {
+                prev->m_next = entry->m_next;
+            }
+
             entry->m_next = INDEX32_NIL;
             entry->m_prev = INDEX32_NIL;
-			return entry;
+            return entry;
         }
 
         static inline void helper_list_insert(xinstance_t* self, u32& head, u32 i)
@@ -97,6 +87,8 @@ namespace xcore
             entry->m_next               = head;
             head                        = i;
         }
+
+		static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
 
         xinstance_t* create(xalloc* main_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 max_num_allocs)
         {
@@ -109,11 +101,20 @@ namespace xcore
             instance->m_mem_base   = mem_addr;
             instance->m_mem_range  = mem_size;
             instance->m_block_size = block_size;
-            instance->m_free_list  = INDEX32_NIL;
             instance->m_alloc_list = INDEX32_NIL;
+            instance->m_free_list  = 0;
 
             instance->m_entry_capacity = block_cnt;
             instance->m_entry_array    = (xinstance_t::entry_t*)main_heap->allocate(sizeof(xinstance_t::entry_t) * block_cnt, sizeof(void*));
+            for (u32 i = 0; i < block_cnt; ++i)
+            {
+                instance->m_entry_array[i].m_size = (u32)block_size;
+				instance->m_entry_array[i].m_prev = i-1;
+				instance->m_entry_array[i].m_next = i+1;
+				instance->m_entry_array[i].m_index = i;
+            }
+			instance->m_entry_array[block_cnt - 1].m_next = INDEX32_NIL;
+			instance->m_entry_array[0].m_prev = INDEX32_NIL;
 
             return instance;
         }
@@ -128,9 +129,13 @@ namespace xcore
         {
             if (self->m_free_list != INDEX32_NIL)
             {
-                xinstance_t::entry_t* entry = helper_list_remove(self, self->m_free_list, self->m_free_list);
-				entry->m_size = size;
-                return entry->m_address;
+				const u32 idx = self->m_free_list;
+                helper_list_remove(self, self->m_free_list, idx);
+	            helper_list_insert(self, self->m_alloc_list, idx);
+				xinstance_t::entry_t* entry = &self->m_entry_array[idx];
+                entry->m_size = size;
+				ASSERT(entry->m_index == idx);
+                return advance_ptr(self->m_mem_base, entry->m_index * self->m_block_size);
             }
             return nullptr;
         }
@@ -140,12 +145,12 @@ namespace xcore
             u32 const             idx   = (u32)(((u64)ptr - (u64)self->m_mem_base) / self->m_block_size);
             xinstance_t::entry_t* entry = helper_idx2entry(self, idx);
             u64 const             size  = entry->m_size;
-			entry->m_size = self->m_block_size;
+            entry->m_size               = (u32)self->m_block_size;
             helper_list_remove(self, self->m_alloc_list, idx);
             helper_list_insert(self, self->m_free_list, idx);
             return size;
         }
 
-    } // namespace xlarge
+    } // namespace xlargestrat
 
 } // namespace xcore

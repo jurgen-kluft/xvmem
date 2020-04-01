@@ -4,7 +4,7 @@
 
 #include "xvmem/x_virtual_allocator_small.h"
 #include "xvmem/x_virtual_memory.h"
-#include "xvmem/private/x_strategy_fsablock.h"
+#include "xvmem/private/x_strategy_fsa_small.h"
 
 namespace xcore
 {

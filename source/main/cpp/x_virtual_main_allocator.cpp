@@ -4,7 +4,8 @@
 #include "xbase/x_btree.h"
 
 #include "xvmem/x_virtual_main_allocator.h"
-#include "xvmem/private/x_strategy_fsablock.h"
+#include "xvmem/private/x_strategy_fsa_small.h"
+#include "xvmem/private/x_strategy_fsa_large.h"
 #include "xvmem/private/x_strategy_coalesce.h"
 #include "xvmem/private/x_strategy_segregated.h"
 #include "xvmem/private/x_strategy_large.h"

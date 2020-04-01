@@ -4,7 +4,7 @@
 #include "xbase/x_memory.h"
 #include "xbase/x_integer.h"
 
-#include "xvmem/private/x_strategy_fsablock.h"
+#include "xvmem/private/x_strategy_fsa_small.h"
 
 namespace xcore
 {
@@ -346,13 +346,13 @@ namespace xcore
             xpages_t::llnode_t* const ppage = pages->indexto_node(page);
             if (phead == nullptr)
             {
-				ppage->link(page, page);
+                ppage->link(page, page);
             }
-			else
-			{
-				ppage->link(phead->m_prev, head);
-				phead->m_prev = page;
-			}
+            else
+            {
+                ppage->link(phead->m_prev, head);
+                phead->m_prev = page;
+            }
             head = page;
         }
 
