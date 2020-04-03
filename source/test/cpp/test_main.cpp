@@ -13,7 +13,7 @@ UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_small);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_large);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_large);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_segregated);
-UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_segregated2);
+//UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_segregated2);
 
 namespace xcore
 {

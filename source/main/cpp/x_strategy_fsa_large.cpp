@@ -14,9 +14,10 @@ namespace xcore
     {
         static void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
 
-        static u32 allocsize_to_bits(u32 allocsize);
-        static u32 allocsize_to_bwidth(u32 allocsize);
-        static u32 allocsize_to_blockrange(u32 allocsize);
+        static u32 allocsize_to_bits(u32 allocsize, u32 pagesize);
+        static u32 bits_to_allocsize(u32 b, u32 w, u32 pagesize);
+        static u32 allocsize_to_bwidth(u32 allocsize, u32 pagesize);
+        static u32 allocsize_to_blockrange(u32 allocsize, u32 pagesize);
 
         const u16 INDEX_NIL = 0xffff;
 
@@ -27,7 +28,7 @@ namespace xcore
         };
 
         static void add_to_list(xlist_t* list, u16& head, u16 item);
-        static bool is_empty_list(u16& head) { return head == INDEX_NIL; }
+        static bool is_empty_list(u16 const head) { return head == INDEX_NIL; }
         static u16  pop_from_list(xlist_t* list, u16& head);
         static void remove_from_list(xlist_t* list, u16& head, u16 item);
 
@@ -61,6 +62,7 @@ namespace xcore
             void*      m_address_base;
             u64        m_address_range;
             u32        m_allocsize;
+            u32        m_pagesize;
             u32        m_block_count;
             xblock_t** m_block_array;
             xbinfo_t*  m_binfo_array;
@@ -90,10 +92,10 @@ namespace xcore
         //      binfo_array = 512 * 2 = 1024 bytes
         //      list_array  = 512 * 4 = 2048 bytes
 
-        xinstance_t* create(xalloc* allocator, void* mem_base, u64 mem_range, u32 allocsize)
+        xinstance_t* create(xalloc* allocator, void* mem_base, u64 mem_range, u32 pagesize, u32 allocsize)
         {
-            u32 const  block_range = allocsize_to_blockrange(allocsize);
-            u32 const  block_count = mem_range / block_range;
+            u32 const  block_range = allocsize_to_blockrange(allocsize, pagesize);
+            u32 const  block_count = (u32)(mem_range / block_range);
             xblock_t** block_array = (xblock_t**)allocator->allocate(sizeof(xblock_t*) * block_count);
             xbinfo_t*  binfo_array = (xbinfo_t*)allocator->allocate(sizeof(xbinfo_t) * block_count);
             xlist_t*   list_nodes  = (xlist_t*)allocator->allocate(sizeof(xlist_t) * block_count);
@@ -103,6 +105,7 @@ namespace xcore
             instance->m_address_base     = mem_base;
             instance->m_address_range    = mem_range;
             instance->m_allocsize        = xceilpo2(allocsize);
+            instance->m_pagesize         = pagesize;
             instance->m_block_count      = block_count;
             instance->m_block_array      = block_array;
             instance->m_binfo_array      = binfo_array;
@@ -121,8 +124,8 @@ namespace xcore
                 instance->m_list_array[i].m_next = i + 1;
                 instance->m_list_array[i].m_prev = i - 1;
             }
-            instance->m_list_array[0].m_prev     = INDEX_NIL;
-            instance->m_list_array[c - 1].m_next = INDEX_NIL;
+            instance->m_list_array[0].m_prev     = c - 1;
+            instance->m_list_array[c - 1].m_next = 0;
 
             return instance;
         }
@@ -133,15 +136,15 @@ namespace xcore
             for (u32 i = 0; i < c; ++i)
             {
                 if (instance->m_block_array[i] != nullptr)
-				{
-					instance->m_allocator->deallocate(instance->m_block_array[i]);
-				}
+                {
+                    instance->m_allocator->deallocate(instance->m_block_array[i]);
+                }
             }
 
             instance->m_allocator->deallocate(instance->m_block_array);
             instance->m_allocator->deallocate(instance->m_binfo_array);
             instance->m_allocator->deallocate(instance->m_list_array);
-			instance->m_allocator->deallocate(instance);
+            instance->m_allocator->deallocate(instance);
         }
 
         static xblock_t* get_block_at(xinstance_t* instance, u32 i) { return instance->m_block_array[i]; }
@@ -169,16 +172,16 @@ namespace xcore
             xblock_t* block = instance->m_block_array[index];
             xbinfo_t* binfo = &instance->m_binfo_array[index];
 
-            u32 const w  = allocsize_to_bwidth(instance->m_allocsize);
-            u32 const wi = get_word_index(binfo->m_words_set); // index of word that is not full
-            u32 const wd = block->m_words[wi];                 // word data
-            u32 const ws = get_empty_slot(wd, w);              // get index of empty slot in word data
-            u32 const ew = 32 / w;                             // number of elements per word
-            u32 const ab = allocsize_to_bits(allocsize);       // get the actual bits of the requested alloc-size
+            u32 const w  = allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize);
+            u32 const wi = get_word_index(binfo->m_words_set);                 // index of word that is not full
+            u32 const wd = block->m_words[wi];                                 // word data
+            u32 const ws = get_empty_slot(wd, w);                              // get index of empty slot in word data
+            u32 const ew = 32 / w;                                             // number of elements per word
+            u32 const ab = allocsize_to_bits(allocsize, instance->m_pagesize); // get the actual bits of the requested alloc-size
 
-            u32 const bs  = allocsize_to_blockrange(instance->m_allocsize);             // memory size of one block
-            void*     ptr = advance_ptr(instance->m_address_base, index * bs);          // memory base of this block
-            ptr           = advance_ptr(ptr, ((wi * ew) + ws) * instance->m_allocsize); // the word-index and slot index determine the offset
+            u32 const bs  = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize); // memory size of one block
+            void*     ptr = advance_ptr(instance->m_address_base, index * bs);                    // memory base of this block
+            ptr           = advance_ptr(ptr, ((wi * ew) + ws) * instance->m_allocsize);           // the word-index and slot index determine the offset
 
             block->m_words[wi] = block->m_words[wi] | (ab << (ws * w)); // write the bits into the element slot
             if (!has_empty_slot(block->m_words[wi], w))
@@ -195,21 +198,21 @@ namespace xcore
             xblock_t* const block = instance->m_block_array[index];
             xbinfo_t* const binfo = &instance->m_binfo_array[index];
 
-            void* const block_base = advance_ptr(instance->m_address_base, index * allocsize_to_blockrange(instance->m_allocsize));
-            u32 const   i          = ((u64)ptr - (u64)block_base) / instance->m_allocsize;
-            u32 const   w          = allocsize_to_bwidth(instance->m_allocsize); // element width in bits
-            u32 const   ew         = 32 / w;                                     // number of elements per word
-            u32 const   wi         = i / ew;                                     // word index
-            u32 const   ei         = i - (wi * ew);                              // element index
-            u32 const   em         = ((1 << w) - 1);                             // element mask
-            u32 const   np         = (block->m_words[wi] >> (w * ei)) & em;      // get the content of the element
-            block->m_words[wi]     = block->m_words[wi] & ~(em << (w * ei));     // mask out the element
-            binfo->m_words_set     = binfo->m_words_set & ~(1 << wi);            // make it known that this word is not full
+            void* const block_base = advance_ptr(instance->m_address_base, index * allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize));
+            u32 const   i          = (u32)(((u64)ptr - (u64)block_base) / instance->m_allocsize);
+            u32 const   w          = allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize); // element width in bits
+            u32 const   ew         = 32 / w;                                                           // number of elements per word
+            u32 const   wi         = i / ew;                                                           // word index
+            u32 const   ei         = i - (wi * ew);                                                    // element index
+            u32 const   em         = ((1 << w) - 1);                                                   // element mask
+            u32 const   np         = (block->m_words[wi] >> (w * ei)) & em;                            // get the content of the element
+            block->m_words[wi]     = block->m_words[wi] & ~(em << (w * ei));                           // mask out the element
+            binfo->m_words_set     = binfo->m_words_set & ~(1 << wi);                                  // make it known that this word is not full
             if (block->m_words[wi] == 0)
             {
                 binfo->m_words_clr = binfo->m_words_clr | (1 << wi); // make it known that this word is clear
             }
-            return np * instance->m_allocsize;
+            return bits_to_allocsize(np, w, instance->m_pagesize);
         }
 
         void* allocate(xinstance_t* instance, u32 size, u32 alignment)
@@ -250,8 +253,8 @@ namespace xcore
             // If block is now empty -> free block
             // Else add block to 'used' list
             u32       size        = 0;
-            u32 const block_range = allocsize_to_blockrange(instance->m_allocsize);
-            u32 const block_index = ((u64)ptr - (u64)instance->m_address_base) / block_range;
+            u32 const block_range = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize);
+            u32 const block_index = (u32)(((u64)ptr - (u64)instance->m_address_base) / block_range);
             xbinfo_t* binfo       = get_binfo_at(instance, block_index);
             if (is_block_full(binfo))
             {
@@ -266,42 +269,86 @@ namespace xcore
                 {
                     remove_from_list(instance->m_list_array, instance->m_block_used_list, block_index);
                     destroy_block_at(instance, block_index);
+                    add_to_list(instance->m_list_array, instance->m_block_empty_list, block_index);
                 }
             }
             return size;
         }
 
-        u32 allocsize_to_bits(u32 allocsize)
+        u32 bits_to_allocsize(u32 b, u32 w, u32 pagesize)
         {
-            u32 p = (allocsize / (64 * 1024));
-            u32 s = p == 0 ? 0 : 1;
-            if (p & 0xff00)
+            if (w == 1)
             {
-                s += 8;
-                p = p >> 8;
+                return pagesize;
             }
-            if (p & 0x00f0)
+            else if (w == 2)
             {
-                s += 4;
-                p = p >> 4;
+                u32 const r = 0x2;
+                u32 const n = (b & (r - 1)) + (((b & (r - 1)) == 0) ? r : 0);
+                return n * pagesize;
             }
-            if (p & 0x000c)
+            else if (w == 4)
             {
-                s += 2;
-                p = p >> 2;
+                u32 const r = 0x8;
+                u32 const n = (b & (r - 1)) + (((b & (r - 1)) == 0) ? r : 0);
+                return n * pagesize;
             }
-            if (p & 0x0002)
+            else if (w == 8)
             {
-                s += 1;
-                // p = p >> 1;
+                u32 const r = 0x80;
+                u32 const n = (b & (r - 1)) + (((b & (r - 1)) == 0) ? r : 0);
+                return n * pagesize;
             }
-            p = (allocsize / (64 * 1024));
-            return (1 << s) | p;
+            else if (w == 16)
+            {
+                u32 const r = 0x8000;
+                u32 const n = (b & (r - 1)) + (((b & (r - 1)) == 0) ? r : 0);
+                return n * pagesize;
+            }
+            else
+            {
+                ASSERT(false); // 'w' should be 1,2,4,8 or 16
+                return pagesize;
+            }
         }
 
-        u32 allocsize_to_bwidth(u32 allocsize)
+        u32 allocsize_to_bits(u32 allocsize, u32 pagesize)
         {
-            u32 const p = xceilpo2((allocsize + (64 * 1024) - 1) / (64 * 1024));
+            u32 const p = xceilpo2((allocsize + pagesize - 1) / pagesize);
+            if (p & 0xFF00)
+            {
+                u32 const n = ((allocsize + pagesize - 1) / pagesize);
+                return 0x8000 | n;
+            }
+            else if (p & 0x00F0)
+            {
+                u32 const n = ((allocsize + pagesize - 1) / pagesize);
+                return 0x80 | n;
+            }
+            else if (p & 0x000C)
+            {
+                u32 const n = ((allocsize + pagesize - 1) / pagesize);
+                return 0x8 | n;
+            }
+            else if (p & 0x0002)
+            {
+                u32 const n = ((allocsize + pagesize - 1) / pagesize);
+                return 0x2 | n;
+            }
+            else if (p & 0x0001)
+            {
+                return 0x1;
+            }
+            else
+            {
+                ASSERT(false); // p should fall into the above conditions
+                return 0x0;
+            }
+        }
+
+        u32 allocsize_to_bwidth(u32 allocsize, u32 pagesize)
+        {
+            u32 const p = xceilpo2((allocsize + pagesize - 1) / pagesize);
             u32       w;
             if (p & 0xff00)
                 w = 16;
@@ -317,12 +364,12 @@ namespace xcore
             return w;
         }
 
-        u32 allocsize_to_blockrange(u32 allocsize)
+        u32 allocsize_to_blockrange(u32 allocsize, u32 pagesize)
         {
             // Compute the memory range of a xblock_t
-            u16 const w = allocsize_to_bwidth(allocsize);
-            u16 const n = 128 / w;
-            u32 const s = n * (1 << w) * 64 * 1024;
+            u16 const w = allocsize_to_bwidth(allocsize, pagesize);
+            u16 const n = (8 * sizeof(u32) * 8) / w;
+            u32 const s = n * allocsize;
             return s;
         }
 
@@ -437,7 +484,7 @@ namespace xcore
 
         void add_to_list(xlist_t* list, u16& head, u16 item)
         {
-            if (head == INDEX_NIL)
+            if (is_empty_list(head))
             {
                 head              = item;
                 list[head].m_next = head;
@@ -445,39 +492,58 @@ namespace xcore
             }
             else
             {
+                u16 const next    = head;
                 u16 const prev    = list[head].m_prev;
-                list[item].m_next = head;
+                list[item].m_next = next;
                 list[item].m_prev = prev;
+                list[next].m_prev = item;
                 list[prev].m_next = item;
-                list[head].m_prev = item;
+                head              = item;
             }
         }
+
+        static inline bool is_list_size_one(xlist_t* list, u16 i) { return (list[i].m_next == i && list[i].m_prev == i); }
 
         u16 pop_from_list(xlist_t* list, u16& head)
         {
             u16 const i = head;
-            if (is_empty_list(head))
+            if (!is_empty_list(head))
             {
-                return INDEX_NIL;
-            }
-            head = list[head].m_next;
-            if (is_empty_list(head))
-            {
-                list[head].m_prev = INDEX_NIL;
+                if (is_list_size_one(list, head))
+                {
+                    head = INDEX_NIL;
+                }
+                else
+                {
+                    u16 const next    = list[head].m_next;
+                    u16 const prev    = list[head].m_prev;
+                    list[prev].m_next = next;
+                    list[next].m_prev = prev;
+
+                    head = next;
+                }
+                list[i].m_next = INDEX_NIL;
+                list[i].m_prev = INDEX_NIL;
             }
             return i;
         }
 
-        void remove_from_list(xlist_t* list, u16& head, u16 item)
+        void remove_from_list(xlist_t* list, u16& head, u16 i)
         {
-            if (head == item)
+            if (is_list_size_one(list, head))
             {
-                head = list[head].m_next;
+                ASSERT(head == i);
+                head = INDEX_NIL;
             }
-            u16 const next    = list[item].m_next;
-            u16 const prev    = list[item].m_prev;
-            list[prev].m_next = next;
-            list[next].m_prev = prev;
+            else
+            {
+                u16 const next    = list[i].m_next;
+                u16 const prev    = list[i].m_prev;
+                list[prev].m_next = next;
+                list[next].m_prev = prev;
+            }
+            list[i].m_next = INDEX_NIL;
+            list[i].m_prev = INDEX_NIL;
         }
 
     } // namespace xfsa_large
