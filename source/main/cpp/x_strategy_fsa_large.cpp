@@ -17,7 +17,7 @@ namespace xcore
         static u32 allocsize_to_bits(u32 allocsize, u32 pagesize);
         static u32 bits_to_allocsize(u32 b, u32 w, u32 pagesize);
         static u32 allocsize_to_bwidth(u32 allocsize, u32 pagesize);
-        static u32 allocsize_to_blockrange(u32 allocsize, u32 pagesize);
+        static u64 allocsize_to_blockrange(u32 allocsize, u32 pagesize);
 
         const u16 INDEX_NIL = 0xffff;
 
@@ -91,10 +91,14 @@ namespace xcore
         //      block_array = 512 * 8 = 4096 bytes
         //      binfo_array = 512 * 2 = 1024 bytes
         //      list_array  = 512 * 4 = 2048 bytes
+        // e.g. 32M, memory range = 16 GB, block_count = 16 GB / (32MB * 16) = 32 blocks
+        //      block_array = 32 * 8 = 256 bytes
+        //      binfo_array = 32 * 2 =  64 bytes
+        //      list_array  = 32 * 4 = 128 bytes
 
         xinstance_t* create(xalloc* allocator, void* mem_base, u64 mem_range, u32 pagesize, u32 allocsize)
         {
-            u32 const  block_range = allocsize_to_blockrange(allocsize, pagesize);
+            u64 const  block_range = allocsize_to_blockrange(allocsize, pagesize);
             u32 const  block_count = (u32)(mem_range / block_range);
             xblock_t** block_array = (xblock_t**)allocator->allocate(sizeof(xblock_t*) * block_count);
             xbinfo_t*  binfo_array = (xbinfo_t*)allocator->allocate(sizeof(xbinfo_t) * block_count);
@@ -179,8 +183,8 @@ namespace xcore
             u32 const ew = 32 / w;                                             // number of elements per word
             u32 const ab = allocsize_to_bits(allocsize, instance->m_pagesize); // get the actual bits of the requested alloc-size
 
-            u32 const bs  = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize); // memory size of one block
-            void*     ptr = advance_ptr(instance->m_address_base, index * bs);                    // memory base of this block
+            u64 const bs  = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize); // memory size of one block
+            void*     ptr = advance_ptr(instance->m_address_base, (u64)index * bs);               // memory base of this block
             ptr           = advance_ptr(ptr, ((wi * ew) + ws) * instance->m_allocsize);           // the word-index and slot index determine the offset
 
             block->m_words[wi] = block->m_words[wi] | (ab << (ws * w)); // write the bits into the element slot
@@ -198,8 +202,8 @@ namespace xcore
             xblock_t* const block = instance->m_block_array[index];
             xbinfo_t* const binfo = &instance->m_binfo_array[index];
 
-            void* const block_base = advance_ptr(instance->m_address_base, index * allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize));
-            u32 const   i          = (u32)(((u64)ptr - (u64)block_base) / instance->m_allocsize);
+            void* const block_base = advance_ptr(instance->m_address_base, (u64)index * allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize));
+            u32 const   i          = (u32)(((u64)ptr - (u64)block_base) / (u64)instance->m_allocsize);
             u32 const   w          = allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize); // element width in bits
             u32 const   ew         = 32 / w;                                                           // number of elements per word
             u32 const   wi         = i / ew;                                                           // word index
@@ -253,7 +257,7 @@ namespace xcore
             // If block is now empty -> free block
             // Else add block to 'used' list
             u32       size        = 0;
-            u32 const block_range = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize);
+            u64 const block_range = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize);
             u32 const block_index = (u32)(((u64)ptr - (u64)instance->m_address_base) / block_range);
             xbinfo_t* binfo       = get_binfo_at(instance, block_index);
             if (is_block_full(binfo))
@@ -364,12 +368,12 @@ namespace xcore
             return w;
         }
 
-        u32 allocsize_to_blockrange(u32 allocsize, u32 pagesize)
+        u64 allocsize_to_blockrange(u32 allocsize, u32 pagesize)
         {
             // Compute the memory range of a xblock_t
             u16 const w = allocsize_to_bwidth(allocsize, pagesize);
             u16 const n = (8 * sizeof(u32) * 8) / w;
-            u32 const s = n * allocsize;
+            u64 const s = (u64)n * (u64)allocsize;
             return s;
         }
 
