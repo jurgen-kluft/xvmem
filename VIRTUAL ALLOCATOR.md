@@ -39,9 +39,36 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - RegionSize = 256 x 1024 x 1024
 - PageSize = 64 KB
 - MinSize = 512
-- MaxSize = 8192
+- MaxSize = 1024
 - Size Increment = 64
 - Number of FSA = (8192-512) / 64 = 120
+
+### FSA medium
+
+- RegionSize = 256 x 1024 x 1024
+- PageSize = 64 KB
+- MinSize = 1024
+- MaxSize = 2048
+- Size Increment = 128
+- Number of FSA = (2048-1024) / 128 = 8
+
+### FSA l1
+
+- RegionSize = 256 x 1024 x 1024
+- PageSize = 64 KB
+- MinSize = 2048
+- MaxSize = 4096
+- Size Increment = 256
+- Number of FSA = (4096-2048) / 256 = 8
+
+### FSA l2
+
+- RegionSize = 256 x 1024 x 1024
+- PageSize = 64 KB
+- MinSize = 4096
+- MaxSize = 8192
+- Size Increment = 512
+- Number of FSA = (8192-4096) / 512 = 8
 
 #### Pros / Cons
 
@@ -55,8 +82,9 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 
 - Can use more than one instance
 - Size range: 8 KB < Size < 128 KB
-- Size alignment: 256
-- A reserved memory range (768MB) of contiguous virtual pages
+- Size alignment: 1024
+- Size-DB: 120 entries
+- A reserved memory range (Max 512MB) of contiguous virtual pages
 - Releases pages back to its underlying page allocator
 - Best-Fit strategy
 - Suitable for GPU memory
@@ -65,8 +93,9 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 
 - Can use more than one instance
 - Size range: 128 KB < Size < 640 KB
-- Size alignment: 1024
-- A reserved memory range (768MB) of contiguous virtual pages
+- Size alignment: 4096
+- Size-DB: 128 entries
+- A reserved memory range (Max 512MB) of contiguous virtual pages
 - Releases pages back to its underlying page allocator
 - Best-Fit strategy
 - Suitable for GPU memory
@@ -74,19 +103,13 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 ## Segregated Allocator [WIP]
 
 - Segregated:
-  - A large address range is divided into 'segment', for example 256 MB
-  - A 'level' is a specific allocation size
-  - A 'level' can obtain multiple 'segment'
-  - A 'level' can release 'segment'
   - Upon allocation the necessary pages are committed
   - Upon deallocation the pages are decommitted
-  - The allocation is aligned to Level:Size but will only commit used pages
-- A reserved memory range (128GB) of virtual pages
+  - The allocation is Size but will only commit used pages
+- A reserved memory range (16GB) of virtual pages
 - Can use more than one instance
-- Sizes to go here, example 64 KB < Size <=  1 MB
+- Sizes to use are multiple of 64KB (page-size)
   Sizes; 64 KB, 128 KB, 256 KB, 512 KB, 1024 KB
-- Sizes to go here, example  1 MB < Size <= 32 MB
-  Sizes; 1 MB, 2 MB, 4 MB ... 32 MB
 - Size-Alignment = Page-Size (64 KB)
 - Suitable for GPU memory
 
@@ -129,15 +152,14 @@ protected:
 
 ## Large Size Allocator
 
-- Sizes >= 32 MB
+- 32 MB < Size < 512 MB
 - Size alignment is page size
 - Small number of allocations (<32)
-- Allocation tracking is done with levels + BST
-  - Could easily track if a level is empty and free it back to main
+- Allocation tracking is done with blocks
 - Reserves huge virtual address space (~128 GB)
 - Maps and unmaps pages on demand
 - Guarantees contiguous memory
-- 128 GB / 32 MB = 4096
+- 128 GB / 512 MB = 256
 
 Pros and Cons:
 
@@ -167,15 +189,37 @@ Pros and Cons:
 ### Address and Size Table
 
 - Min/Max-Alloc-Size, Heap 1 =   8 KB / 128 KB
-  - Size-Alignment = 256 B
-  - Find Size is using a size-BST
+  - Size-Alignment = 1024 B
+  - Find Size is using a size-array of (128K-8K)/1024 = 120 -> 128
 
 - Min/Max-Alloc-Size, Heap 2 = 128 KB / 1024 KB
-  - Size-Alignment = 2048 B
-  - Find Size is using a size-BST
+  - Size-Alignment = 8192 B
+  - Find Size is using a size-array of (1024K-128K)/8K = 112 -> 128
+  - NOTE: This heap configuration is better of using the Segregated strategy
 
-- Allocate: Find free node with best size in size-BST, insert allocated address in address-BST
-- Deallocate: Find pointer in address-BST
+- Address-Range = 32MB
+  We define average size as 2 \* Min-Alloc-Size = 2 \* 8KB = 16KB
+  Targetting 4<->4 list items per block means 32M / ((4+4) \* 16KB) = 256 blocks
+  Maximum number of allocations is 32 MB / Min-Alloc-Size = 32K/8 = 4K
+
+- Allocate: Find free node with best size in size-array and remove from size-db
+            If size needs to be split add the left-over back to the size-db.
+- Deallocate: Find pointer in address-db, check prev-next for coalesce.
+  When removing a node we need to figure out if this is the last 'size' entry for
+  that block, if it is the last one we need to tag it in the size entry block db.
+
+The size-db for every size entry only needs to store a bitset indicating at which block
+we have one or more 'free' nodes of that size. We do have to search it in the list.
+
+Per size we have 256 b = 32 B = 8 W
+Size-db is 128 * 32 B = 4 KB
+
+The only downside of using array's and lists is that the size-db is NOT sorted by default.
+We can almost solve this for every size entry by also introducing an address-db and hbitset.
+
+For the size entry that stores the larger than Max-Alloc-Size it at least will have an address bias. However there will still be many different sizes.
+
+Problem: If you do not align the size by Min-Alloc-Size then you can get size fragments that are smaller than Min-Alloc-Size.
 
 ### Notes 1
 
@@ -185,12 +229,12 @@ Medium Heap Region Size 2 = 1 GB
 Coalesce Heap Region Size = Medium Heap Region Size 1
 Coalesce Heap Min-Size = 8 KB
 Coalesce Heap Max-Size = 128 KB
-Coalesce Heap Step-Size = 256 B
+Coalesce Heap Step-Size = 1 KB
 
 Coalesce Heap Region Size = Medium Heap Region Size 2
-Coalesce Heap Min-Size = 128 KB,
-Coalesce Heap Max-Size = 1 MB
-Coalesce Heap Step-Size = 2 KB
+Coalesce Heap Min-Size = 128 KB
+Coalesce Heap Max-Size = 1024 KB
+Coalesce Heap Step-Size = 8 KB
 
 ### Notes 2
 
