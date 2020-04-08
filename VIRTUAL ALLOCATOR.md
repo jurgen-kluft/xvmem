@@ -184,7 +184,7 @@ Pros and Cons:
 - 0x9A – GPU Memory Allocated
 - 0x9F – GPU Memory Free
 
-## Allocation management for `Medium Size Allocator`
+## Allocation management for `Medium Size Allocator` using array's and lists
 
 ### Address and Size Table
 
