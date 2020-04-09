@@ -259,6 +259,7 @@ namespace xcore
             {
                 xmspace_t* s                 = alloc_space(t, allocsize);
                 t->m_mspaces_used_by_size[i] = s->m_array_index;
+				return s;
             }
         }
 

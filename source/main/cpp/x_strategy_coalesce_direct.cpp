@@ -17,7 +17,7 @@ namespace xcore
         // NOTE: This node should be exactly 16 bytes.
         struct node_t
         {
-            static u16 const NIL       = 0xffff;
+            static u32 const NIL       = 0xffffffff;
             static u32 const FLAG_FREE = 0x0;
             static u32 const FLAG_USED = 0x80000000;
             static u32 const FLAG_MASK = 0x80000000;
@@ -35,6 +35,8 @@ namespace xcore
                 m_next_addr = node_t::NIL;
             }
 
+			XCORE_CLASS_PLACEMENT_NEW_DELETE
+
             inline u32  get_addr() const { return (u32)(m_addr & 0x7ffffff); }
             inline void set_addr(u32 addr) { m_addr = (m_addr & 0x80000000) | (addr & 0x7fffffff); }
             inline u32  get_addr_index() const { return m_addr / (32 * 1024 * (1024 / 256)); }
@@ -50,12 +52,22 @@ namespace xcore
         {
             u8 size_to_index(u32 size) const
             {
-                ASSERT(size >= m_alloc_size_min);
+                ASSERT(size > m_alloc_size_min);
                 if (size >= m_alloc_size_max)
                     return (u8)127;
-                u32 const slot = (size - m_alloc_size_min) / m_alloc_size_step;
+                u32 const slot = (size - m_alloc_size_min - m_alloc_size_step) / m_alloc_size_step;
                 ASSERT(slot < 128);
                 return (u8)slot;
+            }
+
+            u32 align_size(u32 size) const
+            {
+                ASSERT(size <= m_alloc_size_max);
+                if (size <= m_alloc_size_min)
+                    size = m_alloc_size_min + 1;
+				// align up
+                size = (size + (m_alloc_size_step - 1)) & ~(m_alloc_size_step - 1);
+                return size;
             }
 
             u32 m_alloc_size_min;
@@ -120,13 +132,13 @@ namespace xcore
                         // Also set size occupancy
                         u32 const owi    = ssi / 64;
                         u32 const obi    = ssi & (64 - 1);
-                        m_occupancy[owi] = m_occupancy[owi] | (1 << obi);
+                        m_occupancy[owi] = m_occupancy[owi] | ((u64)1 << obi);
                     }
                 }
             }
 
             // Returns the addr node index that has a node with a best-fit 'size'
-            u16 find_size(u32& size_index) const
+            u32 find_size(u32& size_index) const
             {
                 u32 owi = size_index / 64;
                 u64 obm = ~((1 << (size_index & (64 - 1))) - 1);
@@ -137,7 +149,7 @@ namespace xcore
                 }
                 else if (owi == 0)
                 {
-                    ssi = xfindFirstBit(m_occupancy[1]);
+                    ssi = 64 + xfindFirstBit(m_occupancy[1]);
                 }
                 else
                 {
@@ -145,9 +157,9 @@ namespace xcore
                 }
 
                 size_index     = ssi;                            // communicate back the size index we need to search for
-                u16 const sdb0 = xfindFirstBit(m_size_db0[ssi]); // get the addr node that has that size
+                u16 const sdb0 = (u16)xfindFirstBit(m_size_db0[ssi]); // get the addr node that has that size
                 u16 const sdbi = (ssi * 16) + sdb0;
-                u16 const adbi = (sdb0 * 16) + xfindFirstBit(m_size_db1[sdbi]);
+                u32 const adbi = (u32)((sdb0 * 16) + xfindFirstBit(m_size_db1[sdbi]));
                 return adbi;
             }
         };
@@ -208,7 +220,7 @@ namespace xcore
                 }
 
                 // Check if node_aidx still has other nodes of the same size-index 'node-aidx'
-                if (has_node_with_size_index(node_aidx, node_alloc, node_sidx, false))
+                if (has_node_with_size_index(node_aidx, node_alloc, node_sidx))
                 {
                     size_db.insert_size(node_sidx, node_aidx);
                 }
@@ -223,9 +235,9 @@ namespace xcore
                 size_db.insert_size(new_sidx, new_aidx);
             }
 
-            void rescan_size_for(u16 const addr_index, u8 const size_index, xdexer* dexer)
+            void rescan_size_for(u16 const addr_index, u8 const size_index, xsize_db& size_db, xdexer* dexer)
             {
-                if (has_node_with_size_index(addr_index, dexed, size_index))
+                if (has_node_with_size_index(addr_index, dexer, size_index))
                 {
                     size_db.insert_size(size_index, addr_index);
                 }
@@ -251,8 +263,8 @@ namespace xcore
 
                     remove_node(inext, pnext, dexer); // we can safely remove 'next' from the address db
 
-                    rescan_size_for(node_addr_index, node_size_index, dexer);
-                    rescan_size_for(next_addr_index, next_size_index, dexer);
+                    rescan_size_for(node_addr_index, node_size_index, size_db, dexer);
+                    rescan_size_for(next_addr_index, next_size_index, size_db, dexer);
                 }
                 if (merge_prev)
                 {
@@ -272,8 +284,8 @@ namespace xcore
 
                     remove_node(inode, pnode, dexer); // we can safely remove 'prev' from the address db
 
-                    rescan_size_for(prev_addr_index, prev_size_index, dexer);
-                    rescan_size_for(node_addr_index, node_size_index, dexer);
+                    rescan_size_for(prev_addr_index, prev_size_index, size_db, dexer);
+                    rescan_size_for(node_addr_index, node_size_index, size_db, dexer);
                 }
             }
 
@@ -356,22 +368,13 @@ namespace xcore
             u32* m_nodes;
         };
 
-        static inline void* addr_add(void* addr, u64 offset) { return (void*)((u64)addr + offset); }
-
         struct xinstance_t
         {
-            xinstance_t();
-
             // Main API
             void* allocate(u32 size, u32 alignment);
-            void  deallocate(void* p);
+            u32   deallocate(void* p);
 
-            // Coalesce related functions
-            void initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step, u32 list_size);
-            void release();
-
-            inline node_t* alloc_node() { return (node_t*)m_node_heap->allocate(); }
-            inline void    dealloc_node(u32 inode, node_t* pnode)
+            inline void dealloc_node(u32 inode, node_t* pnode)
             {
                 ASSERT(m_node_heap->idx2ptr(inode) == pnode);
                 m_node_heap->deallocate(pnode);
@@ -384,17 +387,18 @@ namespace xcore
                     pnode = (node_t*)m_node_heap->idx2ptr(idx);
                 return pnode;
             }
-            inline u32 node2idx(node_t* n) const
+
+            inline u32 node2idx2(node_t* n)
             {
-                u32 const idx = (n == nullptr) ? (node_t::NIL) : (m_node_heap->ptr2idx(n));
-                return idx;
+                if (n == nullptr)
+                    return node_t::NIL;
+                return m_node_heap->ptr2idx(n);
             }
 
+			XCORE_CLASS_PLACEMENT_NEW_DELETE
+
             // Global variables
-            xalloc*    m_main_heap;
             xfsadexed* m_node_heap;
-            void*      m_memory_addr;
-            u64        m_mspace_size; // 32 MB
 
             // Local variables
             xsize_cfg m_size_cfg;
@@ -402,154 +406,164 @@ namespace xcore
             xaddr_db  m_addr_db;
         };
 
-        xinstance_t::xinstance_t()
-            : m_main_heap(nullptr)
-            , m_node_heap(nullptr)
-            , m_memory_addr(nullptr)
+        void* xinstance_t::allocate(u32 size, u32 alignment)
         {
+            size = m_size_cfg.align_size(size);
+
+            u32       size_index = m_size_cfg.size_to_index(size);
+            u16 const addr_index = m_size_db.find_size(size_index);
+
+            node_t*   pnode = m_addr_db.get_node_with_size_index(addr_index, m_node_heap, size_index);
+            u32 const inode = node2idx2(pnode);
+
+            // Should we split the node?
+            if (size <= pnode->get_size() && ((pnode->get_size() - size) >= m_size_cfg.m_alloc_size_min))
+            {
+                u32     inew = node_t::NIL;
+                node_t* pnew = nullptr;
+                m_addr_db.split_node(inode, pnode, size, m_node_heap, m_size_db, m_size_cfg, inew, pnew);
+            }
+
+            // Mark the current addr node as 'used'
+            ASSERT(pnode->is_free());
+            pnode->set_used(true);
+
+            return (void*)((uptr)pnode->get_addr() - 1024);
         }
 
-        void xinstance_t::initialize(xalloc* main_heap, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step, u32 list_size)
+        u32 xinstance_t::deallocate(void* p)
         {
-            m_main_heap   = main_heap;
-            m_node_heap   = node_heap;
-            m_memory_addr = mem_addr;
+            u32 const addr       = (u32)(uptr)p;
+            u32 const addr_index = (addr + 1024) / (32 * 1024 * (1024 / 256));
 
-            m_size_cfg.m_alloc_size_min  = size_min;
-            m_size_cfg.m_alloc_size_max  = size_max;
-            m_size_cfg.m_alloc_size_step = size_step;
+            node_t*   pnode = m_addr_db.get_node_with_addr(addr_index, m_node_heap, addr);
+            u32       inode = m_node_heap->ptr2idx(pnode);
+            u32 const size  = pnode->get_size();
 
-            m_size_db.m_size_db0 = (u16*)m_main_heap->allocate(128 * sizeof(u16), sizeof(void*));
-            m_size_db.m_size_db1 = (u16*)m_main_heap->allocate(128 * 16 * sizeof(u16), sizeof(void*));
-            m_size_db.reset();
+            // Coalesce
+            u32        inode_prev = pnode->m_prev_addr;
+            u32        inode_next = pnode->m_next_addr;
+            node_t*    pnode_prev = idx2node(inode_prev);
+            node_t*    pnode_next = idx2node(inode_next);
+            bool const merge_prev = pnode_prev->is_free();
+            bool const merge_next = pnode_next->is_free();
+            m_addr_db.coalesce_node(inode, pnode, merge_prev, merge_next, m_size_db, m_size_cfg, m_node_heap);
 
-            m_addr_db.m_nodes = (u32*)m_main_heap->allocate(256 * sizeof(u32), sizeof(void*));
-            m_addr_db.reset();
+            return size;
+        }
 
-            node_t*   head_node  = m_node_heap->construct<node_t>();
-            u32 const head_inode = m_node_heap->ptr2idx(head_node);
-            node_t*   tail_node  = m_node_heap->construct<node_t>();
-            u32 const tail_inode = m_node_heap->ptr2idx(tail_node);
+        xinstance_t* create(xalloc* main_heap, xfsadexed* node_heap, u32 size_min, u32 size_step)
+        {
+            xinstance_t* instance = (xinstance_t*)main_heap->allocate(sizeof(xinstance_t));
+
+            instance->m_node_heap = node_heap;
+
+            instance->m_size_cfg.m_alloc_size_min  = size_min;
+            instance->m_size_cfg.m_alloc_size_max  = size_min + (256 * size_step);
+            instance->m_size_cfg.m_alloc_size_step = size_step;
+
+            instance->m_size_db.m_size_db0 = (u16*)main_heap->allocate(128 * sizeof(u16), sizeof(void*));
+            instance->m_size_db.m_size_db1 = (u16*)main_heap->allocate(128 * 16 * sizeof(u16), sizeof(void*));
+            instance->m_size_db.reset();
+
+            instance->m_addr_db.m_nodes = (u32*)main_heap->allocate(256 * sizeof(u32), sizeof(void*));
+            instance->m_addr_db.reset();
+
+            node_t*   head_node  = instance->m_node_heap->construct<node_t>();
+            u32 const head_inode = instance->m_node_heap->ptr2idx(head_node);
+            node_t*   tail_node  = instance->m_node_heap->construct<node_t>();
+            u32 const tail_inode = instance->m_node_heap->ptr2idx(tail_node);
+            node_t*   main_node  = instance->m_node_heap->construct<node_t>();
+            u32 const main_inode = instance->m_node_heap->ptr2idx(main_node);
             head_node->init();
-            head_node->set_used(true);
             tail_node->init();
-            head_node->set_used(true);
-            node_t*   main_node  = m_node_heap->construct<node_t>();
-            u32 const main_inode = m_node_heap->ptr2idx(main_node);
             main_node->init();
-            main_node->set_addr(0);
+            head_node->set_used(true);
+            head_node->set_addr(1024);
+            head_node->set_size(1024, 0);
+            tail_node->set_used(true);
+            tail_node->set_addr(32 * 1024 * 1024 + 1024);
+            tail_node->set_size(1024, 0);
+            main_node->set_addr(1024);
             main_node->set_size(32 * 1024 * 1024, 127);
             main_node->m_prev_addr = head_inode;
             main_node->m_next_addr = tail_inode;
             head_node->m_next_addr = main_inode;
             tail_node->m_prev_addr = main_inode;
 
-            m_addr_db.m_nodes[0] = head_inode;
+			instance->m_size_db.insert_size(main_node->get_size_index(), 0);
+            instance->m_addr_db.m_nodes[0] = head_inode;
+
+			return instance;
         }
 
-        void xinstance_t::release()
+        void destroy(xinstance_t* instance, xalloc* main_heap)
         {
-            for (s32 i = 0; i < 256; ++i)
+            u32     inode = instance->m_addr_db.m_nodes[0]; // Should be 'head' node
+            node_t* pnode = instance->idx2node(inode);
+            while (pnode != nullptr)
             {
-                u32 ihead = m_addr_db.m_nodes[i];
-                if (ihead != node_t::NIL)
-                {
-                    u32 inode = ihead;
-                    do
-                    {
-                        node_t*   pnode = (node_t*)m_node_heap->idx2ptr(inode);
-                        u32 const inext = pnode->m_next_addr;
-                        dealloc_node(inode, pnode);
-                        inode = inext;
-                    } while (inode != ihead);
-                    m_addr_db.m_nodes[i] = node_t::NIL;
-                }
+                u32 const inext = pnode->m_next_addr;
+                instance->dealloc_node(inode, pnode);
+                inode = inext;
+                pnode = instance->idx2node(inode);
             }
 
-            m_main_heap->deallocate(m_size_db.m_size_db0);
-            m_main_heap->deallocate(m_size_db.m_size_db1);
-            m_main_heap->deallocate(m_addr_db.m_nodes);
+            main_heap->deallocate(instance->m_size_db.m_size_db0);
+            main_heap->deallocate(instance->m_size_db.m_size_db1);
+            main_heap->deallocate(instance->m_addr_db.m_nodes);
+            main_heap->deallocate(instance);
         }
 
-        void* xinstance_t::allocate(u32 size, u32 alignment)
-        {
-            u32       size_index = m_size_cfg.size_to_index(size);
-            u16 const addr_index = m_size_db.find_size(size_index);
+        void* allocate(xinstance_t* instance, u32 size, u32 alignment) { return instance->allocate(size, alignment); }
+        u32   deallocate(xinstance_t* instance, void* ptr) { return instance->deallocate(ptr); }
 
-            node_t* pnode = m_addr_db.get_node_with_size_index(addr_index, m_node_heap, size_index);
-
-            // Should we split the node?
-
-            // Mark the current addr node as 'used'
-            pnode->set_used(true);
-
-            return advance_ptr(m_memory_addr, pnode->get_addr());
-        }
-
-        void xinstance_t::deallocate(void* p)
-        {
-            u32 const addr       = ((u64)p - (u64)m_memory_addr);
-            u32 const addr_index = addr / (32 * 1024 * (1024 / 256));
-
-            node_t* pnode = m_addr_db.get_node_with_addr(addr_index, m_node_heap, addr);
-            u32     inode = m_node_heap->ptr2idx(pnode);
-
-            // Coalesce:
-            //   Determine the 'prev' and 'next' of the current addr node
-            //   If 'prev' is marked as 'Free' then coalesce (merge) with it
-            //   Remove the size node that belonged to 'prev' from the size DB
-            //   If 'next' is marked as 'Free' then coalesce (merge) with it
-            //   Remove the size node that belonged to 'next' from the size DB
-            //   Build the size node with the correct size and reference the 'merged' addr node
-            //   Add the size node to the size DB
-            //   Done
-
-            u32     inode_prev = pnode->m_prev_addr;
-            u32     inode_next = pnode->m_next_addr;
-            node_t* pnode_prev = idx2node(inode_prev);
-            node_t* pnode_next = idx2node(inode_next);
-
-            bool const merge_prev = pnode_prev->is_free();
-            bool const merge_next = pnode_next->is_free();
-            m_addr_db.coalesce_node(inode, pnode, merge_prev, merge_next, m_size_cfg, m_node_heap);
-        }
     } // namespace xcoalescestrat_direct
 
-    class xvmem_allocator_coalesce : public xalloc
+    using namespace xcoalescestrat_direct;
+
+    class xvmem_allocator_coalesce_direct : public xalloc
     {
     public:
-        xvmem_allocator_coalesce()
+        xvmem_allocator_coalesce_direct()
             : m_internal_heap(nullptr)
             , m_node_alloc(nullptr)
         {
         }
 
-        virtual void* allocate(u32 size, u32 alignment);
-        virtual void  deallocate(void* p);
-        virtual void  release();
+        virtual void* v_allocate(u32 size, u32 alignment);
+        virtual void  v_deallocate(void* p);
+        virtual void  v_release();
 
-        xalloc*                            m_internal_heap;
-        xfsadexed*                         m_node_alloc; // For allocating node_t and nsize_t nodes
-        xvmem*                             m_vmem;
-        xcoalescestrat_direct::xinstance_t m_coalescee;
+		XCORE_CLASS_PLACEMENT_NEW_DELETE
+
+        xalloc*      m_internal_heap;
+        xfsadexed*   m_node_alloc; // For allocating node_t and nsize_t nodes
+        xvmem*       m_vmem;
+        xinstance_t* m_coalescee;
     };
 
-    void* xvmem_allocator_coalesce::allocate(u32 size, u32 alignment) { return m_coalescee.allocate(size, alignment); }
-
-    void xvmem_allocator_coalesce::deallocate(void* p) { m_coalescee.deallocate(p); }
-
-    void xvmem_allocator_coalesce::release()
+    void* xvmem_allocator_coalesce_direct::v_allocate(u32 size, u32 alignment)
     {
-        m_coalescee.release();
+        void* ptr = xcoalescestrat_direct::allocate(m_coalescee, size, alignment);
+
+        return ptr;
+    }
+
+    void xvmem_allocator_coalesce_direct::v_deallocate(void* p) { xcoalescestrat_direct::deallocate(m_coalescee, p); }
+
+    void xvmem_allocator_coalesce_direct::v_release()
+    {
+        destroy(m_coalescee, m_internal_heap);
 
         // release virtual memory
 
         m_internal_heap->destruct<>(this);
     }
 
-    xalloc* gCreateVMemCoalesceAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 alloc_addr_list_size)
+    xalloc* gCreateVMemCoalesceDirectAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_step)
     {
-        xvmem_allocator_coalesce* allocator = internal_heap->construct<xvmem_allocator_coalesce>();
+        xvmem_allocator_coalesce_direct* allocator = internal_heap->construct<xvmem_allocator_coalesce_direct>();
         allocator->m_internal_heap          = internal_heap;
         allocator->m_node_alloc             = node_alloc;
         allocator->m_vmem                   = vmem;
@@ -559,7 +573,7 @@ namespace xcore
         u32   attr = 0;
         vmem->reserve(mem_size, page_size, attr, memory_addr);
 
-        allocator->m_coalescee.initialize(internal_heap, node_alloc, memory_addr, mem_size, alloc_size_min, alloc_size_max, alloc_size_step, alloc_addr_list_size);
+        allocator->m_coalescee = create(internal_heap, node_alloc, alloc_size_min, alloc_size_step);
 
         return allocator;
     }
