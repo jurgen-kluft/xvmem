@@ -43,13 +43,16 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create(gTestAllocator, sNodeHeap, 8*1024, 1024);
 
 			void* p1 = xcoalescestrat_direct::allocate(c, 10 * 1024, 8);
-			xcoalescestrat_direct::deallocate(c, p1);
+			u32 s1 = xcoalescestrat_direct::deallocate(c, p1);
+			CHECK_EQUAL(10 * 1024, s1);
 
-			void* p2 = xcoalescestrat_direct::allocate(c, 10 * 1024, 8);
-			xcoalescestrat_direct::deallocate(c, p2);
+			void* p2 = xcoalescestrat_direct::allocate(c, 12 * 1024, 8);
+			u32 s2 = xcoalescestrat_direct::deallocate(c, p2);
+			CHECK_EQUAL(10 * 1024, s1);
 
-			void* p3 = xcoalescestrat_direct::allocate(c, 10 * 1024, 8);
-			xcoalescestrat_direct::deallocate(c, p3);
+			void* p3 = xcoalescestrat_direct::allocate(c, 14 * 1024, 8);
+			u32 s3 = xcoalescestrat_direct::deallocate(c, p3);
+			CHECK_EQUAL(10 * 1024, s1);
 
 			xcoalescestrat_direct::destroy(c, gTestAllocator);
 		}
