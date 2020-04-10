@@ -2,7 +2,7 @@
 
 These are just thoughts on a virtual memory allocator
 
-1. CPU Fixed-Size-Allocator (FSA), 8 <= SIZE <= 4 KB
+1. CPU Fixed-Size-Allocator (FSA), 8 <= SIZE <= 8 KB
 2. Virtual Memory: Alloc, Cache and Free pages back to system
 
 Let's say an APP has 640 GB of address space and it has the following behaviour:
@@ -20,6 +20,8 @@ Let's say an APP has 640 GB of address space and it has the following behaviour:
 - Temporal Strategy :soon:
 
 ## Fixed Size Allocator [Ok]
+
+This is an intrusive fixed size allocator targetted at small size allocations.
 
 ### Multi Threading
 
