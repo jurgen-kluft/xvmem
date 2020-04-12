@@ -27,14 +27,23 @@ This is an intrusive fixed size allocator targetted at small size allocations.
 
 Not too hard to make multi-thread safe using atomics where the only hard multi-threading problem is page commit/decommit.
 
-### FSA very small
+### FSA tiny
 
-- RegionSize = 512 x 1024 x 1024
+- RegionSize = 256 x 1024 x 1024
 - PageSize = 4 KB (if possible), otherwise 64 KB
 - MinSize = 8
-- MaxSize = 512
+- MaxSize = 64
 - Size Increment = 8
-- Number of FSA = 512 / 8 = 64
+- Number of FSA = 64 / 8 = 8
+
+### FSA very small
+
+- RegionSize = 256 x 1024 x 1024
+- PageSize = 4 KB (if possible), otherwise 64 KB
+- MinSize = 64
+- MaxSize = 512
+- Size Increment = 16
+- Number of FSA = 512 / 16 = 32
 
 ### FSA small
 
@@ -43,7 +52,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - MinSize = 512
 - MaxSize = 1024
 - Size Increment = 64
-- Number of FSA = (8192-512) / 64 = 120
+- Number of FSA = (1024-512) / 64 = 8
 
 ### FSA medium
 
@@ -78,27 +87,25 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Very low wastage [+]
 - Can make use of flexible memory [+]
 - Fast [+]
+- Can cache a certain amount of free pages [+]
 - Difficult to detect memory corruption [-]
 
-## Coalesce Allocator A
+## Coalesce Allocator Direct (32 MB)
 
 - Can use more than one instance
 - Size range: 8 KB < Size < 128 KB
 - Size alignment: 1024
-- Size-DB: 120 entries
-- A reserved memory range (Max 512MB) of contiguous virtual pages
-- Releases pages back to its underlying page allocator
+- Size-DB: 128 entries
+- A memory range of 32 MB
 - Best-Fit strategy
 - Suitable for GPU memory
 
-## Coalesce Allocator B
+## Coalesce Allocator Multi-Direct
 
-- Can use more than one instance
-- Size range: 128 KB < Size < 640 KB
-- Size alignment: 4096
-- Size-DB: 128 entries
-- A reserved memory range (Max 512MB) of contiguous virtual pages
-- Releases pages back to its underlying page allocator
+- Using multiple instances of Coalesce Direct
+- Size range: 8 KB < Size < 640 KB
+- A memory range (e.g. 768MB)
+- Releases 32MB page ranges back to the system
 - Best-Fit strategy
 - Suitable for GPU memory
 
@@ -111,7 +118,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - A reserved memory range (16GB) of virtual pages
 - Can use more than one instance
 - Sizes to use are multiple of 64KB (page-size)
-  Sizes; 64 KB, 128 KB, 256 KB, 512 KB, 1024 KB
+  Sizes; 64 KB, 128 KB, 256 KB, 512 KB, ..., 16 MB, 32 MB
 - Size-Alignment = Page-Size (64 KB)
 - Suitable for GPU memory
 
@@ -161,7 +168,7 @@ protected:
 - Reserves huge virtual address space (~128 GB)
 - Maps and unmaps pages on demand
 - Guarantees contiguous memory
-- 128 GB / 512 MB = 256
+- 128 GB / 512 MB = 256 maximum number of allocations
 
 Pros and Cons:
 
@@ -175,33 +182,32 @@ Pros and Cons:
 
 - memset to byte value
   - Keep it memorable
-  - 0x0A10C8ED
-  - 0x0DE1E7ED
-- 0xFA – Fixed-Size (FSA) Memory Allocated
-- 0xFF – Fixed-Size (FSA) Memory Free
-- 0xDA – Direct Memory Allocated
-- 0xDF – Direct Memory Free
-- 0xA1 – Memory ALlocated
-- 0xDE – Memory DEallocated
-- 0x9A – GPU Memory Allocated
-- 0x9F – GPU Memory Free
+- 0xF5A10C8E – Fixed-Size (FSA) Memory Allocated
+- 0xF5ADE1E7 – Fixed-Size (FSA) Memory Free
+- 0xD3A10C8E – Direct Memory Allocated
+- 0xD3ADE1E7 – Direct Memory Free
+- 0x3A10C8ED – Memory ALlocated
+- 0x3DE1E7ED – Memory DEallocated
+- 0x96A10C8E – GPU(96U) Memory Allocated
+- 0x96DE1E7E – GPU(96U) Memory Free
 
-## Allocation management for `Medium Size Allocator` using array's and lists
+## Allocation management for `Coalesce Allocator` using array's and lists
 
-### Address and Size Table
+### Address and Size Tables
 
 - Min/Max-Alloc-Size, Heap 1 =   8 KB / 128 KB
   - Size-Alignment = 1024 B
-  - Find Size is using a size-array of (128K-8K)/1024 = 120 -> 128
+  - Find Size is using a size-array of (128K-8K)/1024 = 120 -> 128 entries
 
 - Min/Max-Alloc-Size, Heap 2 = 128 KB / 1024 KB
   - Size-Alignment = 8192 B
   - Find Size is using a size-array of (1024K-128K)/8K = 112 -> 128
-  - NOTE: This heap configuration is better of using the Segregated strategy
+  - 1 MB per address node, 256 nodes = covering 256 MB
+  - NOTE: This heap configuration may be better of using the Segregated strategy
 
 - Address-Range = 32MB
   We define average size as 2 \* Min-Alloc-Size = 2 \* 8KB = 16KB
-  Targetting 4<->4 list items per block means 32M / ((4+4) \* 16KB) = 256 blocks
+  Targetting 8 nodes per block means 32M / (8 \* 16KB) = 256 blocks
   Maximum number of allocations is 32 MB / Min-Alloc-Size = 32K/8 = 4K
 
 - Allocate: Find free node with best size in size-array and remove from size-db
@@ -217,7 +223,7 @@ Per size we have 256 b = 32 B = 8 W
 Size-db is 128 * 32 B = 4 KB
 
 The only downside of using array's and lists is that the size-db is NOT sorted by default.
-We can almost solve this for every size entry by also introducing an address-db and hbitset.
+We can solve this for every size entry by also introducing an address-db and bitset.
 
 For the size entry that stores the larger than Max-Alloc-Size it at least will have an address bias. However there will still be many different sizes.
 
@@ -253,20 +259,6 @@ These sizes are very efficient and could benefit from a fast allocator.
 For GPU resources it is best to analyze the resource constraints, for example; On Nintendo Switch shaders should be allocated with an alignment of 256 bytes and the size should also be a multiple of 256.
 
 ### Notes 5
-
-A direct size and address table design:
-
-- Heap 1
-  MemSize = 1 GB, SizeAlignment = 256 B, MinSize = 8 KB, MaxSize = 128 KB
-  Address-BST
-  Size-BST
-
-- Heap 2
-  MemSize = 1 GB, SizeAlignment = 2 KB, MinSize = 128 KB, MaxSize = 1 MB
-  Address-BST
-  Size-BST
-
-### Notes 6
 
 Memory Debugging:
 
