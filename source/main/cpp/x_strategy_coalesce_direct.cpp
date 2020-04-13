@@ -56,7 +56,7 @@ namespace xcore
                 ASSERT(size > m_alloc_size_min);
                 if (size >= m_alloc_size_max)
                     return (u8)127;
-                u32 const slot = (size - m_alloc_size_min - m_alloc_size_step) / m_alloc_size_step;
+                u32 const slot = (size - m_alloc_size_step - m_alloc_size_min) / m_alloc_size_step;
                 ASSERT(slot < 128);
                 return (u8)slot;
             }
@@ -112,7 +112,7 @@ namespace xcore
                         // Also clear size occupancy
                         u32 const owi    = ssi / 64;
                         u32 const obi    = ssi & (64 - 1);
-                        m_occupancy[owi] = m_occupancy[owi] & ~(1 << obi);
+                        m_occupancy[owi] = m_occupancy[owi] & ~((u64)1 << obi);
                     }
                 }
             }
@@ -261,12 +261,12 @@ namespace xcore
                 }
             }
 
-            void coalesce_node(u32 inode, node_t* pnode, bool merge_prev, bool merge_next, xsize_db& size_db, xsize_cfg const& size_cfg, xdexer* dexer)
+            void coalesce_node(u32 inode, node_t* pnode, bool merge_prev, bool merge_next, xsize_db& size_db, xsize_cfg const& size_cfg, xfsadexed* node_heap)
             {
                 if (merge_next)
                 {
                     u32 const inext = pnode->m_next_addr;
-                    node_t*   pnext = (node_t*)dexer->idx2ptr(inext);
+                    node_t*   pnext = (node_t*)node_heap->idx2ptr(inext);
 
                     u32 const node_size_index = pnode->get_size_index();
                     u32 const node_addr_index = pnode->get_addr_index();
@@ -279,16 +279,17 @@ namespace xcore
                     u32 const node_size = pnode->get_size() + next_size;
                     pnode->set_size(node_size, size_cfg.size_to_index(node_size));
 
-                    remove_node(inext, pnext, dexer); // we can safely remove 'next' from the address db
+                    remove_node(inext, pnext, node_heap); // we can safely remove 'next' from the address db
+					node_heap->deallocate(pnext);
 
-                    rescan_for_size_index(node_addr_index, node_size_index, size_db, dexer);
-                    rescan_for_size_index(next_addr_index, next_size_index, size_db, dexer);
-                    rescan_for_size_index(pnode->get_addr_index(), pnode->get_size_index(), size_db, dexer);
+                    rescan_for_size_index(node_addr_index, node_size_index, size_db, node_heap);
+                    rescan_for_size_index(next_addr_index, next_size_index, size_db, node_heap);
+                    rescan_for_size_index(pnode->get_addr_index(), pnode->get_size_index(), size_db, node_heap);
                 }
                 if (merge_prev)
                 {
                     u32 const iprev = pnode->m_prev_addr;
-                    node_t*   pprev = (node_t*)dexer->idx2ptr(iprev);
+                    node_t*   pprev = (node_t*)node_heap->idx2ptr(iprev);
 
                     u32 const prev_size_index = pprev->get_size_index();
                     u32 const prev_addr_index = pprev->get_addr_index();
@@ -301,11 +302,12 @@ namespace xcore
                     u32 const prev_size = pprev->get_size() + node_size;
                     pprev->set_size(prev_size, size_cfg.size_to_index(prev_size));
 
-                    remove_node(inode, pnode, dexer); // we can safely remove 'prev' from the address db
+                    remove_node(inode, pnode, node_heap); // we can safely remove 'prev' from the address db
+					node_heap->deallocate(pnode);
 
-                    rescan_for_size_index(prev_addr_index, prev_size_index, size_db, dexer);
-                    rescan_for_size_index(node_addr_index, node_size_index, size_db, dexer);
-                    rescan_for_size_index(pprev->get_addr_index(), pprev->get_size_index(), size_db, dexer);
+                    rescan_for_size_index(prev_addr_index, prev_size_index, size_db, node_heap);
+                    rescan_for_size_index(node_addr_index, node_size_index, size_db, node_heap);
+                    rescan_for_size_index(pprev->get_addr_index(), pprev->get_size_index(), size_db, node_heap);
                 }
             }
 
@@ -340,65 +342,77 @@ namespace xcore
             node_t* get_node_with_addr(u32 const i, xdexer* dexer, u32 addr)
             {
                 u32     inode = m_nodes[i];
-                node_t* pnode = (node_t*)dexer->idx2ptr(inode);
-                do
-                {
-                    if (pnode->is_used() && pnode->get_addr() == addr)
-                    {
-                        return pnode;
-                    }
-                    inode = pnode->m_next_addr;
-                    pnode = (node_t*)dexer->idx2ptr(inode);
-                } while (pnode->get_addr_index() == i);
+				if (inode != node_t::NIL)
+				{
+					node_t* pnode = (node_t*)dexer->idx2ptr(inode);
+					do
+					{
+						if (pnode->is_used() && pnode->get_addr() == addr)
+						{
+							return pnode;
+						}
+						inode = pnode->m_next_addr;
+						pnode = (node_t*)dexer->idx2ptr(inode);
+					} while (pnode->get_addr_index() == i);
+				}
                 return nullptr;
             }
 
             node_t* get_node_with_size_index(u32 const i, xdexer* dexer, u32 size_index)
             {
                 u32     inode = m_nodes[i];
-                node_t* pnode = (node_t*)dexer->idx2ptr(inode);
-                do
-                {
-                    if (!pnode->is_used() && pnode->get_size_index() == size_index)
-                    {
-                        return pnode;
-                    }
-                    inode = pnode->m_next_addr;
-                    pnode = (node_t*)dexer->idx2ptr(inode);
-                } while (pnode->get_addr_index() == i);
+				if (inode != node_t::NIL)
+				{
+					node_t* pnode = (node_t*)dexer->idx2ptr(inode);
+					do
+					{
+						if (!pnode->is_used() && pnode->get_size_index() == size_index)
+						{
+							return pnode;
+						}
+						inode = pnode->m_next_addr;
+						pnode = (node_t*)dexer->idx2ptr(inode);
+					} while (pnode->get_addr_index() == i);
+				}
                 return nullptr;
             }
 
             bool has_size_index(u32 const i, xdexer* dexer, u32 size_index) const
             {
                 u32     inode = m_nodes[i];
-                node_t* pnode = (node_t*)dexer->idx2ptr(inode);
-                do
-                {
-                    if (pnode->is_used() == false && pnode->get_size_index() == size_index)
-                    {
-                        return true;
-                    }
-                    inode = pnode->m_next_addr;
-                    pnode = (node_t*)dexer->idx2ptr(inode);
-                } while (pnode->get_addr_index() == i);
+				if (inode != node_t::NIL)
+				{
+					node_t* pnode = (node_t*)dexer->idx2ptr(inode);
+					do
+					{
+						if (pnode->is_used() == false && pnode->get_size_index() == size_index)
+						{
+							return true;
+						}
+						inode = pnode->m_next_addr;
+						pnode = (node_t*)dexer->idx2ptr(inode);
+					} while (pnode->get_addr_index() == i);
+				}
                 return false;
             }
 
             u32 count_size_index(u32 const i, xdexer* dexer, u32 size_index) const
             {
-                u32     count = 0;
+				u32     count = 0;
                 u32     inode = m_nodes[i];
-                node_t* pnode = (node_t*)dexer->idx2ptr(inode);
-                do
-                {
-                    if (pnode->is_used() == false && pnode->get_size_index() == size_index)
-                    {
-                        count += 1;
-                    }
-                    inode = pnode->m_next_addr;
-                    pnode = (node_t*)dexer->idx2ptr(inode);
-                } while (pnode->get_addr_index() == i);
+				if (inode != node_t::NIL)
+				{
+					node_t* pnode = (node_t*)dexer->idx2ptr(inode);
+					do
+					{
+						if (pnode->is_used() == false && pnode->get_size_index() == size_index)
+						{
+							count += 1;
+						}
+						inode = pnode->m_next_addr;
+						pnode = (node_t*)dexer->idx2ptr(inode);
+					} while (pnode->get_addr_index() == i);
+				}
                 return count;
             }
 
@@ -505,7 +519,7 @@ namespace xcore
             instance->m_node_heap = node_heap;
 
             instance->m_size_cfg.m_alloc_size_min  = size_min;
-            instance->m_size_cfg.m_alloc_size_max  = size_min + (256 * size_step);
+            instance->m_size_cfg.m_alloc_size_max  = size_min + (127 * size_step);
             instance->m_size_cfg.m_alloc_size_step = size_step;
 
             instance->m_size_db.m_size_db0 = (u16*)main_heap->allocate(128 * sizeof(u16), sizeof(void*));
