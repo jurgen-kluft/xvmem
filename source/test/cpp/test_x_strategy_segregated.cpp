@@ -40,7 +40,7 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
         UNITTEST_TEST(init)
 		{
 			void* mem_base = (void*)0x00ff000000000000ULL;
-			xsegregatedstrat::xinstance_t* inst = xsegregatedstrat::create(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sSpaceRange, sMinumSize, sMaximumSize, sStepSize, sPageSize);
+			xsegregatedstrat::xinstance_t* inst = xsegregatedstrat::create(gTestAllocator, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
 			xsegregatedstrat::destroy(inst);
 		}
 
@@ -48,7 +48,7 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
         UNITTEST_TEST(alloc_dealloc)
 		{
 			void* mem_base = (void*)0x00ff000000000000ULL;
-			xsegregatedstrat::xinstance_t* inst = xsegregatedstrat::create(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sSpaceRange, sMinumSize, sMaximumSize, sStepSize, sPageSize);
+			xsegregatedstrat::xinstance_t* inst = xsegregatedstrat::create(gTestAllocator, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
 
 			void* p1 = xsegregatedstrat::allocate(inst, sMinumSize, 1024);
 			xsegregatedstrat::deallocate(inst, p1);

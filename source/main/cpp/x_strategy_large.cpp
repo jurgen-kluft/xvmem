@@ -90,12 +90,11 @@ namespace xcore
 
 		static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
 
-        xinstance_t* create(xalloc* main_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 max_num_allocs)
+        xinstance_t* create(xalloc* main_heap, void* mem_addr, u64 mem_size, u32 max_num_allocs)
         {
             xinstance_t* instance   = main_heap->construct<xinstance_t>();
             u64 const    block_size = mem_size / max_num_allocs;
             u32 const    block_cnt  = max_num_allocs;
-            ASSERT(block_size > size_min);
 
             instance->m_main_heap  = main_heap;
             instance->m_mem_base   = mem_addr;

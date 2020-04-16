@@ -72,15 +72,6 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Size Increment = 256
 - Number of FSA = (4096-2048) / 256 = 8
 
-### FSA l2
-
-- RegionSize = 256 x 1024 x 1024
-- PageSize = 64 KB
-- MinSize = 4096
-- MaxSize = 8192
-- Size Increment = 512
-- Number of FSA = (8192-4096) / 512 = 8
-
 #### Pros / Cons
 
 - Tiny implementation [+]
@@ -90,22 +81,31 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Can cache a certain amount of free pages [+]
 - Difficult to detect memory corruption [-]
 
-## Coalesce Allocator Direct (32 MB)
+## Coalesce Allocator Direct 1 (256 MB)
+
+Using xsize_db_s256_a2048
 
 - Can use more than one instance
-- Size range: 8 KB < Size < 128 KB
-- Size alignment: 1024
-- Size-DB: 128 entries
-- A memory range of 32 MB
+- Size range: 4 KB < Size < 64 KB
+  - Size alignment: 256
+  - Size-DB: 256 entries
+- A memory range of 256 MB
+  - Addr-DB: 2048 entries
+  - 256 MB / 2048 = 128 KB per address node
 - Best-Fit strategy
 - Suitable for GPU memory
 
-## Coalesce Allocator Multi-Direct
+## Coalesce Allocator Direct 2 (256 MB)
 
-- Using multiple instances of Coalesce Direct
-- Size range: 8 KB < Size < 640 KB
-- A memory range (e.g. 768MB)
-- Releases 32MB page ranges back to the system
+Using xsize_db_s128_a256
+
+- Can use more than one instance
+- Size range: 64 KB < Size < 512 KB
+- Size alignment: 4096
+- Size-DB: 128 entries
+- A memory range of 256 MB
+  - Addr-DB: 256 entries
+  - 256 MB / 256 = 1 MB per address node
 - Best-Fit strategy
 - Suitable for GPU memory
 
@@ -231,18 +231,18 @@ Problem: If you do not align the size by Min-Alloc-Size then you can get size fr
 
 ### Notes 1
 
-Medium Heap Region Size 1 = 1 GB
-Medium Heap Region Size 2 = 1 GB
+Small/Medium Heap Region Size = 256 MB
+Medium/Large Heap Region Size = 256 MB
 
-Coalesce Heap Region Size = Medium Heap Region Size 1
-Coalesce Heap Min-Size = 8 KB
-Coalesce Heap Max-Size = 128 KB
-Coalesce Heap Step-Size = 1 KB
+Coalesce Heap Region Size = Small/Medium Heap Region Size
+Coalesce Heap Min-Size = 4 KB
+Coalesce Heap Max-Size = 64 KB
+Coalesce Heap Step-Size = 256 B
 
-Coalesce Heap Region Size = Medium Heap Region Size 2
-Coalesce Heap Min-Size = 128 KB
-Coalesce Heap Max-Size = 1024 KB
-Coalesce Heap Step-Size = 8 KB
+Coalesce Heap Region Size = Medium/Large Heap Region Size
+Coalesce Heap Min-Size = 64 KB
+Coalesce Heap Max-Size = 512 KB
+Coalesce Heap Step-Size = 2 KB
 
 ### Notes 2
 

@@ -3,9 +3,8 @@
 #include "xbase/x_allocator.h"
 #include "xbase/x_integer.h"
 
-#include "xvmem/x_virtual_memory.h"
 #include "xvmem/private/x_strategy_segregated.h"
-#include "xvmem/private/x_binarysearch_tree.h"
+#include "xvmem/x_virtual_memory.h"
 
 namespace xcore
 {
@@ -16,14 +15,14 @@ namespace xcore
         virtual void  v_deallocate(void* p);
         virtual void  v_release();
 
-        void initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize);
+        void initialize(xalloc* main_alloc, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 pagesize);
 
         xsegregatedstrat::xinstance_t* m_segregated;
     };
 
-    void xvmem_allocator_segregated::initialize(xalloc* main_alloc, xfsadexed* node_alloc, void* vmem_address, u64 vmem_space, u64 level_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_step, u32 pagesize)
+    void xvmem_allocator_segregated::initialize(xalloc* main_alloc, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align)
     {
-        m_segregated = xsegregatedstrat::create(main_alloc, node_alloc, vmem_address, vmem_space, level_range, allocsize_min, allocsize_max, allocsize_step, pagesize);
+        m_segregated = xsegregatedstrat::create(main_alloc, mem_address, mem_space, allocsize_min, allocsize_max, allocsize_align);
     }
 
     void* xvmem_allocator_segregated::v_allocate(u32 size, u32 alignment)
@@ -34,5 +33,19 @@ namespace xcore
 
     void xvmem_allocator_segregated::v_deallocate(void* ptr) { xsegregatedstrat::deallocate(m_segregated, ptr); }
     void xvmem_allocator_segregated::v_release() { xsegregatedstrat::destroy(m_segregated); }
+
+    xalloc* gCreateVMemSegregatedAllocator(xalloc* internal_heap, xvmem* vmem, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max)
+    {
+        xvmem_allocator_segregated* allocator = internal_heap->construct<xvmem_allocator_segregated>();
+
+        u32   page_size = 0;
+        void* mem_addr = nullptr;
+        vmem->reserve(mem_range, page_size, 0, mem_addr);
+
+		u32 const alloc_size_align = page_size;
+		allocator->initialize(internal_heap, mem_addr, mem_range, alloc_size_min, alloc_size_max, alloc_size_align);
+
+        return allocator;
+    }
 
 }; // namespace xcore

@@ -10,9 +10,8 @@
 
 namespace xcore
 {
-	// This is a virtual allocator that can manage a memory range and deal with large (>32 MiB?) allocations and deallocations
-	// Maximum allocation size is capped at 1 GiB.
-	extern xalloc*	gCreateVMemLargeAllocator(xalloc* internal_heap, xfsadexed* node_heap, xvmem* vmem, u64 vmem_range, u32 alloc_size_min);
+	// This is a virtual allocator that can manage a memory range and deal with large (>32 MiB) allocations and deallocations
+	extern xalloc*	gCreateVMemLargeAllocator(xalloc* internal_heap, xfsadexed* node_heap, xvmem* vmem, u64 vmem_range, u32 alloc_size_min, u32 alloc_size_max);
 };
 
 #endif	/// __X_VMEM_LARGE_ALLOCATOR_H__

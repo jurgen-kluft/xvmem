@@ -32,15 +32,15 @@ namespace xcore
         void*                          m_fvsa_mem_base;  // A memory base pointer
         u64                            m_fvsa_mem_range; // 1 GB
         u32                            m_fvsa_pages_list_size;
-        xfsastrat::xlist_t*               m_fvsa_pages_list; // 127 allocators
+        xfsastrat::xlist_t*            m_fvsa_pages_list; // 127 allocators
         u32                            m_fsa_min_size;    // 1 KB
         u32                            m_fsa_step_size;   // 64
         u32                            m_fsa_max_size;    // 8 KB
         u32                            m_fsa_pages_list_size;
-        xfsastrat::xlist_t*               m_fsa_pages_list; // 112 allocators
+        xfsastrat::xlist_t*            m_fsa_pages_list; // 112 allocators
         u32                            m_fsa_page_size;  // 64 KB
-        xfsastrat::xlist_t                m_fsa_freepages_list;
-        xfsastrat::xpages_t*                   m_fsa_pages;
+        xfsastrat::xlist_t             m_fsa_freepages_list;
+        xfsastrat::xpages_t*           m_fsa_pages;
         u32                            m_med_min_size;   // 8 KB
         u32                            m_med_step_size;  // 256 (size alignment)
         u32                            m_med_max_size;   // 640 KB

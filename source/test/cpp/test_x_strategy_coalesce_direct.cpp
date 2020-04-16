@@ -32,13 +32,13 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 
 		UNITTEST_TEST(coalescee_init)
 		{
-			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create(gTestAllocator, sNodeHeap, 8*1024, 1024);
+			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create_4KB_64KB_256B_32MB(gTestAllocator, sNodeHeap);
 			xcoalescestrat_direct::destroy(c, gTestAllocator);
 		}
 
 		UNITTEST_TEST(coalescee_alloc_dealloc_pairs)
 		{
-			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create(gTestAllocator, sNodeHeap, 8*1024, 1024);
+			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create_4KB_64KB_256B_32MB(gTestAllocator, sNodeHeap);
 
 			void* p1 = xcoalescestrat_direct::allocate(c, 10 * 1024, 8);
 			u32 s1 = xcoalescestrat_direct::deallocate(c, p1);
@@ -57,7 +57,7 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 
 		UNITTEST_TEST(coalescee_alloc_dealloc_3_times)
 		{
-			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create(gTestAllocator, sNodeHeap, 8*1024, 1024);
+			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create_4KB_64KB_256B_32MB(gTestAllocator, sNodeHeap);
 
 			void* p1 = xcoalescestrat_direct::allocate(c, 8 * 1024, 8);
 			void* p2 = xcoalescestrat_direct::allocate(c, 8 * 1024, 8);
@@ -72,7 +72,7 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 
 		UNITTEST_TEST(coalescee_alloc_dealloc_fixed_size_many)
 		{
-			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create(gTestAllocator, sNodeHeap, 8*1024, 1024);
+			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create_4KB_64KB_256B_32MB(gTestAllocator, sNodeHeap);
 
 			const s32 cnt = 32;
 			void* ptrs[cnt];
