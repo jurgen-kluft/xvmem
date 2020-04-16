@@ -222,7 +222,7 @@ namespace xcore
         u32       seg_page_size = 0;
         u32 const seg_mem_attrs = 0; // Page/Memory attributes
         vmem->reserve(m_seg_mem_range, seg_page_size, seg_mem_attrs, m_seg_mem_base);
-        m_seg_allocator = xsegregatedstrat::create(internal_allocator, m_node_allocator, m_seg_mem_base, m_seg_mem_range, m_seg_mem_subrange, m_seg_min_size, m_seg_max_size, m_seg_step_size, page_size);
+        m_seg_allocator = xsegregatedstrat::create(internal_allocator, m_seg_mem_base, m_seg_mem_range, m_seg_min_size, m_seg_max_size, page_size);
 
         m_large_min_size          = (u32)32 * 1024 * 1024;         // 32 MB
         m_large_mem_base          = nullptr;                       // A memory base pointer
@@ -232,7 +232,7 @@ namespace xcore
         vmem->reserve(m_large_mem_range, large_page_size, large_mem_attrs, m_large_mem_base);
 
         const u32 max_num_large_allocations = 64;
-        m_large_allocator                   = xlargestrat::create(internal_allocator, m_large_mem_base, m_large_mem_range, m_large_min_size, max_num_large_allocations);
+        m_large_allocator                   = xlargestrat::create(internal_allocator, m_large_mem_base, m_large_mem_range, max_num_large_allocations);
     }
 
     xalloc* gCreateVmAllocator(xalloc* internal_allocator, xvmem* vmem)

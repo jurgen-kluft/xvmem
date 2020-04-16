@@ -2,6 +2,8 @@
 #include "xbase/x_allocator.h"
 #include "xbase/x_console.h"
 
+#include "xvmem/x_virtual_memory.h"
+
 #include "xunittest/xunittest.h"
 #include "xunittest/private/ut_ReportAssert.h"
 
@@ -97,11 +99,20 @@ bool gRunUnitTest(UnitTest::TestReporter& reporter)
 	xcore::TestAllocator testAllocator(systemAllocator);
 	gTestAllocator = &testAllocator;
 
-	int r = UNITTEST_SUITE_RUN(reporter, xVMemUnitTest);
-	if (UnitTest::GetNumAllocations()!=0)
+	int r = 0;
+	if (!xcore::gInitVirtualMemory())
 	{
-		reporter.reportFailure(__FILE__, __LINE__, "xunittest", "memory leaks detected!");
+		reporter.reportFailure(__FILE__, __LINE__, "xunittest", "Virtual memory initialization failed!");
 		r = -1;
+	}
+	else
+	{
+		int r = UNITTEST_SUITE_RUN(reporter, xVMemUnitTest);
+		if (UnitTest::GetNumAllocations()!=0)
+		{
+			reporter.reportFailure(__FILE__, __LINE__, "xunittest", "memory leaks detected!");
+			r = -1;
+		}
 	}
 
 	gTestAllocator->release();

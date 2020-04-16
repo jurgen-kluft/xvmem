@@ -33,6 +33,11 @@ public:
 		m_main_allocator->deallocate(m_mem_address);
 	}
 
+	virtual bool initialize(u32 pagesize)
+	{
+		return true;
+	}
+
     virtual bool reserve(u64 address_range, u32& page_size, u32 attributes, void*& baseptr)
 	{
 		page_size = m_page_size;

@@ -262,7 +262,7 @@ namespace xcore
 
         bool is_empty(xinstance_t* instance) { return instance->m_allocation_count == 0; }
 
-        void release(xinstance_t* instance, xalloc* main_heap)
+        void destroy(xinstance_t* instance, xalloc* main_heap)
         {
             u32     inode = instance->m_addr_db.m_nodes[0]; // Should be 'head' node
             node_t* pnode = instance->idx2node(inode);
@@ -559,9 +559,7 @@ namespace xcore
 
     void xvmem_allocator_coalesce_direct::v_release()
     {
-        xcoalescestrat_direct::release(&m_coalescee, m_internal_heap);
-
-        // release virtual memory
+        xcoalescestrat_direct::destroy(&m_coalescee, m_internal_heap);
 
         m_internal_heap->destruct<>(this);
     }

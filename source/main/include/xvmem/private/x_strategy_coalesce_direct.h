@@ -15,10 +15,13 @@ namespace xcore
         struct xinstance_t;
 
         // Min-Size / Max-Size / Step-Size / Region-Size
+		// Node-Heap as a indexed fixed-size allocator needs to allocate elements with a size-of 16 bytes
         xinstance_t* create_4KB_64KB_256B_32MB(xalloc* main_heap, xfsadexed* node_heap);
         xinstance_t* create_64KB_512KB_2KB_64MB(xalloc* main_heap, xfsadexed* node_heap);
 
         // So a high-level allocator could do something like this
+		// Where every allocator is either active or non-active
+		// If an allocator is active than memory has been committed otherwise it is only reserved
         struct xcoalesce_allocator
         {
             void*        m_s2m_mem_base;      // The memory base address, reserved

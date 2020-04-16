@@ -15,12 +15,23 @@ namespace xcore
     class xvmem_os : public xvmem
     {
     public:
+		virtual bool initialize(u32 pagesize);
+
         virtual bool reserve(u64 address_range, u32& page_size, u32 attributes, void*& baseptr);
         virtual bool release(void* baseptr);
 
         virtual bool commit(void* page_address, u32 page_size, u32 page_count);
         virtual bool decommit(void* page_address, u32 page_size, u32 page_count);
+
+	private:
+		u32 m_pagesize;
     };
+
+	bool xvmem_os::initialize(u32 pagesize)
+	{
+		m_pagesize = pagesize;
+		return true;
+	}
 
 #if defined TARGET_MAC
 
@@ -65,6 +76,7 @@ namespace xcore
         unsigned int allocation_type = MEM_RESERVE | reserve_flags;
         unsigned int protect         = 0;
         baseptr                      = ::VirtualAlloc(NULL, (SIZE_T)address_range, allocation_type, protect);
+		page_size = m_pagesize;
         return baseptr != nullptr;
     }
 
@@ -96,6 +108,13 @@ namespace xcore
 #error Unknown Platform/Compiler configuration for xvmem
 
 #endif
+
+	bool gInitVirtualMemory()
+	{
+		SYSTEM_INFO sysinfo;
+		::GetSystemInfo(&sysinfo);
+		return sVMem.initialize(sysinfo.dwPageSize);
+	}
 
     xvmem* gGetVirtualMemory() { return &sVMem; }
 

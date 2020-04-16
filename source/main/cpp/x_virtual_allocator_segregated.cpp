@@ -17,6 +17,8 @@ namespace xcore
 
         void initialize(xalloc* main_alloc, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 pagesize);
 
+		XCORE_CLASS_PLACEMENT_NEW_DELETE
+
         xsegregatedstrat::xinstance_t* m_segregated;
     };
 
