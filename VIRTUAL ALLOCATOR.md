@@ -81,9 +81,9 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Can cache a certain amount of free pages [+]
 - Difficult to detect memory corruption [-]
 
-## Coalesce Allocator Direct 1 (256 MB)
+## Coalesce Allocator Direct 1 (32 MB)
 
-Using xsize_db_s256_a2048
+Using xsize_db_s256_a256
 
 - Can use more than one instance
 - Size range: 4 KB < Size < 64 KB
@@ -108,6 +108,10 @@ Using xsize_db_s128_a256
   - 256 MB / 256 = 1 MB per address node
 - Best-Fit strategy
 - Suitable for GPU memory
+
+## Coalesce Allocator
+
+Releasing pages back to free memory, using a type of 'delayed' caching mechanism.
 
 ## Segregated Allocator [WIP]
 
