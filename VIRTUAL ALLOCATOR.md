@@ -27,50 +27,11 @@ This is an intrusive fixed size allocator targetted at small size allocations.
 
 Not too hard to make multi-thread safe using atomics where the only hard multi-threading problem is page commit/decommit.
 
-### FSA tiny
+### FSA
 
 - RegionSize = 256 x 1024 x 1024
 - PageSize = 4 KB (if possible), otherwise 64 KB
-- MinSize = 8
-- MaxSize = 64
-- Size Increment = 8
-- Number of FSA = 64 / 8 = 8
-
-### FSA very small
-
-- RegionSize = 256 x 1024 x 1024
-- PageSize = 4 KB (if possible), otherwise 64 KB
-- MinSize = 64
-- MaxSize = 512
-- Size Increment = 16
-- Number of FSA = 512 / 16 = 32
-
-### FSA small
-
-- RegionSize = 256 x 1024 x 1024
-- PageSize = 64 KB
-- MinSize = 512
-- MaxSize = 1024
-- Size Increment = 64
-- Number of FSA = (1024-512) / 64 = 8
-
-### FSA medium
-
-- RegionSize = 256 x 1024 x 1024
-- PageSize = 64 KB
-- MinSize = 1024
-- MaxSize = 2048
-- Size Increment = 128
-- Number of FSA = (2048-1024) / 128 = 8
-
-### FSA l1
-
-- RegionSize = 256 x 1024 x 1024
-- PageSize = 64 KB
-- MinSize = 2048
-- MaxSize = 4096
-- Size Increment = 256
-- Number of FSA = (4096-2048) / 256 = 8
+- Min/Max/Step = 8/64/8, 64/512/16, 512/1024/64, 1024/2048/128, 2048/4096/256
 
 #### Pros / Cons
 
@@ -109,9 +70,9 @@ Using xsize_db_s128_a256
 - Best-Fit strategy
 - Suitable for GPU memory
 
-## Coalesce Allocator
+## Coalesce Allocator, Release/Commit Pages
 
-Releasing pages back to free memory, using a type of 'delayed' caching mechanism.
+Releasing pages back to free memory
 
 ## Segregated Allocator [WIP]
 

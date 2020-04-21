@@ -25,7 +25,11 @@ namespace xcore
         virtual u32 v_size() const X_FINAL { return m_alloc_size; }
 
         virtual void* v_allocate() X_FINAL { return alloc_elem(m_pages, m_pages_list, m_alloc_size); }
-        virtual void  v_deallocate(void* ptr) X_FINAL { return free_elem(m_pages, m_pages_list, ptr, m_empty_pages_list); }
+        virtual u32   v_deallocate(void* ptr) X_FINAL
+        {
+            free_elem(m_pages, m_pages_list, ptr, m_empty_pages_list);
+            return m_alloc_size;
+        }
 
         virtual void v_release()
         {
@@ -37,11 +41,11 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
     protected:
-        xalloc*            m_main_heap;
+        xalloc*                    m_main_heap;
         xfsastrat::xpages_t* const m_pages;
-        xfsastrat::xlist_t    m_pages_list;
-        xfsastrat::xlist_t    m_empty_pages_list;
-        u32 const          m_alloc_size;
+        xfsastrat::xlist_t         m_pages_list;
+        xfsastrat::xlist_t         m_empty_pages_list;
+        u32 const                  m_alloc_size;
     };
 
     xfsa* gCreateVMemBasedFsa(xalloc* main_allocator, xfsastrat::xpages_t* vpages, u32 allocsize)
@@ -67,7 +71,7 @@ namespace xcore
         virtual u32 v_size() const X_FINAL { return m_alloc_size; }
 
         virtual void* v_allocate() X_FINAL { return alloc_elem(m_pages, m_pages_notfull_list, m_alloc_size); }
-        virtual void  v_deallocate(void* ptr) X_FINAL
+        virtual u32   v_deallocate(void* ptr) X_FINAL
         {
             free_elem(m_pages, m_pages_notfull_list, ptr, m_pages_empty_list);
 
@@ -77,6 +81,8 @@ namespace xcore
             {
                 free_one_page(m_pages, m_pages_empty_list);
             }
+
+            return m_alloc_size;
         }
 
         virtual void* v_idx2ptr(u32 index) const X_FINAL { return ptr_of_elem(m_pages, index); }
@@ -87,11 +93,11 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
     protected:
-        xalloc*            m_main_heap;
+        xalloc*                    m_main_heap;
         xfsastrat::xpages_t* const m_pages;
-        xfsastrat::xlist_t    m_pages_notfull_list;
-        xfsastrat::xlist_t    m_pages_empty_list;
-        u32 const          m_alloc_size;
+        xfsastrat::xlist_t         m_pages_notfull_list;
+        xfsastrat::xlist_t         m_pages_empty_list;
+        u32 const                  m_alloc_size;
     };
 
     // Constraints:

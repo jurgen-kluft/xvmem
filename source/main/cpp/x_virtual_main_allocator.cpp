@@ -17,48 +17,40 @@ namespace xcore
     class xvmem_allocator : public xalloc
     {
     public:
-        void          init(xalloc* heap_allocator, xvmem* vmem);
+        void init(xalloc* heap_allocator, xvmem* vmem);
 
         virtual void* v_allocate(u32 size, u32 align);
-        virtual void  v_deallocate(void* ptr);
+        virtual u32   v_deallocate(void* ptr);
         virtual void  v_release();
 
-		XCORE_CLASS_PLACEMENT_NEW_DELETE
+        XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*                        m_internal_heap;
-        u32                            m_fvsa_min_size;  // 8
-        u32                            m_fvsa_step_size; // 8
-        u32                            m_fvsa_max_size;  // 1 KB
-        void*                          m_fvsa_mem_base;  // A memory base pointer
-        u64                            m_fvsa_mem_range; // 1 GB
-        u32                            m_fvsa_pages_list_size;
-        xfsastrat::xlist_t*            m_fvsa_pages_list; // 127 allocators
-        u32                            m_fsa_min_size;    // 1 KB
-        u32                            m_fsa_step_size;   // 64
-        u32                            m_fsa_max_size;    // 8 KB
-        u32                            m_fsa_pages_list_size;
-        xfsastrat::xlist_t*            m_fsa_pages_list; // 112 allocators
-        u32                            m_fsa_page_size;  // 64 KB
-        xfsastrat::xlist_t             m_fsa_freepages_list;
-        xfsastrat::xpages_t*           m_fsa_pages;
-        u32                            m_med_min_size;   // 8 KB
-        u32                            m_med_step_size;  // 256 (size alignment)
-        u32                            m_med_max_size;   // 640 KB
-        void*                          m_med_mem_base;   // A memory base pointer
-        u64                            m_med_mem_range;  // 768 MB
-        xfsadexed*                     m_node_allocator; // 32B node allocator
-        xcoalescestrat::xinstance_t*   m_med_allocator;
-        u32                            m_seg_min_size;  // 640 KB
-        u32                            m_seg_max_size;  // 32 MB
-        u32                            m_seg_step_size; // 1 MB
-        void*                          m_seg_mem_base;  // A memory base pointer
-        u64                            m_seg_mem_range; // 128 GB
-        u64                            m_seg_mem_subrange;
-        xsegregatedstrat::xinstance_t* m_seg_allocator;
-        u32                            m_large_min_size;  // 32MB
-        void*                          m_large_mem_base;  // A memory base pointer
-        u64                            m_large_mem_range; //
-        xlargestrat::xinstance_t*      m_large_allocator;
+        xalloc*    m_internal_heap;
+        void*      m_med_mem_base;     // A memory base pointer
+        u64        m_med_mem_range;    // 768 MB
+        u32        m_fsa_min_size;     // 8 B
+        u32        m_fsa_max_size;     // 4096 B
+        xalloc*    m_fsa_allocator;    //
+        xfsadexed* m_node_allocator;   // 16 B node allocator
+        u32        m_med_min_size;     // 4 KB
+        u32        m_med_step_size;    // 256 B (size alignment)
+        u32        m_med_max_size;     // 64 KB
+        xalloc*    m_med_allocator;    //
+        u32        m_led_min_size;     // 64 KB
+        u32        m_led_step_size;    // 4096 B (size alignment)
+        u32        m_led_max_size;     // 512 KB
+        xalloc*    m_led_allocator;    //
+        u32        m_seg_min_size;     // 640 KB
+        u32        m_seg_max_size;     // 32 MB
+        u32        m_seg_step_size;    // 1 MB
+        void*      m_seg_mem_base;     // A memory base pointer
+        u64        m_seg_mem_range;    // 128 GB
+        u64        m_seg_mem_subrange; //
+        xalloc*    m_seg_allocator;    //
+        u32        m_large_min_size;   // 32MB
+        void*      m_large_mem_base;   // A memory base pointer
+        u64        m_large_mem_range;  //
+        xalloc*    m_large_allocator;  //
     };
 
     void* xvmem_allocator::v_allocate(u32 size, u32 align)
@@ -68,34 +60,26 @@ namespace xcore
         if (align > size)
             size = align;
 
-        if (size <= m_fvsa_max_size)
-        {
-            if (size < m_fvsa_min_size)
-                size = m_fvsa_min_size;
-            u32 const        alloc_size  = (size + (m_fvsa_step_size - 1)) & ~(m_fvsa_step_size - 1);
-            s32 const        alloc_index = (alloc_size - m_fvsa_min_size) / m_fvsa_step_size;
-            xfsastrat::xlist_t& page_list   = m_fvsa_pages_list[alloc_index];
-            return alloc_elem(m_fsa_pages, page_list, alloc_size);
-        }
-
         if (size <= m_fsa_max_size)
         {
             if (size < m_fsa_min_size)
                 size = m_fsa_min_size;
-            u32 const        alloc_size  = (size + (m_fsa_step_size - 1)) & ~(m_fsa_step_size - 1);
-            s32 const        alloc_index = (alloc_size - m_fsa_min_size) / m_fsa_step_size;
-            xfsastrat::xlist_t& page_list   = m_fsa_pages_list[alloc_index];
-            return alloc_elem(m_fsa_pages, page_list, alloc_size);
+            return m_fsa_allocator->allocate(size, align);
         }
-
         if (size <= m_med_max_size)
         {
             if (size < m_med_min_size)
                 size = m_med_min_size;
-            return xcoalescestrat::allocate(m_med_allocator, size, align);
+            return m_med_allocator->allocate(size, align);
+        }
+        if (size <= m_led_max_size)
+        {
+            if (size < m_led_min_size)
+                size = m_led_min_size;
+            return m_led_allocator->allocate(size, align);
         }
 
-        return xlargestrat::allocate(m_large_allocator, size, align);
+        return m_large_allocator->allocate(size, align);
     }
 
     // Helper function to determine if a pointer is inside a certain memory range
@@ -107,20 +91,20 @@ namespace xcore
         return p >= begin && p < end;
     }
 
-    void xvmem_allocator::v_deallocate(void* ptr)
+    u32 xvmem_allocator::v_deallocate(void* ptr)
     {
         if (helper_is_in_memrange(m_fvsa_mem_base, m_fvsa_mem_range, ptr))
         {
             u32 const alloc_size = sizeof_elem(m_fsa_pages, ptr);
             if (alloc_size >= m_fvsa_min_size && alloc_size <= m_fvsa_max_size)
             {
-                u32 const        alloc_index = (alloc_size - m_fvsa_min_size) / m_fvsa_step_size;
+                u32 const           alloc_index = (alloc_size - m_fvsa_min_size) / m_fvsa_step_size;
                 xfsastrat::xlist_t& page_list   = m_fvsa_pages_list[alloc_index];
                 free_elem(m_fsa_pages, page_list, ptr, m_fsa_freepages_list);
             }
             else if (alloc_size >= m_fsa_min_size && alloc_size <= m_fsa_max_size)
             {
-                u32 const        alloc_index = (alloc_size - m_fsa_min_size) / m_fsa_step_size;
+                u32 const           alloc_index = (alloc_size - m_fsa_min_size) / m_fsa_step_size;
                 xfsastrat::xlist_t& page_list   = m_fsa_pages_list[alloc_index];
                 free_elem(m_fsa_pages, page_list, ptr, m_fsa_freepages_list);
             }
@@ -189,11 +173,11 @@ namespace xcore
         m_fvsa_pages_list      = (xfsastrat::xlist_t*)internal_allocator->allocate(sizeof(xfsastrat::xlist_t) * m_fvsa_pages_list_size, sizeof(void*));
 
         // FSA, also every size has it's own 'used pages' list
-        m_fsa_min_size           = 1024;
-        m_fsa_step_size          = 64;
-        m_fsa_max_size           = 8192;
-        m_fsa_pages_list_size    = (m_fsa_max_size - m_fsa_min_size) / m_fsa_step_size;
-        m_fsa_pages_list         = (xfsastrat::xlist_t*)internal_allocator->allocate(sizeof(xfsastrat::xlist_t) * m_fsa_pages_list_size, sizeof(void*));
+        m_fsa_min_size        = 1024;
+        m_fsa_step_size       = 64;
+        m_fsa_max_size        = 8192;
+        m_fsa_pages_list_size = (m_fsa_max_size - m_fsa_min_size) / m_fsa_step_size;
+        m_fsa_pages_list      = (xfsastrat::xlist_t*)internal_allocator->allocate(sizeof(xfsastrat::xlist_t) * m_fsa_pages_list_size, sizeof(void*));
 
         // Create node heap for nodes with size 32B
         // We prefer to create a separate virtual memory based FSA allocator.

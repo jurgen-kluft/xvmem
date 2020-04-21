@@ -260,8 +260,6 @@ namespace xcore
 			return instance;
 		}
 
-        bool is_empty(xinstance_t* instance) { return instance->m_allocation_count == 0; }
-
         void destroy(xinstance_t* instance, xalloc* main_heap)
         {
             u32     inode = instance->m_addr_db.m_nodes[0]; // Should be 'head' node
