@@ -11,20 +11,20 @@ namespace xcore
 {
     namespace xfsastrat
     {
-		// Usage:
-		//   Create an instance of ``xfsastrat::xpages_t`` by calling ``xfsastrat::create()``
-		//   When you are done and want to release the instance, call ``xfsastrat::destroy()``
+        // Usage:
+        //   Create an instance of ``xfsastrat::xpages_t`` by calling ``xfsastrat::create()``
+        //   When you are done and want to release the instance, call ``xfsastrat::destroy()``
 
-		// ``xfsastrat::alloc_elem()``:
-		//   When this function returns NULL the next thing to do is to call ``alloc_page``.
-		//   You will receive a ``void*`` that can be used to do an actual virtual memory commit.
-		//
-		// ``xfsastrat::free_elem()``:
-		//   Freeing an element can result in a page becoming ``empty``, this will be returned in
-		//   ``pages_empty_list``. You can see how many pages are in the list and if you want to
-		//   remove one (or more) you can repeatedly call ``free_one_page``.
-		//   If you want to free every item of the page list you can call ``free_all_pages``.
-		//
+        // ``xfsastrat::alloc_elem()``:
+        //   When this function returns NULL the next thing to do is to call ``alloc_page``.
+        //   You will receive a ``void*`` that can be used to do an actual virtual memory commit.
+        //
+        // ``xfsastrat::free_elem()``:
+        //   Freeing an element can result in a page becoming ``empty``, this will be returned in
+        //   ``pages_empty_list``. You can see how many pages are in the list and if you want to
+        //   remove one (or more) you can repeatedly call ``free_one_page``.
+        //   If you want to free every item of the page list you can call ``free_all_pages``.
+        //
 
         struct xpages_t;
         struct xlist_t
@@ -48,7 +48,6 @@ namespace xcore
         u32       idx_of_elem(xpages_t* pages, void* const ptr);
         void*     ptr_of_elem(xpages_t* pages, u32 const index);
         void      free_elem(xpages_t* pages, xlist_t& page_list, void* const ptr, xlist_t& pages_empty_list);
-
 
         static const u16 INDEX16_NIL = 0xffff;
 
@@ -557,123 +556,123 @@ namespace xcore
     class xfsa_allocator : public xalloc
     {
     public:
-        
-		virtual void* v_allocate(u32 size, u32 alignment) X_FINAL
-		{
-			if (size < m_fvsa_min_size)
-				size = m_fvsa_min_size;
-
-			u32 const size_index = (size - m_fvsa_max_size) / m_fvsa_step_size;
-			u32 const alloc_index = m_fvsa_size_to_index[size_index];
-			u32 const alloc_size = m_fvsa_index_to_size[alloc_index];
-
-			return xfsastrat::alloc_elem(m_fsa_pages, m_fvsa_pages_list[alloc_index], alloc_size);
-		}
-
-        virtual u32   v_deallocate(void* ptr) X_FINAL
+        virtual void* v_allocate(u32 size, u32 alignment) X_FINAL
         {
-			u32 const alloc_size = sizeof_elem(m_fsa_pages, ptr);
-			u32 const size_index = (alloc_size - m_fvsa_max_size) / m_fvsa_step_size;
-			u32 const alloc_index = m_fvsa_size_to_index[size_index];
+            if (size < m_fvsa_min_size)
+                size = m_fvsa_min_size;
 
-            xfsastrat::xlist_t& page_list   = m_fvsa_pages_list[alloc_index];
-			xfsastrat::free_elem(m_fsa_pages, page_list, ptr, m_fsa_freepages_list);
+            u32 const size_index  = (size - m_fvsa_max_size) / m_fvsa_step_size;
+            u32 const alloc_index = m_fvsa_size_to_index[size_index];
+            u32 const alloc_size  = m_fvsa_index_to_size[alloc_index];
+
+            return xfsastrat::alloc_elem(m_fsa_pages, m_fvsa_pages_list[alloc_index], alloc_size);
+        }
+
+        virtual u32 v_deallocate(void* ptr) X_FINAL
+        {
+            u32 const alloc_size  = sizeof_elem(m_fsa_pages, ptr);
+            u32 const size_index  = (alloc_size - m_fvsa_max_size) / m_fvsa_step_size;
+            u32 const alloc_index = m_fvsa_size_to_index[size_index];
+
+            xfsastrat::xlist_t& page_list = m_fvsa_pages_list[alloc_index];
+            xfsastrat::free_elem(m_fsa_pages, page_list, ptr, m_fsa_freepages_list);
 
             return alloc_size;
         }
 
-        virtual void v_release() 
-		{
-			m_main_heap->deallocate(m_fvsa_size_to_index);
-			m_main_heap->deallocate(m_fvsa_index_to_size);
-			m_main_heap->deallocate(m_fvsa_pages_list);
-			m_main_heap->deallocate(this); 
-		}
+        virtual void v_release()
+        {
+            for (u32 i = 0; i < m_fvsa_pages_list_size; i++)
+            {
+                free_all_pages(m_fsa_pages, m_fvsa_pages_list[i]);
+            }
+
+            m_main_heap->deallocate(m_fvsa_size_to_index);
+            m_main_heap->deallocate(m_fvsa_index_to_size);
+            m_main_heap->deallocate(m_fvsa_pages_list);
+            m_main_heap->deallocate(this);
+        }
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*              m_main_heap;
+        xalloc* m_main_heap;
 
-		void*                m_fvsa_mem_base;  // A memory base pointer
-        u64                  m_fvsa_mem_range; // 1 GB
+        void* m_fvsa_mem_base;  // A memory base pointer
+        u64   m_fvsa_mem_range; // 1 GB
 
-        u32                  m_fvsa_min_size;
-        u32                  m_fvsa_step_size;
-        u32                  m_fvsa_max_size;
-		u8*				     m_fvsa_size_to_index;
-		u16*				 m_fvsa_index_to_size;
+        u32  m_fvsa_min_size;
+        u32  m_fvsa_step_size;
+        u32  m_fvsa_max_size;
+        u8*  m_fvsa_size_to_index;
+        u16* m_fvsa_index_to_size;
 
-		u32                  m_fvsa_pages_list_size;
-		xfsastrat::xlist_t*  m_fvsa_pages_list; // N allocators
-        
-		u32                  m_fsa_page_size;  // 64 KB
+        u32                 m_fvsa_pages_list_size;
+        xfsastrat::xlist_t* m_fvsa_pages_list; // N allocators
+
+        u32                  m_fsa_page_size; // 64 KB
         xfsastrat::xlist_t   m_fsa_freepages_list;
         xfsastrat::xpages_t* m_fsa_pages;
     };
 
-	static void populate_size2index(u8* array, s32& array_index, u8& allocator_index, u32& size, s32 count)
-	{
+    static void populate_size2index(u8* array, s32& array_index, u8& allocator_index, u32& size, s32 count)
+    {
         for (s32 te = 0; te < count; ++te)
         {
-			array[array_index++] = allocator_index;
-			size += 8;
-		}
-	}
+            array[array_index++] = allocator_index;
+            size += 8;
+        }
+    }
 
-	struct size_range_t
-	{
-		u32 m_size_min;
-		u32 m_size_max;
-		u32 m_size_step;
-	};
+    struct size_range_t
+    {
+        u32 m_size_min;
+        u32 m_size_max;
+        u32 m_size_step;
+    };
 
     xalloc* create_alloc_fsa(xalloc* main_heap, xvmem* vmem)
     {
         xfsa_allocator* fsa = main_heap->construct<xfsa_allocator>();
-        fsa->m_main_heap = main_heap;
+        fsa->m_main_heap    = main_heap;
 
-		size_range_t size_ranges[] = {
-			{    0,   64,  8},
-			{   64,  512,  16},
-			{  512, 1024,  64},
-			{ 1024, 2048, 128},
-			{ 2048, 4096, 256},
-		};
-		u32 const size_range_count = sizeof(size_ranges) / sizeof(size_range_t);
-		u32 const min_step = 8;
-		u32 const min_size = size_ranges[0].m_size_min;
-		u32 const max_size = size_ranges[size_range_count - 1].m_size_max;
-		u32 const num_sizes = max_size / min_step;
+        size_range_t size_ranges[] = {
+            {0, 64, 8}, {64, 512, 16}, {512, 1024, 64}, {1024, 2048, 128}, {2048, 4096, 256},
+        };
+        u32 const size_range_count = sizeof(size_ranges) / sizeof(size_range_t);
+        u32 const min_step         = 8;
+        u32 const min_size         = size_ranges[0].m_size_min;
+        u32 const max_size         = size_ranges[size_range_count - 1].m_size_max;
+        u32 const num_sizes        = max_size / min_step;
 
-		fsa->m_fvsa_size_to_index = (u8*)main_heap->allocate(sizeof(u8) * num_sizes);
+        fsa->m_fvsa_size_to_index = (u8*)main_heap->allocate(sizeof(u8) * num_sizes);
 
-		u32 num_allocators = 0;
-		for (u32 c = 0; c < size_range_count; ++c)
-		{
-			size_range_t& r = size_ranges[c];
-			num_allocators += (r.m_size_max - r.m_size_min) / r.m_size_step;
-		}
-
-		fsa->m_fvsa_index_to_size = (u16*)main_heap->allocate(sizeof(u16) * num_allocators);
-
-		s32 array_index = 0;
-		u8 allocator_index = 0;
-		for (u32 size = min_size; size <= max_size;)
+        u32 num_allocators = 0;
+        for (u32 c = 0; c < size_range_count; ++c)
         {
-			for (u32 c = 0; c < size_range_count; ++c)
-			{
-				size_range_t& r = size_ranges[c];
-				if (size > r.m_size_min && size <= r.m_size_max)
-				{
-					populate_size2index(fsa->m_fvsa_size_to_index, array_index, allocator_index, size, r.m_size_step / min_step);
-					ASSERT(allocator_index < num_allocators);
-					fsa->m_fvsa_index_to_size[allocator_index] = size - min_step;
-					allocator_index += 1;
-					break;
-				}
-			}
+            size_range_t& r = size_ranges[c];
+            num_allocators += (r.m_size_max - r.m_size_min) / r.m_size_step;
         }
-		ASSERT(allocator_index == num_allocators);
+
+        fsa->m_fvsa_index_to_size = (u16*)main_heap->allocate(sizeof(u16) * num_allocators);
+
+        s32 array_index     = 0;
+        u8  allocator_index = 0;
+        for (u32 size = min_size; size <= max_size;)
+        {
+            for (u32 c = 0; c < size_range_count; ++c)
+            {
+                size_range_t& r = size_ranges[c];
+                if (size > r.m_size_min && size <= r.m_size_max)
+                {
+                    populate_size2index(fsa->m_fvsa_size_to_index, array_index, allocator_index, size, r.m_size_step / min_step);
+                    ASSERT(allocator_index < num_allocators);
+                    fsa->m_fvsa_index_to_size[allocator_index] = size - min_step;
+                    allocator_index += 1;
+                    break;
+                }
+            }
+        }
+        ASSERT(allocator_index == num_allocators);
 
         fsa->m_fvsa_mem_range    = (u64)512 * 1024 * 1024;
         fsa->m_fvsa_mem_base     = nullptr;
@@ -689,7 +688,7 @@ namespace xcore
         fsa->m_fvsa_pages_list_size = num_allocators;
         fsa->m_fvsa_pages_list      = (xfsastrat::xlist_t*)fsa->m_main_heap->allocate(sizeof(xfsastrat::xlist_t) * fsa->m_fvsa_pages_list_size, sizeof(void*));
 
-		return fsa;
+        return fsa;
     }
 
 }; // namespace xcore

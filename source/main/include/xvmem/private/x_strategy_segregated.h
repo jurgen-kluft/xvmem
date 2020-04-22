@@ -8,7 +8,6 @@
 namespace xcore
 {
     class xalloc;
-    class xfsadexed;
 
     xalloc* create_alloc_segregated(xalloc* main_alloc, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align);
 

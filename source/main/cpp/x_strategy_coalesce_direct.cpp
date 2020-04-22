@@ -99,13 +99,15 @@ namespace xcore
             u32* m_nodes;
         };
 
-        struct xinstance_t
+        class xalloc_coalesce_direct : public xalloc
         {
+		public:
 			enum { ADDR_OFFSET = 1024 };
 
             // Main API
-            void* allocate(u32 size, u32 alignment);
-            u32   deallocate(void* p);
+            virtual void* v_allocate(u32 size, u32 alignment);
+            virtual u32   v_deallocate(void* p);
+			virtual void  v_release();
 
             inline void dealloc_node(u32 inode, node_t* pnode)
             {
@@ -131,6 +133,7 @@ namespace xcore
             XCORE_CLASS_PLACEMENT_NEW_DELETE
 
             // Global variables
+			xalloc*    m_main_heap;
             xfsadexed* m_node_heap;
 
             // Local variables
@@ -140,7 +143,7 @@ namespace xcore
             xaddr_db  m_addr_db;
         };
 
-        void* xinstance_t::allocate(u32 size, u32 alignment)
+        void* xalloc_coalesce_direct::v_allocate(u32 size, u32 alignment)
         {
             size = m_size_cfg.align_size(size);
 
@@ -171,7 +174,7 @@ namespace xcore
             return (void*)((uptr)pnode->get_addr() - ADDR_OFFSET);
         }
 
-        u32 xinstance_t::deallocate(void* p)
+        u32 xalloc_coalesce_direct::v_deallocate(void* p)
         {
             u32 const addr       = (u32)(uptr)p + ADDR_OFFSET;
             u32 const addr_index = (addr / m_addr_db.m_addr_range);
@@ -199,8 +202,9 @@ namespace xcore
             }
         }
 
-        static void initialize(xinstance_t* instance, xalloc* main_heap, xfsadexed* node_heap, u32 size_min, u32 size_max, u32 size_step, u64 memory_range, u32 addr_count)
+        static void initialize(xalloc_coalesce_direct* instance, xalloc* main_heap, xfsadexed* node_heap, u32 size_min, u32 size_max, u32 size_step, u64 memory_range, u32 addr_count)
         {
+			instance->m_main_heap = main_heap;
             instance->m_node_heap = node_heap;
 			instance->m_allocation_count = 0;
 
@@ -229,11 +233,11 @@ namespace xcore
             main_node->init();
             head_node->set_used();
             head_node->set_addr(0);
-            head_node->set_size(xinstance_t::ADDR_OFFSET, 0);
+            head_node->set_size(xalloc_coalesce_direct::ADDR_OFFSET, 0);
             tail_node->set_used();
-            tail_node->set_addr(memory_range + xinstance_t::ADDR_OFFSET);
-            tail_node->set_size(xinstance_t::ADDR_OFFSET, 0);
-            main_node->set_addr(xinstance_t::ADDR_OFFSET);
+            tail_node->set_addr(memory_range + xalloc_coalesce_direct::ADDR_OFFSET);
+            tail_node->set_size(xalloc_coalesce_direct::ADDR_OFFSET, 0);
+            main_node->set_addr(xalloc_coalesce_direct::ADDR_OFFSET);
             main_node->set_size(memory_range, size_index_count - 1);
 
             // head <-> main <-> tail
@@ -246,37 +250,20 @@ namespace xcore
             instance->m_addr_db.m_nodes[0] = head_inode;
         }
 
-        xinstance_t* create_4KB_64KB_256B_32MB(xalloc* main_heap, xfsadexed* node_heap) 
-		{ 
-            xinstance_t* instance = (xinstance_t*)main_heap->allocate(sizeof(xinstance_t));
-			initialize(instance, main_heap, node_heap, 4 * 1024, 64 * 1024, 256, (u64)32 * 1024 * 1024, 256); 
-			return instance;
-		}
-
-        xinstance_t* create_64KB_512KB_2KB_64MB(xalloc* main_heap, xfsadexed* node_heap) 
-		{
-            xinstance_t* instance = (xinstance_t*)main_heap->allocate(sizeof(xinstance_t));
-			initialize(instance, main_heap, node_heap, 64 * 1024, 512 * 1024, 2 * 1024, (u64)64 * 1024 * 1024, 256); 
-			return instance;
-		}
-
-        void destroy(xinstance_t* instance, xalloc* main_heap)
+        void xalloc_coalesce_direct::v_release()
         {
-            u32     inode = instance->m_addr_db.m_nodes[0]; // Should be 'head' node
-            node_t* pnode = instance->idx2node(inode);
+            u32     inode = m_addr_db.m_nodes[0]; // Should be 'head' node
+            node_t* pnode = idx2node(inode);
             while (pnode != nullptr)
             {
                 u32 const inext = pnode->m_next_addr;
-                instance->dealloc_node(inode, pnode);
+                dealloc_node(inode, pnode);
                 inode = inext;
-                pnode = instance->idx2node(inode);
+                pnode = idx2node(inode);
             }
 
-            main_heap->deallocate(instance->m_addr_db.m_nodes);
+            m_main_heap->deallocate(m_addr_db.m_nodes);
         }
-
-        void* allocate(xinstance_t* instance, u32 size, u32 alignment) { return instance->allocate(size, alignment); }
-        u32   deallocate(xinstance_t* instance, void* ptr) { return instance->deallocate(ptr); }
 
         void xaddr_db::reset()
         {
@@ -525,58 +512,16 @@ namespace xcore
 
     using namespace xcoalescestrat_direct;
 
-    class xvmem_allocator_coalesce_direct : public xalloc
-    {
-    public:
-        xvmem_allocator_coalesce_direct()
-            : m_internal_heap(nullptr)
-            , m_node_alloc(nullptr)
-        {
-        }
+	xalloc* create_alloc_coalesce_direct(xalloc* main_heap, xfsadexed* node_heap, void* mem_base, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step)
+	{
+		xalloc_coalesce_direct* allocator = main_heap->construct<xalloc_coalesce_direct>();
 
-        virtual void* v_allocate(u32 size, u32 alignment);
-        virtual void  v_deallocate(void* p);
-        virtual void  v_release();
+		u32 const addr_cnt = mem_range / 4096;
+		u32 const num_sizes = (alloc_size_max - alloc_size_min) / alloc_size_step;
+		ASSERT(num_sizes < 255);
 
-        XCORE_CLASS_PLACEMENT_NEW_DELETE
-
-        xalloc*      m_internal_heap;
-        xfsadexed*   m_node_alloc; // For allocating node_t and nsize_t nodes
-        xvmem*       m_vmem;
-        xinstance_t  m_coalescee;
-    };
-
-    void* xvmem_allocator_coalesce_direct::v_allocate(u32 size, u32 alignment)
-    {
-        void* ptr = xcoalescestrat_direct::allocate(&m_coalescee, size, alignment);
-
-        return ptr;
-    }
-
-    void xvmem_allocator_coalesce_direct::v_deallocate(void* p) { xcoalescestrat_direct::deallocate(&m_coalescee, p); }
-
-    void xvmem_allocator_coalesce_direct::v_release()
-    {
-        xcoalescestrat_direct::destroy(&m_coalescee, m_internal_heap);
-
-        m_internal_heap->destruct<>(this);
-    }
-
-    xalloc* gCreateVMemCoalesceDirectAllocator(xalloc* internal_heap, xfsadexed* node_alloc, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_step)
-    {
-        xvmem_allocator_coalesce_direct* allocator = internal_heap->construct<xvmem_allocator_coalesce_direct>();
-        allocator->m_internal_heap                 = internal_heap;
-        allocator->m_node_alloc                    = node_alloc;
-        allocator->m_vmem                          = vmem;
-
-        void* memory_addr = nullptr;
-        u32   page_size;
-        u32   attr = 0;
-        vmem->reserve(mem_size, page_size, attr, memory_addr);
-
-        initialize(&allocator->m_coalescee, internal_heap, node_alloc, alloc_size_min, alloc_size_min + (224 * alloc_size_step), alloc_size_step, mem_size, 256);
-
-        return allocator;
-    }
+		initialize(allocator, main_heap, node_heap, alloc_size_min, alloc_size_max, alloc_size_step, mem_range, addr_cnt);
+		return allocator;
+	}
 
 }; // namespace xcore
