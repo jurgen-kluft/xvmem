@@ -42,31 +42,27 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Can cache a certain amount of free pages [+]
 - Difficult to detect memory corruption [-]
 
-## Coalesce Allocator Direct 1 (32 MB)
-
-Using xsize_db_s256_a256
+## Coalesce Allocator Direct 1 (512 MB)
 
 - Can use more than one instance
 - Size range: 4 KB < Size < 64 KB
   - Size alignment: 256
   - Size-DB: 256 entries
-- A memory range of 256 MB
-  - Addr-DB: 2048 entries
-  - 256 MB / 2048 = 128 KB per address node
+- A memory range of 512 MB
+  - Addr-DB: 4096 entries
+  - 512 MB / 4096 = 128 KB per address node
 - Best-Fit strategy
 - Suitable for GPU memory
 
-## Coalesce Allocator Direct 2 (256 MB)
-
-Using xsize_db_s128_a256
+## Coalesce Allocator Direct 2 (512 MB)
 
 - Can use more than one instance
 - Size range: 64 KB < Size < 512 KB
 - Size alignment: 4096
 - Size-DB: 128 entries
-- A memory range of 256 MB
-  - Addr-DB: 256 entries
-  - 256 MB / 256 = 1 MB per address node
+- A memory range of 512 MB
+  - Addr-DB: 512 entries
+  - 512 MB / 512 = 1 MB per address node
 - Best-Fit strategy
 - Suitable for GPU memory
 
