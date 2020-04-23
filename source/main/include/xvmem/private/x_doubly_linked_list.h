@@ -28,6 +28,7 @@ namespace xcore
             u16  m_prev, m_next;
         };
 
+		bool    is_empty() const { return m_count == 0; }
         void    insert(node_t* list, u16 item); // Inserts 'item' at the head
 		void    insert_tail(node_t* list, u16 item); // Inserts 'item' at the tail end
         void    remove_item(node_t* list, u16 item);
