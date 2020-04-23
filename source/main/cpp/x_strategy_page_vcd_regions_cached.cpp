@@ -5,6 +5,7 @@
 #include "xbase/x_integer.h"
 
 #include "xvmem/private/x_strategy_page_vcd_regions.h"
+#include "xvmem/private/x_doubly_linked_list.h"
 #include "xvmem/x_virtual_memory.h"
 
 namespace xcore
@@ -16,30 +17,63 @@ namespace xcore
     class xalloc_page_vcd_regions : public xalloc
     {
     public:
+        xalloc_page_vcd_regions();
+
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
         virtual u32   v_deallocate(void* ptr) X_FINAL;
         virtual void  v_release();
 
-        void commit_region(void* reg_base, u32 num_regions) { m_vmem->commit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); }
-        void decommit_region(void* reg_base, u32 num_regions) { m_vmem->decommit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); }
+        void commit_region(void* reg_base, u32 num_regions) 
+		{
+			// Check to see if this region is still committed
+			// If not then commit the virtual memory
+
+			m_vmem->commit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); 
+		}
+
+        void decommit_region(void* reg_base, u32 num_regions) 
+		{
+			// Check to see if we can add it to the cache
+			// If the cache is holding too many regions then decommit the oldest
+			// Add this region to the cache
+
+			m_vmem->decommit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); 
+		}
 
         struct region_t
         {
             u16 m_counter;
         };
 
-        xalloc*   m_main_heap;   // Internal allocator to allocate ourselves and bookkeeping data from
-        xalloc*   m_allocator;   // The allocator that does the allocations/deallocations
-        xvmem*    m_vmem;        // Virtual memory interface
-        u32       m_page_size;   //
-        void*     m_mem_base;    // Memory base pointer
-        u64       m_mem_range;   // Memory range
-        u64       m_reg_range;   // Memory range of a region
-        u32       m_num_regions; //
-        region_t* m_regions;     // The array of regions
+        xalloc*                m_main_heap;     // Internal allocator to allocate ourselves and bookkeeping data from
+        xalloc*                m_allocator;     // The allocator that does the allocations/deallocations
+        xvmem*                 m_vmem;          // Virtual memory interface
+        u32                    m_page_size;     //
+        void*                  m_mem_base;      // Memory base pointer
+        u64                    m_mem_range;     // Memory range
+        u64                    m_reg_range;     // Memory range of a region
+        u32                    m_num_regions;   //
+        region_t*              m_regions;       // The array of regions
+        xarray_list_t          m_regions_cache; // We do not immediatly decommit a region, we add it to this list
+        xarray_list_t::node_t* m_regions_list;  // Every region has a list node
     };
 
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
+
+    xalloc_page_vcd_regions::xalloc_page_vcd_regions()
+        : m_main_heap(nullptr)
+        , m_allocator(nullptr)
+        , m_vmem(nullptr)
+        , m_page_size(0)
+        , m_mem_base(nullptr)
+        , m_mem_range(0)
+        , m_reg_range(0)
+        , m_num_regions(0)
+        , m_regions(nullptr)
+        , m_regions_cache()
+        , m_regions_list(nullptr)
+    {
+    }
 
     void* xalloc_page_vcd_regions::v_allocate(u32 size, u32 alignment)
     {
@@ -140,20 +174,26 @@ namespace xcore
         m_main_heap->deallocate(this);
     }
 
-    xalloc* create_page_vcd_regions(xalloc* main_heap, xalloc* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size)
+    xalloc* create_page_vcd_regions_cached(xalloc* main_heap, xalloc* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size, u32 num_regions_to_cache)
     {
         xalloc_page_vcd_regions* proxy = main_heap->construct<xalloc_page_vcd_regions>();
 
-        proxy->m_main_heap   = main_heap;
-        proxy->m_allocator   = allocator;
-        proxy->m_vmem        = vmem;
-        proxy->m_page_size   = page_size;
-        proxy->m_mem_base    = address_base;
-        proxy->m_mem_range   = address_range;
-        proxy->m_reg_range   = region_size;
-        proxy->m_num_regions = address_range / region_size;
-        proxy->m_regions     = (xalloc_page_vcd_regions::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions::region_t) * proxy->m_num_regions);
+        proxy->m_main_heap    = main_heap;
+        proxy->m_allocator    = allocator;
+        proxy->m_vmem         = vmem;
+        proxy->m_page_size    = page_size;
+        proxy->m_mem_base     = address_base;
+        proxy->m_mem_range    = address_range;
+        proxy->m_reg_range    = region_size;
+        proxy->m_num_regions  = address_range / region_size;
+        proxy->m_regions      = (xalloc_page_vcd_regions::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions::region_t) * proxy->m_num_regions);
+        proxy->m_regions_list = (xarray_list_t::node_t*)main_heap->allocate(sizeof(xarray_list_t::node_t) * proxy->m_num_regions);
 
+        for (u32 i = 0; i < proxy->m_num_regions; ++i)
+        {
+            proxy->m_regions[i].m_counter = 0;
+            proxy->m_regions_list[i].link(xarray_list_t::NIL, xarray_list_t::NIL);
+        }
         return proxy;
     }
 

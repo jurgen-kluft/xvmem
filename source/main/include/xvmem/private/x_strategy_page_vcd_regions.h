@@ -8,8 +8,7 @@
 namespace xcore
 {
     class xalloc;
-    class xfsadexed;
-	class xvmem;
+    class xvmem;
 
     // Memory range (address_range) is divided into regions (region_size)
     // When we detect that a region is used we 'commit' the pages in that region
@@ -17,9 +16,9 @@ namespace xcore
     // |----X----X----X----X----X----X----X----X----X----X----X----X----|
     //
     // Every region has a counter and when during allocation we detect an intersection we
-	// increment. During deallocation we decrement the counter.
-	// When the counter changes from '0' to '1' we commit the region.
-	// When the counter changes from '1' to '0' we decommit the region.
+    // increment. During deallocation we decrement the counter.
+    // When the counter changes from '0' to '1' we commit the region.
+    // When the counter changes from '1' to '0' we decommit the region.
 
     xalloc* create_page_vcd_regions(xalloc* main_heap, xalloc* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size);
 

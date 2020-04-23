@@ -12,14 +12,14 @@ namespace xcore
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment);
-        virtual void  v_deallocate(void* p);
+        virtual u32   v_deallocate(void* p);
         virtual void  v_release();
 
         void initialize(xalloc* main_alloc, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 pagesize);
 
 		XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xsegregatedstrat::xinstance_t* m_segregated;
+        xalloc* m_segregated;
     };
 
     void xvmem_allocator_segregated::initialize(xalloc* main_alloc, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align)
@@ -33,7 +33,7 @@ namespace xcore
         return ptr;
     }
 
-    void xvmem_allocator_segregated::v_deallocate(void* ptr) { xsegregatedstrat::deallocate(m_segregated, ptr); }
+    u32  xvmem_allocator_segregated::v_deallocate(void* ptr) { xsegregatedstrat::deallocate(m_segregated, ptr); }
     void xvmem_allocator_segregated::v_release() { xsegregatedstrat::destroy(m_segregated); }
 
     xalloc* gCreateVMemSegregatedAllocator(xalloc* internal_heap, xvmem* vmem, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max)
