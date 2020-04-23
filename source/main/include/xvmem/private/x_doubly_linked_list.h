@@ -13,7 +13,7 @@ namespace xcore
 
         xarray_list_t()
             : m_count(0)
-            , m_list(NIL)
+            , m_head(NIL)
         {
         }
 
@@ -28,12 +28,15 @@ namespace xcore
             u16  m_prev, m_next;
         };
 
-        void    insert(node_t* list, u16& head, u16 item);
-        void    remove(node_t* list, u16& head, u16 item);
+        void    insert(node_t* list, u16 item); // Inserts 'item' at the head
+		void    insert_tail(node_t* list, u16 item); // Inserts 'item' at the tail end
+        void    remove_item(node_t* list, u16 item);
+        node_t* remove_head(node_t* list);
+		node_t* remove_tail(node_t* list);
         node_t* idx2node(node_t* list, u16 i);
         u16     node2idx(node_t* list, node_t* n);
         u16     m_count;
-        u16     m_list;
+        u16     m_head;
     };
 
 } // namespace xcore

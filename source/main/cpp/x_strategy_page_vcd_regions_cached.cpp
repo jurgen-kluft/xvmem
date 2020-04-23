@@ -14,6 +14,8 @@ namespace xcore
     //    This allocator is a proxy and keeps track of regions of memory to
     //    be able to decommit pages back to the system.
 
+    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
+
     class xalloc_page_vcd_regions : public xalloc
     {
     public:
@@ -23,21 +25,81 @@ namespace xcore
         virtual u32   v_deallocate(void* ptr) X_FINAL;
         virtual void  v_release();
 
-        void commit_region(void* reg_base, u32 num_regions) 
+        void commit_region(void* reg_base, u32 region_index, u32 num_regions) 
 		{
-			// Check to see if this region is still committed
-			// If not then commit the virtual memory
-
-			m_vmem->commit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); 
+			bool const region_1st_is_cached = m_regions_list[region_index].is_linked(region_index);
+			if (num_regions == 1)
+			{
+				if (!region_1st_is_cached)
+				{
+					m_vmem->commit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); 
+				}
+				else
+				{
+					m_regions_cache.remove_item(m_regions_list, region_index);
+				}
+			}
+			else
+			{
+				ASSERT(num_regions == 2);
+				bool const region_2nd_is_cached = m_regions_list[region_index + 1].is_linked(region_index + 1);
+				if (region_1st_is_cached && region_2nd_is_cached)
+				{
+					m_regions_cache.remove_item(m_regions_list, region_index);
+					m_regions_cache.remove_item(m_regions_list, region_index + 1);
+				}
+				else if (region_1st_is_cached && !region_2nd_is_cached)
+				{
+					m_regions_cache.remove_item(m_regions_list, region_index);
+					m_vmem->commit(advance_ptr(reg_base, m_reg_range), m_page_size, m_reg_range / m_page_size); 
+				}
+				else if (!region_1st_is_cached && region_2nd_is_cached)
+				{
+					m_vmem->commit(reg_base, m_page_size, m_reg_range / m_page_size); 
+					m_regions_cache.remove_item(m_regions_list, region_index + 1);
+				}
+			}
 		}
 
-        void decommit_region(void* reg_base, u32 num_regions) 
+        void decommit_region(void* reg_base, u32 region_index, u32 num_regions) 
 		{
 			// Check to see if we can add it to the cache
 			// If the cache is holding too many regions then decommit the oldest
 			// Add this region to the cache
+			if (num_regions == 1)
+			{
+				m_regions_cache.insert_tail(m_regions_list, region_index);
 
-			m_vmem->decommit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); 
+				// Is cache is maxed out?  ->  decommit the oldest
+				if (m_regions_cache.m_count == m_max_regions_cached)
+				{
+					xarray_list_t::node_t* pregion = m_regions_cache.remove_head(m_regions_list);
+					u16 const iregion = m_regions_cache.node2idx(m_regions_list, pregion);
+					void* reg_base = advance_ptr(m_mem_base, iregion * m_reg_range);
+					m_vmem->decommit(reg_base, m_page_size, m_reg_range / m_page_size);	
+				}
+			}
+			else
+			{
+				ASSERT(num_regions == 2);
+
+				// Possible optimization: remove head twice and see if those regions are connected and
+				// decommit 2 * reg_range.
+
+				for (u32 i=0; i<num_regions; ++i)
+				{
+					m_regions_cache.insert_tail(m_regions_list, region_index + i);
+
+					// Is cache is maxed out?  ->  decommit the oldest
+					if (m_regions_cache.m_count == m_max_regions_cached)
+					{
+						xarray_list_t::node_t* pregion = m_regions_cache.remove_head(m_regions_list);
+						u16 const iregion = m_regions_cache.node2idx(m_regions_list, pregion);
+						void* reg_base = advance_ptr(m_mem_base, iregion * m_reg_range);
+						m_vmem->decommit(reg_base, m_page_size, m_reg_range / m_page_size);	
+					}
+				}
+			}
 		}
 
         struct region_t
@@ -52,13 +114,12 @@ namespace xcore
         void*                  m_mem_base;      // Memory base pointer
         u64                    m_mem_range;     // Memory range
         u64                    m_reg_range;     // Memory range of a region
-        u32                    m_num_regions;   //
+        u32                    m_num_regions;   // Number of regions
+		u32 m_max_regions_cached; // Number of regions to cache (maximum)
         region_t*              m_regions;       // The array of regions
         xarray_list_t          m_regions_cache; // We do not immediatly decommit a region, we add it to this list
         xarray_list_t::node_t* m_regions_list;  // Every region has a list node
     };
-
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
 
     xalloc_page_vcd_regions::xalloc_page_vcd_regions()
         : m_main_heap(nullptr)
@@ -94,7 +155,7 @@ namespace xcore
             if (region_ref_L == 0)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
-                commit_region(region_mem_base, 1);
+                commit_region(region_mem_base, region_index_L, 1);
             }
         }
         else
@@ -105,18 +166,18 @@ namespace xcore
             if (region_ref_L == 0 && region_ref_R != 0)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
-                commit_region(region_mem_base, 1);
+                commit_region(region_mem_base, region_index_L, 1);
             }
             else if (region_ref_L == 0 && region_ref_R == 0)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
-                commit_region(region_mem_base, 2);
+                commit_region(region_mem_base, region_index_L, 2);
             }
             else if (region_ref_L != 0 && region_ref_R == 0)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_R * m_reg_range);
                 u32 const   num_regions     = 1;
-                commit_region(region_mem_base, 1);
+                commit_region(region_mem_base, region_index_R, 1);
             }
         }
         return ptr;
@@ -140,7 +201,7 @@ namespace xcore
             if (region_ref_L == 1)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
-                decommit_region(region_mem_base, 1);
+                decommit_region(region_mem_base, region_index_L, 1);
             }
         }
         else
@@ -151,17 +212,17 @@ namespace xcore
             if (region_ref_L == 1 && region_ref_R > 1)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
-                decommit_region(region_mem_base, 1);
+                decommit_region(region_mem_base, region_index_L, 1);
             }
             else if (region_ref_L == 1 && region_ref_R == 1)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
-                decommit_region(region_mem_base, 2);
+                decommit_region(region_mem_base, region_index_L, 2);
             }
             else if (region_ref_L > 1 && region_ref_R == 1)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_R * m_reg_range);
-                decommit_region(region_mem_base, 1);
+                decommit_region(region_mem_base, region_index_R, 1);
             }
         }
 

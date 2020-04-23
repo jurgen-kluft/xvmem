@@ -7,55 +7,131 @@
 
 namespace xcore
 {
-    void xarray_list_t::insert(node_t* list, u16& head, u16 item)
+    void xarray_list_t::insert(node_t* list, u16 item)
     {
-        node_t* const phead = idx2node(list, head);
         node_t* const pitem = idx2node(list, item);
-        if (phead == nullptr)
+        if (m_head == NIL)
         {
             pitem->link(item, item);
         }
         else
         {
-            pitem->link(phead->m_prev, head);
-            phead->m_prev = item;
+            u16 const     inext = m_head;
+            node_t* const pnext = idx2node(list, inext);
+            u16 const     iprev = pnext->m_prev;
+            node_t* const pprev = idx2node(list, iprev);
+            pitem->link(iprev, inext);
+            pnext->m_prev = item;
+            pprev->m_next = item;
         }
-        head = item;
+        m_head = item;
+        m_count += 1;
     }
 
-    void xarray_list_t::remove(node_t* list, u16& head, u16 item)
+    void xarray_list_t::insert_tail(node_t* list, u16 item)
     {
-        node_t* const phead = idx2node(list, head);
+        node_t* const pitem = idx2node(list, item);
+        if (m_head == NIL)
+        {
+            pitem->link(item, item);
+            m_head = item;
+        }
+        else
+        {
+            u16 const     inext = m_head;
+            node_t* const pnext = idx2node(list, inext);
+            u16 const     iprev = pnext->m_prev;
+            node_t* const pprev = idx2node(list, iprev);
+            pitem->link(iprev, inext);
+            pnext->m_prev = item;
+            pprev->m_next = item;
+        }
+        m_count += 1;
+    }
+
+    void xarray_list_t::remove_item(node_t* list, u16 item)
+    {
+        node_t* const phead = idx2node(list, m_head);
         node_t* const pitem = idx2node(list, item);
         node_t* const pprev = idx2node(list, pitem->m_prev);
         node_t* const pnext = idx2node(list, pitem->m_next);
-        pprev->m_next                   = pitem->m_next;
-        pnext->m_prev                   = pitem->m_prev;
+        pprev->m_next       = pitem->m_next;
+        pnext->m_prev       = pitem->m_prev;
         pitem->link(item, item);
-
-        if (head == item)
+        if (m_head == item)
         {
-            head = node2idx(list, pnext);
-            if (head == item)
+            m_head = node2idx(list, pnext);
+            if (m_head == item)
             {
-                head = NIL;
+                m_head = NIL;
             }
         }
+        m_count -= 1;
     }
 
-	xarray_list_t::node_t* xarray_list_t::idx2node(node_t* list, u16 i)
+	xarray_list_t::node_t* xarray_list_t::remove_head(node_t* list)
 	{
+		if (m_head == NIL)
+		{
+			return nullptr;
+		}
+		u16 const iitem = m_head;
+        node_t* const pitem = idx2node(list, iitem);
+		u16 const inext = pitem->m_next;
+        node_t* const pnext = idx2node(list, inext);
+		u16 const iprev = pitem->m_prev;
+		node_t* const pprev = idx2node(list, iprev);
+		pprev->m_next = inext;
+		pnext->m_prev = iprev;
+		pitem->link(NIL, NIL);
+		if (m_count == 1)
+		{
+			m_head = NIL;
+		}
+		else
+		{
+			m_head = inext;
+		}
+		m_count -= 1;
+		return pitem;
+	}
+
+	xarray_list_t::node_t* xarray_list_t::remove_tail(node_t* list)
+	{
+		if (m_head == NIL)
+		{
+			return nullptr;
+		}
+		u16 const inext = m_head;
+        node_t* const pnext = idx2node(list, inext);
+		u16 const iitem = pnext->m_prev;
+        node_t* const pitem = idx2node(list, iitem);
+		u16 const iprev = pitem->m_prev;
+		node_t* const pprev = idx2node(list, iprev);
+		pprev->m_next = inext;
+		pnext->m_prev = iprev;
+		pitem->link(NIL, NIL);
+		if (m_count == 1)
+		{
+			m_head = NIL;
+		}
+		m_count -= 1;
+		return pitem;
+	}
+
+    xarray_list_t::node_t* xarray_list_t::idx2node(node_t* list, u16 i)
+    {
         if (i == NIL)
             return nullptr;
         return &list[i];
-	}
-		
-	u16     xarray_list_t::node2idx(node_t* list, node_t* node)
-	{
+    }
+
+    u16 xarray_list_t::node2idx(node_t* list, node_t* node)
+    {
         if (node == nullptr)
             return NIL;
         u16 const index = (u16)(((u64)node - (u64)&list[0]) / sizeof(node_t));
         return index;
-	}
+    }
 
 } // namespace xcore
