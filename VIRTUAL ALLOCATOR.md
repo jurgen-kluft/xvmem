@@ -66,10 +66,6 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Best-Fit strategy
 - Suitable for GPU memory
 
-## Coalesce Allocator, Release/Commit Pages
-
-Releasing pages back to free memory
-
 ## Segregated Allocator [WIP]
 
 - Segregated:
