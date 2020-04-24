@@ -14,10 +14,22 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
 {
     UNITTEST_FIXTURE(main)
     {
+        static void*      sNodeData = nullptr;
+        static xfsadexed* sNodeHeap = nullptr;
 
-        UNITTEST_FIXTURE_SETUP() {}
+        UNITTEST_FIXTURE_SETUP()
+        {
+            const s32 sizeof_node  = 32;
+            const s32 countof_node = 16384;
+            sNodeData              = gTestAllocator->allocate(sizeof_node * countof_node);
+            sNodeHeap              = gTestAllocator->construct<xfsadexed_array>(sNodeData, sizeof_node, countof_node);
+        }
 
-        UNITTEST_FIXTURE_TEARDOWN() {}
+        UNITTEST_FIXTURE_TEARDOWN()
+        {
+            gTestAllocator->deallocate(sNodeData);
+            gTestAllocator->destruct(sNodeHeap);
+        }
 
         UNITTEST_TEST(create_then_release)
         {
@@ -26,7 +38,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 64 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             fsa->release();
         }
@@ -38,7 +50,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 64 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             void* p1 = fsa->allocate(40 * 1024, sizeof(void*));
             CHECK_NOT_NULL(p1);
@@ -55,7 +67,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 64 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             // The behaviour of the allocator is that it has given us pointers relative to mem_base in an
             // incremental way using 'allocsize'.
@@ -90,7 +102,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 128 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             // The behaviour of the allocator is that it has given us pointers relative to mem_base in an
             // incremental way using 'allocsize'.
@@ -126,7 +138,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 256 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             // The behaviour of the allocator is that it has given us pointers relative to mem_base in an
             // incremental way using 'allocsize'.
@@ -162,7 +174,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 512 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             // The behaviour of the allocator is that it has given us pointers relative to mem_base in an
             // incremental way using 'allocsize'.
@@ -198,7 +210,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 1 * 1024 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             // The behaviour of the allocator is that it has given us pointers relative to mem_base in an
             // incremental way using 'allocsize'.
@@ -234,7 +246,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 8 * 1024 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             // The behaviour of the allocator is that it has given us pointers relative to mem_base in an
             // incremental way using 'allocsize'.
@@ -270,7 +282,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             u32 const pagesize  = 64 * 1024;
             u32 const allocsize = 32 * 1024 * 1024;
 
-            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, mem_base, mem_range, pagesize, allocsize);
+            xalloc* fsa = create_alloc_fsa_large(gTestAllocator, sNodeHeap, mem_base, mem_range, pagesize, allocsize);
 
             // The behaviour of the allocator is that it has given us pointers relative to mem_base in an
             // incremental way using 'allocsize'.

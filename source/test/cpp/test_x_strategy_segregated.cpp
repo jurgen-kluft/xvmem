@@ -40,14 +40,14 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
         UNITTEST_TEST(init)
         {
             void*   mem_base = (void*)0x00ff000000000000ULL;
-            xalloc* a        = create_alloc_segregated(gTestAllocator, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
+            xalloc* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
             a->release();
         }
 
         UNITTEST_TEST(alloc_dealloc)
         {
             void*   mem_base = (void*)0x00ff000000000000ULL;
-            xalloc* a        = create_alloc_segregated(gTestAllocator, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
+            xalloc* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
 
             void* p1 = a->allocate(sMinumSize, 1024);
             a->deallocate(p1);
