@@ -105,14 +105,14 @@ Pros and Cons:
 ## Proxy allocators for 'commit/decommit' of virtual memory
 
 1. Direct   
-   Upon allocation virtual memory is committed
-   Upon deallocation virtual memory is decommitted
+   Upon allocation virtual memory is committed   
+   Upon deallocation virtual memory is decommitted   
 2. Regions   
-   Upon allocation, newly intersecting regions are committed
-   Upon deallocation, intersecting regions that become non-intersected are decommitted
-3. Regions with caching   
-   A region is not directly committed or decommitted but it is first added to a list
-   When the list reaches its maximum the oldest ones are decommitted
+   Upon allocation, newly intersecting regions are committed   
+   Upon deallocation, intersecting regions that become non-intersected are decommitted   
+3. Regions with caching      
+   A region is not directly committed or decommitted but it is first added to a list    
+   When the list reaches its maximum the oldest ones are decommitted   
 
 ## Temporal Allocator [WIP]
 
