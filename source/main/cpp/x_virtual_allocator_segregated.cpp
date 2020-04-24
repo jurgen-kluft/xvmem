@@ -15,38 +15,51 @@ namespace xcore
         virtual u32   v_deallocate(void* p);
         virtual void  v_release();
 
-        void initialize(xalloc* main_alloc, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 pagesize);
+        void initialize(xalloc* main_alloc, xfsa* node_heap, xvmem* vmem, u64 mem_range, u32 allocsize_min, u32 allocsize_max);
 
-		XCORE_CLASS_PLACEMENT_NEW_DELETE
+        XCORE_CLASS_PLACEMENT_NEW_DELETE
 
+        xalloc* m_main_heap;
         xalloc* m_segregated;
+        u32     m_page_size;
+        void*   m_mem_base;
+        u64     m_mem_range;
+        xvmem*  m_vmem;
     };
 
-    void xvmem_allocator_segregated::initialize(xalloc* main_alloc, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align)
+    void xvmem_allocator_segregated::initialize(xalloc* main_heap, xfsa* node_heap, xvmem* vmem, u64 mem_range, u32 allocsize_min, u32 allocsize_max)
     {
-        m_segregated = xsegregatedstrat::create(main_alloc, mem_address, mem_space, allocsize_min, allocsize_max, allocsize_align);
+        m_mem_range = mem_range;
+        m_vmem      = vmem;
+        m_vmem->reserve(m_mem_range, m_page_size, 0, m_mem_base);
+        m_segregated = create_alloc_segregated(main_heap, node_heap, m_mem_base, m_mem_range, allocsize_min, allocsize_max, m_page_size);
     }
 
     void* xvmem_allocator_segregated::v_allocate(u32 size, u32 alignment)
     {
-        void* ptr = xsegregatedstrat::allocate(m_segregated, size, alignment);
+        void* ptr = m_segregated->allocate(size, alignment);
+        // TODO: Commit virtual memory
         return ptr;
     }
 
-    u32  xvmem_allocator_segregated::v_deallocate(void* ptr) { xsegregatedstrat::deallocate(m_segregated, ptr); }
-    void xvmem_allocator_segregated::v_release() { xsegregatedstrat::destroy(m_segregated); }
-
-    xalloc* gCreateVMemSegregatedAllocator(xalloc* internal_heap, xvmem* vmem, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max)
+    u32 xvmem_allocator_segregated::v_deallocate(void* ptr)
     {
-        xvmem_allocator_segregated* allocator = internal_heap->construct<xvmem_allocator_segregated>();
+        u32 alloc_size = m_segregated->deallocate(ptr);
+        // TODO: Decommit virtual memory
+        return alloc_size;
+    }
 
-        u32   page_size = 0;
-        void* mem_addr = nullptr;
-        vmem->reserve(mem_range, page_size, 0, mem_addr);
+    void xvmem_allocator_segregated::v_release()
+    {
+        m_vmem->release(m_mem_base);
+        m_segregated->release();
+        m_main_heap->deallocate(this);
+    }
 
-		u32 const alloc_size_align = page_size;
-		allocator->initialize(internal_heap, mem_addr, mem_range, alloc_size_min, alloc_size_max, alloc_size_align);
-
+    xalloc* gCreateVMemSegregatedAllocator(xalloc* main_heap, xfsa* node_heap, xvmem* vmem, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max)
+    {
+        xvmem_allocator_segregated* allocator = main_heap->construct<xvmem_allocator_segregated>();
+        allocator->initialize(main_heap, node_heap, vmem, mem_range, alloc_size_min, alloc_size_max);
         return allocator;
     }
 

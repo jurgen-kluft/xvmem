@@ -13,88 +13,87 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 {
     UNITTEST_FIXTURE(main)
     {
-		static void* sNodeData = nullptr;
-		static xfsadexed* sNodeHeap = nullptr;
+        static void*      sNodeData = nullptr;
+        static xfsadexed* sNodeHeap = nullptr;
 
         UNITTEST_FIXTURE_SETUP()
-		{
-			const s32 sizeof_node = 16;
-			const s32 countof_node = 16384;
-			sNodeData = gTestAllocator->allocate(sizeof_node * countof_node);
-			sNodeHeap = gTestAllocator->construct<xfsadexed_array>(sNodeData, sizeof_node, countof_node);
-		}
+        {
+            const s32 sizeof_node  = 16;
+            const s32 countof_node = 16384;
+            sNodeData              = gTestAllocator->allocate(sizeof_node * countof_node);
+            sNodeHeap              = gTestAllocator->construct<xfsadexed_array>(sNodeData, sizeof_node, countof_node);
+        }
 
         UNITTEST_FIXTURE_TEARDOWN()
-		{
-			gTestAllocator->deallocate(sNodeData);
-			gTestAllocator->destruct(sNodeHeap);
-		}
+        {
+            gTestAllocator->deallocate(sNodeData);
+            gTestAllocator->destruct(sNodeHeap);
+        }
 
-		UNITTEST_TEST(coalescee_init)
-		{
-			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create_4KB_64KB_256B_32MB(gTestAllocator, sNodeHeap);
-			xcoalescestrat_direct::destroy(c, gTestAllocator);
-		}
+        UNITTEST_TEST(coalescee_init)
+        {
+            xalloc* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256);
+            c->release();
+        }
 
-		UNITTEST_TEST(coalescee_alloc_dealloc_pairs)
-		{
-			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create_4KB_64KB_256B_32MB(gTestAllocator, sNodeHeap);
+        UNITTEST_TEST(coalescee_alloc_dealloc_pairs)
+        {
+            xalloc* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256);
 
-			void* p1 = xcoalescestrat_direct::allocate(c, 10 * 1024, 8);
-			u32 s1 = xcoalescestrat_direct::deallocate(c, p1);
-			CHECK_EQUAL(10 * 1024, s1);
+            void* p1 = c->allocate(10 * 1024, 8);
+            u32   s1 = c->deallocate(p1);
+            CHECK_EQUAL(10 * 1024, s1);
 
-			void* p2 = xcoalescestrat_direct::allocate(c, 12 * 1024, 8);
-			u32 s2 = xcoalescestrat_direct::deallocate(c, p2);
-			CHECK_EQUAL(10 * 1024, s1);
+            void* p2 = c->allocate(12 * 1024, 8);
+            u32   s2 = c->deallocate(p2);
+            CHECK_EQUAL(10 * 1024, s1);
 
-			void* p3 = xcoalescestrat_direct::allocate(c, 14 * 1024, 8);
-			u32 s3 = xcoalescestrat_direct::deallocate(c, p3);
-			CHECK_EQUAL(10 * 1024, s1);
+            void* p3 = c->allocate(14 * 1024, 8);
+            u32   s3 = c->deallocate(p3);
+            CHECK_EQUAL(10 * 1024, s1);
 
-			xcoalescestrat_direct::destroy(c, gTestAllocator);
-		}
+            c->release();
+        }
 
-		UNITTEST_TEST(coalescee_alloc_dealloc_3_times)
-		{
-			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create_4KB_64KB_256B_32MB(gTestAllocator, sNodeHeap);
+        UNITTEST_TEST(coalescee_alloc_dealloc_3_times)
+        {
+            xalloc* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256);
 
-			void* p1 = xcoalescestrat_direct::allocate(c, 8 * 1024, 8);
-			void* p2 = xcoalescestrat_direct::allocate(c, 8 * 1024, 8);
-			void* p3 = xcoalescestrat_direct::allocate(c, 8 * 1024, 8);
+            void* p1 = c->allocate(8 * 1024, 8);
+            void* p2 = c->allocate(8 * 1024, 8);
+            void* p3 = c->allocate(8 * 1024, 8);
 
-			xcoalescestrat_direct::deallocate(c, p1);
-			xcoalescestrat_direct::deallocate(c, p2);
-			xcoalescestrat_direct::deallocate(c, p3);
+            c->deallocate(p1);
+            c->deallocate(p2);
+            c->deallocate(p3);
 
-			xcoalescestrat_direct::destroy(c, gTestAllocator);
-		}
+            c->release();
+        }
 
-		UNITTEST_TEST(coalescee_alloc_dealloc_fixed_size_many)
-		{
-			xcoalescestrat_direct::xinstance_t* c = xcoalescestrat_direct::create_4KB_64KB_256B_32MB(gTestAllocator, sNodeHeap);
+        UNITTEST_TEST(coalescee_alloc_dealloc_fixed_size_many)
+        {
+            xalloc* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256);
 
-			const s32 cnt = 32;
-			void* ptrs[cnt];
-			for (s32 i=0; i<cnt; ++i)
-			{
-				ptrs[i] = xcoalescestrat_direct::allocate(c, 10 * 1024, 8);
-			}
-			s32 i=0;
-			for (; i<(cnt-1); ++i)
-			{
-				u32 const s1 = xcoalescestrat_direct::deallocate(c, ptrs[i]);
-				CHECK_EQUAL(10 * 1024, s1);
-			}
-			for (; i<cnt; ++i)
-			{
-				u32 const s1 = xcoalescestrat_direct::deallocate(c, ptrs[i]);
-				CHECK_EQUAL(10 * 1024, s1);
-			}
+            const s32 cnt = 32;
+            void*     ptrs[cnt];
+            for (s32 i = 0; i < cnt; ++i)
+            {
+                ptrs[i] = c->allocate(10 * 1024, 8);
+            }
+            s32 i = 0;
+            for (; i < (cnt - 1); ++i)
+            {
+                u32 const s1 = c->deallocate(ptrs[i]);
+                CHECK_EQUAL(10 * 1024, s1);
+            }
+            for (; i < cnt; ++i)
+            {
+                u32 const s1 = c->deallocate(ptrs[i]);
+                CHECK_EQUAL(10 * 1024, s1);
+            }
 
-			xcoalescestrat_direct::destroy(c, gTestAllocator);
-		}
-
-	}
+            c->release();
+        }
+    }
 }
 UNITTEST_SUITE_END

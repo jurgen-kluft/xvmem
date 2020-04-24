@@ -31,7 +31,7 @@ namespace xcore
         }
 
         virtual void* v_allocate(u32 size, u32 alignment);
-        virtual void  v_deallocate(void* p);
+        virtual u32   v_deallocate(void* p);
         virtual void  v_release();
 
         xalloc*    m_main_heap;
@@ -39,13 +39,13 @@ namespace xcore
         void*      m_memory_base;
         u64        m_memory_range;
         u32        m_page_size;
-		xlargestrat::xinstance_t* m_allocator;
+		xalloc*    m_allocator;
         XCORE_CLASS_PLACEMENT_NEW_DELETE;
     };
 
     void* xvmem_allocator_large::v_allocate(u32 size, u32 alignment)
     {
-        void* ptr = xlargestrat::allocate(m_allocator, size, alignment);
+        void* ptr = m_allocator->allocate(size, alignment);
 
         // The large allocator:
         // - commits pages on allocation
@@ -57,18 +57,20 @@ namespace xcore
         return ptr;
     }
 
-    void xvmem_allocator_large::v_deallocate(void* p)
+    u32 xvmem_allocator_large::v_deallocate(void* p)
     {
         ASSERT(is_partof_memory_range(m_memory_base, m_memory_range, p));
-        u32 const size = xlargestrat::deallocate(m_allocator, p);
+        u32 const size = m_allocator->deallocate(p);
 
         u32 const page_count = (size + (m_page_size - 1)) / (m_page_size);
         m_vmem->decommit(p, m_page_size, page_count);
+
+		return size;
     }
 
     void xvmem_allocator_large::v_release()
     {
-        xlargestrat::destroy(m_allocator);
+        m_allocator->release();
         m_vmem->release(m_memory_base);
         m_main_heap->deallocate(this);
     }
@@ -86,7 +88,7 @@ namespace xcore
         large_allocator->m_memory_range = mem_range;
         large_allocator->m_page_size    = page_size;
 
-		large_allocator->m_allocator = xlargestrat::create(internal_heap, mem_addr, mem_range, 64);
+		large_allocator->m_allocator = create_alloc_large(internal_heap, mem_addr, mem_range, 64);
 
         return large_allocator;
     }

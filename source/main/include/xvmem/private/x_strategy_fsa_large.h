@@ -8,8 +8,9 @@
 namespace xcore
 {
     class xalloc;
+	class xfsa;
 
-    xalloc* create_alloc_fsa_large(xalloc* main_alloc, void* mem_address, u64 mem_range, u32 pagesize, u32 allocsize);
+    xalloc* create_alloc_fsa_large(xalloc* main_alloc, xfsa* node_alloc, void* mem_address, u64 mem_range, u32 pagesize, u32 allocsize);
 
 } // namespace xcore
 

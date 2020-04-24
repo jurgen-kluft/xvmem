@@ -5,16 +5,18 @@
 #include "xvmem/x_virtual_allocator_small.h"
 #include "xvmem/x_virtual_memory.h"
 #include "xvmem/private/x_strategy_fsa_small.h"
+#include "xvmem/private/x_strategy_fsa_pages.h"
+#include "xvmem/private/x_doubly_linked_list.h"
 
 namespace xcore
 {
     // ----------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------
-    class xvfsa : public xfsa
+    class xfsa_vmem : public xfsa
     {
     public:
-        inline xvfsa(xalloc* main_heap, xfsastrat::xpages_t* pages, u32 allocsize)
+        inline xfsa_vmem(xalloc* main_heap, xpages_t* pages, u32 allocsize)
             : m_main_heap(main_heap)
             , m_pages(pages)
             , m_pages_list()
@@ -41,16 +43,16 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
     protected:
-        xalloc*                    m_main_heap;
-        xfsastrat::xpages_t* const m_pages;
-        xfsastrat::xlist_t         m_pages_list;
-        xfsastrat::xlist_t         m_empty_pages_list;
-        u32 const                  m_alloc_size;
+        xalloc*         m_main_heap;
+        xpages_t* const m_pages;
+        xalist_t        m_pages_list;
+        xalist_t        m_empty_pages_list;
+        u32 const       m_alloc_size;
     };
 
     xfsa* gCreateVMemBasedFsa(xalloc* main_allocator, xfsastrat::xpages_t* vpages, u32 allocsize)
     {
-        xvfsa* fsa = main_allocator->construct<xvfsa>(main_allocator, vpages, allocsize);
+        xfsa_vmem* fsa = main_allocator->construct<xfsa_vmem>(main_allocator, vpages, allocsize);
         return fsa;
     }
 
@@ -60,7 +62,7 @@ namespace xcore
     class xvfsa_dexed : public xfsadexed
     {
     public:
-        inline xvfsa_dexed(xalloc* main_heap, xfsastrat::xpages_t* pages, u32 allocsize)
+        inline xvfsa_dexed(xalloc* main_heap, xpages_t* pages, u32 allocsize)
             : m_main_heap(main_heap)
             , m_pages(pages)
             , m_pages_notfull_list()
@@ -93,11 +95,11 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
     protected:
-        xalloc*                    m_main_heap;
-        xfsastrat::xpages_t* const m_pages;
-        xfsastrat::xlist_t         m_pages_notfull_list;
-        xfsastrat::xlist_t         m_pages_empty_list;
-        u32 const                  m_alloc_size;
+        xalloc*         m_main_heap;
+        xpages_t* const m_pages;
+        xalist_t        m_pages_notfull_list;
+        xalist_t        m_pages_empty_list;
+        u32 const       m_alloc_size;
     };
 
     // Constraints:

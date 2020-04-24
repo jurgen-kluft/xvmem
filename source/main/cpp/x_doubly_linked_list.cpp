@@ -7,7 +7,7 @@
 
 namespace xcore
 {
-    void xarray_list_t::insert(node_t* list, u16 item)
+    void xalist_t::insert(node_t* list, u16 item)
     {
         node_t* const pitem = idx2node(list, item);
         if (m_head == NIL)
@@ -28,7 +28,7 @@ namespace xcore
         m_count += 1;
     }
 
-    void xarray_list_t::insert_tail(node_t* list, u16 item)
+    void xalist_t::insert_tail(node_t* list, u16 item)
     {
         node_t* const pitem = idx2node(list, item);
         if (m_head == NIL)
@@ -49,7 +49,7 @@ namespace xcore
         m_count += 1;
     }
 
-    void xarray_list_t::remove_item(node_t* list, u16 item)
+    void xalist_t::remove_item(node_t* list, u16 item)
     {
         node_t* const phead = idx2node(list, m_head);
         node_t* const pitem = idx2node(list, item);
@@ -69,7 +69,7 @@ namespace xcore
         m_count -= 1;
     }
 
-	xarray_list_t::node_t* xarray_list_t::remove_head(node_t* list)
+	xalist_t::node_t* xalist_t::remove_head(node_t* list)
 	{
 		if (m_head == NIL)
 		{
@@ -96,7 +96,7 @@ namespace xcore
 		return pitem;
 	}
 
-	xarray_list_t::node_t* xarray_list_t::remove_tail(node_t* list)
+	xalist_t::node_t* xalist_t::remove_tail(node_t* list)
 	{
 		if (m_head == NIL)
 		{
@@ -119,14 +119,14 @@ namespace xcore
 		return pitem;
 	}
 
-    xarray_list_t::node_t* xarray_list_t::idx2node(node_t* list, u16 i)
+    xalist_t::node_t* xalist_t::idx2node(node_t* list, u16 i)
     {
         if (i == NIL)
             return nullptr;
         return &list[i];
     }
 
-    u16 xarray_list_t::node2idx(node_t* list, node_t* node)
+    u16 xalist_t::node2idx(node_t* list, node_t* node)
     {
         if (node == nullptr)
             return NIL;

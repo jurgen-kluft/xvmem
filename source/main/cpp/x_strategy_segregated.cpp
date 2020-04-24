@@ -30,7 +30,7 @@ namespace xcore
 
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
 
-    xalloc* create_alloc_segregated(xalloc* main_heap, void* mem_address, u64 mem_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align)
+    xalloc* create_alloc_segregated(xalloc* main_heap, xfsa* node_heap, void* mem_address, u64 mem_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align)
     {
         ASSERT(xispo2(allocsize_min) && xispo2(allocsize_max) && xispo2(allocsize_align));
 
@@ -53,7 +53,7 @@ namespace xcore
         u32       fsa_size      = allocsize_min;
         for (s32 i = 0; i < self->m_alloc_count; ++i)
         {
-            self->m_allocators[i] = create_alloc_fsa_large(main_heap, fsa_mem_base, fsa_mem_range, pagesize, fsa_size);
+            self->m_allocators[i] = create_alloc_fsa_large(main_heap, node_heap, fsa_mem_base, fsa_mem_range, pagesize, fsa_size);
             fsa_mem_base          = advance_ptr(fsa_mem_base, fsa_mem_range);
             fsa_size              = fsa_size << 1;
         }

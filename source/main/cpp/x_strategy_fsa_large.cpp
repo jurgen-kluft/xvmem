@@ -49,53 +49,55 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*                m_allocator;
-        void*                  m_address_base;
-        u64                    m_address_range;
-        u32                    m_allocsize;
-        u32                    m_pagesize;
-        u32                    m_block_count;
-        xblock_t**             m_block_array;
-        xbinfo_t*              m_binfo_array;
-        xarray_list_t::node_t* m_list_array;
-        xarray_list_t          m_block_empty_list;
-        xarray_list_t          m_block_used_list;
-        xarray_list_t          m_block_full_list;
+        xalloc*           m_main_heap;
+        xfsa*             m_node_heap;
+        void*             m_address_base;
+        u64               m_address_range;
+        u32               m_allocsize;
+        u32               m_pagesize;
+        u32               m_block_count;
+        xblock_t**        m_block_array;
+        xbinfo_t*         m_binfo_array;
+        xalist_t::node_t* m_list_array;
+        xalist_t          m_block_empty_list;
+        xalist_t          m_block_used_list;
+        xalist_t          m_block_full_list;
     };
 
-    xalloc* create_alloc_fsa_large(xalloc* allocator, void* mem_base, u64 mem_range, u32 pagesize, u32 allocsize)
+    xalloc* create_alloc_fsa_large(xalloc* main_heap, xfsa* node_heap, void* mem_base, u64 mem_range, u32 pagesize, u32 allocsize)
     {
-        u64 const               block_range = allocsize_to_blockrange(allocsize, pagesize);
-        u32 const               block_count = (u32)(mem_range / block_range);
-        xblock_t**              block_array = (xblock_t**)allocator->allocate(sizeof(xblock_t*) * block_count);
-        xbinfo_t*               binfo_array = (xbinfo_t*)allocator->allocate(sizeof(xbinfo_t) * block_count);
-        xarray_list_t::node_t* list_nodes  = (xarray_list_t::node_t*)allocator->allocate(sizeof(xarray_list_t::node_t) * block_count);
+        ASSERT(sizeof(xblock_t) == node_heap->size());
 
-        xalloc_fsa_large* instance   = allocator->construct<xalloc_fsa_large>();
-        instance->m_allocator        = allocator;
-        instance->m_address_base     = mem_base;
-        instance->m_address_range    = mem_range;
-        instance->m_allocsize        = xceilpo2(allocsize);
-        instance->m_pagesize         = pagesize;
-        instance->m_block_count      = block_count;
-        instance->m_block_array      = block_array;
-        instance->m_binfo_array      = binfo_array;
-        instance->m_list_array       = list_nodes;
-        instance->m_block_used_list  = xarray_list_t();
-        instance->m_block_full_list  = xarray_list_t();
-        instance->m_block_empty_list = xarray_list_t();
-		instance->m_block_empty_list.m_head = 0;
+        u64 const         block_range = allocsize_to_blockrange(allocsize, pagesize);
+        u32 const         block_count = (u32)(mem_range / block_range);
+        xblock_t**        block_array = (xblock_t**)main_heap->allocate(sizeof(xblock_t*) * block_count);
+        xbinfo_t*         binfo_array = (xbinfo_t*)main_heap->allocate(sizeof(xbinfo_t) * block_count);
+        xalist_t::node_t* list_nodes  = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * block_count);
 
-		// Initialize the block list by linking all blocks into the empty list
+        xalloc_fsa_large* instance          = main_heap->construct<xalloc_fsa_large>();
+        instance->m_main_heap               = main_heap;
+        instance->m_node_heap               = node_heap;
+        instance->m_address_base            = mem_base;
+        instance->m_address_range           = mem_range;
+        instance->m_allocsize               = xceilpo2(allocsize);
+        instance->m_pagesize                = pagesize;
+        instance->m_block_count             = block_count;
+        instance->m_block_array             = block_array;
+        instance->m_binfo_array             = binfo_array;
+        instance->m_list_array              = list_nodes;
+        instance->m_block_used_list         = xalist_t();
+        instance->m_block_full_list         = xalist_t();
+        instance->m_block_empty_list        = xalist_t();
+        instance->m_block_empty_list.m_head = 0;
+
+        // Initialize the block list by linking all blocks into the empty list
         for (u32 i = 0; i < block_count; ++i)
         {
-            instance->m_list_array[i].m_next = i + 1;
-            instance->m_list_array[i].m_prev = i - 1;
+            instance->m_list_array[0].link(i - 1, i + 1);
         }
-        instance->m_list_array[0].m_prev     = block_count - 1;
-        instance->m_list_array[block_count - 1].m_next = 0;
+        instance->m_list_array[0].link(block_count - 1, 0);
 
-		// All block pointers are initially NULL
+        // All block pointers are initially NULL
         for (u32 i = 0; i < block_count; ++i)
         {
             instance->m_block_array[i] = nullptr;
@@ -111,14 +113,14 @@ namespace xcore
         {
             if (m_block_array[i] != nullptr)
             {
-                m_allocator->deallocate(m_block_array[i]);
+                m_node_heap->deallocate(m_block_array[i]);
             }
         }
 
-        m_allocator->deallocate(m_block_array);
-        m_allocator->deallocate(m_binfo_array);
-        m_allocator->deallocate(m_list_array);
-        m_allocator->deallocate(this);
+        m_main_heap->deallocate(m_block_array);
+        m_main_heap->deallocate(m_binfo_array);
+        m_main_heap->deallocate(m_list_array);
+        m_main_heap->deallocate(this);
     }
 
     static xblock_t* get_block_at(xalloc_fsa_large* instance, u32 i) { return instance->m_block_array[i]; }
@@ -126,7 +128,8 @@ namespace xcore
 
     static xblock_t* create_block_at(xalloc_fsa_large* instance, u32 block_index)
     {
-        xblock_t* block = (xblock_t*)instance->m_allocator->allocate(sizeof(xblock_t));
+        ASSERT(sizeof(xblock_t) == instance->m_node_heap->size());
+        xblock_t* block = (xblock_t*)instance->m_node_heap->allocate();
         for (s32 i = 0; i < 8; ++i)
             block->m_words[i] = 0;
         instance->m_block_array[block_index] = block;
@@ -137,7 +140,7 @@ namespace xcore
     static void destroy_block_at(xalloc_fsa_large* instance, u32 i)
     {
         xblock_t* block = instance->m_block_array[i];
-        instance->m_allocator->deallocate(block);
+        instance->m_node_heap->deallocate(block);
         instance->m_block_array[i] = nullptr;
     }
 
@@ -198,9 +201,9 @@ namespace xcore
         {
             if (!m_block_empty_list.is_empty())
             {
-                xarray_list_t::node_t* pnode = m_block_empty_list.remove_head(m_list_array);
-				u16 const inode     = m_block_empty_list.node2idx(m_list_array, pnode);
-                xblock_t* block = create_block_at(this, inode);
+                xalist_t::node_t* pnode = m_block_empty_list.remove_head(m_list_array);
+                u16 const         inode = m_block_empty_list.node2idx(m_list_array, pnode);
+                xblock_t*         block = create_block_at(this, inode);
                 m_block_used_list.insert(m_list_array, inode);
                 return allocate_from(this, inode, size);
             }
@@ -212,8 +215,8 @@ namespace xcore
             void*     ptr   = allocate_from(this, i, size);
             if (is_block_full(binfo))
             {
-				m_block_used_list.remove_item(m_list_array, i);
-				m_block_full_list.insert(m_list_array, i);
+                m_block_used_list.remove_item(m_list_array, i);
+                m_block_full_list.insert(m_list_array, i);
             }
             return ptr;
         }
@@ -234,17 +237,17 @@ namespace xcore
         if (is_block_full(binfo))
         {
             size = deallocate_from(this, block_index, ptr);
-			m_block_full_list.remove_item(m_list_array, block_index);
-			m_block_used_list.insert(m_list_array, block_index);
+            m_block_full_list.remove_item(m_list_array, block_index);
+            m_block_used_list.insert(m_list_array, block_index);
         }
         else
         {
             size = deallocate_from(this, block_index, ptr);
             if (is_block_empty(binfo))
             {
-				m_block_full_list.remove_item(m_list_array, block_index);
+                m_block_full_list.remove_item(m_list_array, block_index);
                 destroy_block_at(this, block_index);
-				m_block_empty_list.insert(m_list_array, block_index);
+                m_block_empty_list.insert(m_list_array, block_index);
             }
         }
         return size;
@@ -456,7 +459,5 @@ namespace xcore
         }
         return b;
     }
-
-
 
 } // namespace xcore
