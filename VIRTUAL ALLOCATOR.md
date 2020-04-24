@@ -2,7 +2,7 @@
 
 These are just thoughts on a virtual memory allocator
 
-1. CPU Fixed-Size-Allocator (FSA), 8 <= SIZE <= 8 KB
+1. CPU Fixed-Size-Allocator (FSA), 8 <= SIZE <= 4 KB
 2. Virtual Memory: Alloc, Cache and Free pages back to system
 
 Let's say an APP has 640 GB of address space and it has the following behaviour:
@@ -29,7 +29,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 
 ### FSA
 
-- RegionSize = 256 x 1024 x 1024
+- RegionSize = 512 x 1024 x 1024
 - PageSize = 4 KB (if possible), otherwise 64 KB
 - Min/Max/Step = 8/64/8, 64/512/16, 512/1024/64, 1024/2048/128, 2048/4096/256
 
@@ -79,9 +79,40 @@ Releasing pages back to free memory
 - A reserved memory range (16GB) of virtual pages
 - Can use more than one instance
 - Sizes to use are multiple of 64KB (page-size)
-  Sizes; 64 KB, 128 KB, 256 KB, 512 KB, ..., 16 MB, 32 MB
+  Sizes; 512 KB, ..., 16 MB, 32 MB (Also can handle 64 KB, 128 KB and 256 KB)
 - Size-Alignment = Page-Size (64 KB)
 - Suitable for GPU memory
+
+## Large Size Allocator
+
+- 32 MB < Size < 512 MB
+- Size alignment is page size
+- Small number of allocations (<32)
+- Allocation tracking is done with blocks (kinda like FSA)
+- Reserves huge virtual address space (~128 GB)
+- Maps and unmaps pages on demand
+- Guarantees contiguous memory
+- 128 GB / 512 MB = 256 maximum number of allocations
+
+Pros and Cons:
+
+- No headers [+]
+- Relatively simple implementation (~200 lines of code) [+]
+- Will have no fragmentation [+]
+- Size rounded up to page size [-]
+- Mapping and unmapping kernel calls relatively slow [-]
+
+## Proxy allocators for 'commit/decommit' of virtual memory
+
+1. Direct
+   Upon allocation virtual memory is committed
+   Upon deallocation virtual memory is decommitted
+2. Regions
+   Upon allocation, newly intersecting regions are committed
+   Upon deallocation, intersecting regions that become non-intersected are decommitted
+3. Regions with caching
+   A region is not directly committed or decommitted but it is first added to a list
+   When the list reaches its maximum the oldest ones are decommitted
 
 ## Temporal Allocator [WIP]
 
@@ -119,25 +150,6 @@ protected:
     xentry*          m_entry_array;
 };
 ```
-
-## Large Size Allocator
-
-- 32 MB < Size < 512 MB
-- Size alignment is page size
-- Small number of allocations (<32)
-- Allocation tracking is done with blocks
-- Reserves huge virtual address space (~128 GB)
-- Maps and unmaps pages on demand
-- Guarantees contiguous memory
-- 128 GB / 512 MB = 256 maximum number of allocations
-
-Pros and Cons:
-
-- No headers [+]
-- Relatively simple implementation (~200 lines of code) [+]
-- Will have no fragmentation [+]
-- Size rounded up to page size [-]
-- Mapping and unmapping kernel calls relatively slow [-]
 
 ## Clear Values (1337 speak)
 
