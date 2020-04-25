@@ -17,45 +17,55 @@ Build {
 	},
 	Units = function ()
 		-- Recursively globs for source files relevant to current build-id
-		local function SourceGlob(dir)
+		local function SourceGlobCommon(dir)
 			return FGlob {
 				Dir = dir,
 				Extensions = { ".c", ".cpp", ".s", ".asm" },
 				Filters = {
-					{ Pattern = "_Win32"; Config = "win64-*-*" },
-					{ Pattern = "_mac"; Config = "macosx-*-*" },
-					{ Pattern = "_test"; Config = "*-*-*-test" },
+					{ Pattern = "_[Ww]in32"; Config = "ignore" },
+					{ Pattern = "_[Mm]ac"; Config = "ignore" },
+				}
+			}
+		end
+		local function SourceGlobPlatform(dir)
+			return FGlob {
+				Dir = dir,
+				Extensions = { ".c", ".cpp", ".s", ".asm" },
+				Filters = {
+					{ Pattern = "_[Ww]in32"; Config = "win64-*-*-*" },
+					{ Pattern = "_[Mm]ac"; Config = "macosx-*-*-*" },
+					{ Pattern = ""; Config = "ignore" },
 				}
 			}
 		end
 		local xunittest_library = StaticLibrary {
 			Name = "xunittest",
 			Config = "*-*-*-test",
-			Sources = { SourceGlob("../xunittest/source/main/cpp") },
+			Sources = { SourceGlobCommon("../xunittest/source/main/cpp"), SourceGlobPlatform("../xunittest/source/main/cpp") },
 			Includes = { "..//xunittest/source/main/include" },
 		}
 		local xentry_library = StaticLibrary {
 			Name = "xentry",
 			Config = "*-*-*-*",
-			Sources = { SourceGlob("../xentry/source/main/cpp") },
+			Sources = { SourceGlobCommon("../xentry/source/main/cpp"), SourceGlobPlatform("../xentry/source/main/cpp") },
 			Includes = { "..//xentry/source/main/include" },
 		}
 		local xbase_library = StaticLibrary {
 			Name = "xbase",
 			Config = "*-*-*-*",
-			Sources = { SourceGlob("../xbase/source/main/cpp") },
+			Sources = { SourceGlobCommon("../xbase/source/main/cpp"), SourceGlobPlatform("../xbase/source/main/cpp") },
 			Includes = { "..//xbase/source/main/include","..//xunittest/source/main/include" },
 		}
 		local xvmem_library = StaticLibrary {
 			Name = "xvmem",
 			Config = "*-*-*-*",
-			Sources = { SourceGlob("source/main/cpp") },
+			Sources = { SourceGlobCommon("source/main/cpp"), SourceGlobPlatform("source/main/cpp") },
 			Includes = { "..//xvmem/source/main/include","..//xbase/source/main/include" },
 		}
 		local unittest = Program {
 			Name = "xvmem_test",
 			Config = "*-*-*-test",
-			Sources = { SourceGlob("source/test/cpp") },
+			Sources = { SourceGlobCommon("source/test/cpp"), SourceGlobPlatform("source/test/cpp") },
 			Includes = { "source/main/include","source/test/include","..//xunittest/source/main/include","..//xentry/source/main/include","..//xbase/source/main/include","..//xvmem/source/main/include" },
 			Depends = { xunittest_library,xentry_library,xbase_library,xvmem_library },
 		}
