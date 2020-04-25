@@ -40,7 +40,7 @@ public:
         return true;
     }
 
-    virtual bool release(void* baseptr) { return true; }
+    virtual bool release(void* baseptr, u64 address_range) { return true; }
 
     virtual bool commit(void* address, u32 page_size, u32 page_count) { return true; }
 
@@ -67,7 +67,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             xpages_t* pages = create_fsa_pages(gTestAllocator, mem_base, mem_range, page_size);
 
             destroy(pages);
-            vmem.release(mem_base);
+            vmem.release(mem_base, mem_range);
         }
 
         UNITTEST_TEST(create_then_alloc_free_one_page_then_release)
@@ -87,7 +87,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             CHECK_EQUAL(0, page_list.m_count);
 
             destroy(pages);
-            vmem.release(mem_base);
+            vmem.release(mem_base, mem_range);
         }
 
         UNITTEST_TEST(create_then_alloc_free_many_pages_then_release)
@@ -111,7 +111,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             }
 
             destroy(pages);
-            vmem.release(mem_base);
+            vmem.release(mem_base, mem_range);
         }
 
         UNITTEST_TEST(create_then_alloc_free_use_many_pages_then_release)
@@ -160,7 +160,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             }
 
             destroy(pages);
-            vmem.release(mem_base);
+            vmem.release(mem_base, mem_range);
         }
 
         UNITTEST_TEST(alloc_elements_then_release)
@@ -197,7 +197,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             free_one_page(pages, empty_pages);
 
             destroy(pages);
-            vmem.release(mem_base);
+            vmem.release(mem_base, mem_range);
         }
 
         UNITTEST_TEST(create_then_alloc_elements_many_times_then_release)
@@ -236,7 +236,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             }
 
             destroy(pages);
-            vmem.release(mem_base);
+            vmem.release(mem_base, mem_range);
         }
     }
 }

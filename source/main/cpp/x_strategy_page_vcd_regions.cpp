@@ -23,6 +23,8 @@ namespace xcore
         void commit_region(void* reg_base, u32 num_regions) { m_vmem->commit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); }
         void decommit_region(void* reg_base, u32 num_regions) { m_vmem->decommit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); }
 
+        XCORE_CLASS_PLACEMENT_NEW_DELETE
+
         struct region_t
         {
             u16 m_counter;

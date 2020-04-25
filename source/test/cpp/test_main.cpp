@@ -65,10 +65,10 @@ namespace xcore
             return mAllocator->allocate(size, alignment);
         }
 
-        virtual void v_deallocate(void* mem)
+        virtual u32 v_deallocate(void* mem)
         {
             UnitTest::DecNumAllocations();
-            mAllocator->deallocate(mem);
+            return mAllocator->deallocate(mem);
         }
 
         virtual void v_release()

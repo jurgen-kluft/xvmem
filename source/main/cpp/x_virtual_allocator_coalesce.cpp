@@ -40,15 +40,15 @@ namespace xcore
     }
 
     u32 xvmem_allocator_coalesce_direct::v_deallocate(void* p)
-	{
-		u32 const alloc_size = m_allocator->deallocate(p);
-		return alloc_size; 
-	}
+    {
+        u32 const alloc_size = m_allocator->deallocate(p);
+        return alloc_size;
+    }
 
     void xvmem_allocator_coalesce_direct::v_release()
     {
-		m_allocator->release();
-        m_vmem->release(m_mem_base);
+        m_allocator->release();
+        m_vmem->release(m_mem_base, m_mem_range);
     }
 
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
@@ -57,9 +57,9 @@ namespace xcore
     {
         xvmem_allocator_coalesce_direct* allocator = main_heap->construct<xvmem_allocator_coalesce_direct>();
 
-        void*     mem_base = nullptr;
-        u32       page_size;
-        u32       attr         = 0;
+        void* mem_base = nullptr;
+        u32   page_size;
+        u32   attr = 0;
         vmem->reserve(mem_size, page_size, attr, mem_base);
         allocator->m_vmem      = vmem;
         allocator->m_mem_base  = allocator->m_mem_base;

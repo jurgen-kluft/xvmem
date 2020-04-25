@@ -47,7 +47,7 @@ namespace xcore
                 if (root == nullptr)
                 {
                     ret = false;
-                    goto done;
+                    return ret;
                 }
 
                 node_t* node = root;
@@ -63,14 +63,13 @@ namespace xcore
                 if (node == nullptr)
                 {
                     ret = false;
-                    goto done;
+                    return ret;
                 }
 
                 // Return the node we found
                 ret   = true;
                 found = node;
 
-            done:
                 return ret;
             }
 
@@ -84,7 +83,7 @@ namespace xcore
                 if (root == nullptr)
                 {
                     ret = false;
-                    goto done;
+                    return ret;
                 }
 
                 node_t* node = root;
@@ -105,7 +104,6 @@ namespace xcore
                 ret   = true;
                 found = node;
 
-            done:
                 return ret;
             }
 
@@ -282,7 +280,7 @@ namespace xcore
                     ret  = true;
                     root = node;
                     node->set_color_black(tree);
-                    goto done;
+                    return ret;
                 }
 
                 // Otherwise, insert the node as you would typically in a BST
@@ -296,7 +294,7 @@ namespace xcore
                     if (c == 0)
                     {
                         ret = false;
-                        goto done;
+                        return ret;
                     }
 
                     if (c < 0)
@@ -331,8 +329,6 @@ namespace xcore
                 helper_insert_rebalance(tree, root, node);
 
                 ret = true;
-
-            done:
                 return ret;
             }
 
@@ -667,17 +663,17 @@ namespace xcore
                 }
             }
 
-			bool get_min(node_t* proot, tree_t* tree, node_t*& found)
-			{
-				found = nullptr;
-				node_t* pnode = proot;
-				while (pnode != nullptr)
-				{
-					found = pnode;
-					pnode = pnode->get_left();
-				}
-				return found != nullptr;
-			}
+            bool get_min(node_t* proot, tree_t* tree, node_t*& found)
+            {
+                found         = nullptr;
+                node_t* pnode = proot;
+                while (pnode != nullptr)
+                {
+                    found = pnode;
+                    pnode = pnode->get_left();
+                }
+                return found != nullptr;
+            }
 
         } // namespace pointer_based
 
@@ -748,7 +744,7 @@ namespace xcore
                 if (root == node_t::NIL)
                 {
                     ret = false;
-                    goto done;
+                    return ret;
                 }
 
                 node_t* node = idx2ptr(dexer, root);
@@ -766,21 +762,17 @@ namespace xcore
                 if (node == nullptr)
                 {
                     ret = false;
-                    goto done;
+                    return ret;
                 }
 
                 // Return the node we found
                 ret   = true;
                 found = ptr2idx(dexer, node);
 
-            done:
                 return ret;
             }
 
-            bool find(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found)
-            {
-				return find_specific(root, tree, dexer, data, found, tree->m_compare_f);
-			}
+            bool find(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found) { return find_specific(root, tree, dexer, data, found, tree->m_compare_f); }
 
             bool upper(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found)
             {
@@ -792,7 +784,7 @@ namespace xcore
                 if (root == node_t::NIL)
                 {
                     ret = false;
-                    goto done;
+                    return ret;
                 }
 
                 node_t* node = idx2ptr(dexer, root);
@@ -813,7 +805,6 @@ namespace xcore
                 ret   = true;
                 found = ptr2idx(dexer, node);
 
-            done:
                 return ret;
             }
 
@@ -1017,7 +1008,7 @@ namespace xcore
                     ret   = true;
                     iroot = inode;
                     node->set_color_black(tree);
-                    goto done;
+                    return ret;
                 }
 
                 // Otherwise, insert the node as you would typically in a BST
@@ -1032,7 +1023,7 @@ namespace xcore
                     if (c == 0)
                     {
                         ret = false;
-                        goto done;
+                        return ret;
                     }
 
                     if (c < 0)
@@ -1070,8 +1061,6 @@ namespace xcore
                 helper_insert_rebalance(tree, dexer, root, iroot, node, inode);
 
                 ret = true;
-
-            done:
                 return ret;
             }
 
@@ -1448,18 +1437,18 @@ namespace xcore
             }
 
             bool get_min(u32 iroot, tree_t* tree, xdexer* dexer, u32& found)
-			{
-				found = 0xffffffff;
-				u32 inode = iroot;
+            {
+                found         = 0xffffffff;
+                u32     inode = iroot;
                 node_t* pnode = idx2ptr(dexer, iroot);
                 while (pnode != nullptr)
                 {
-					found = inode;
+                    found = inode;
                     inode = pnode->get_left();
-                    pnode  = idx2ptr(dexer, inode);
+                    pnode = idx2ptr(dexer, inode);
                 }
-				return found != 0xffffffff;
-			}
+                return found != 0xffffffff;
+            }
 
         } // namespace index_based
     }     // namespace xbst

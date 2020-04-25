@@ -34,12 +34,12 @@ namespace xcore
         virtual u32   v_deallocate(void* p);
         virtual void  v_release();
 
-        xalloc*    m_main_heap;
-        xvmem*     m_vmem;
-        void*      m_memory_base;
-        u64        m_memory_range;
-        u32        m_page_size;
-		xalloc*    m_allocator;
+        xalloc* m_main_heap;
+        xvmem*  m_vmem;
+        void*   m_memory_base;
+        u64     m_memory_range;
+        u32     m_page_size;
+        xalloc* m_allocator;
         XCORE_CLASS_PLACEMENT_NEW_DELETE;
     };
 
@@ -65,13 +65,13 @@ namespace xcore
         u32 const page_count = (size + (m_page_size - 1)) / (m_page_size);
         m_vmem->decommit(p, m_page_size, page_count);
 
-		return size;
+        return size;
     }
 
     void xvmem_allocator_large::v_release()
     {
         m_allocator->release();
-        m_vmem->release(m_memory_base);
+        m_vmem->release(m_memory_base, m_memory_range);
         m_main_heap->deallocate(this);
     }
 
@@ -80,7 +80,7 @@ namespace xcore
         xvmem_allocator_large* large_allocator = internal_heap->construct<xvmem_allocator_large>(internal_heap);
 
         u32   page_size = 0;
-        void* mem_addr = nullptr;
+        void* mem_addr  = nullptr;
         vmem->reserve(mem_range, page_size, 0, mem_addr);
 
         large_allocator->m_vmem         = vmem;
@@ -88,7 +88,7 @@ namespace xcore
         large_allocator->m_memory_range = mem_range;
         large_allocator->m_page_size    = page_size;
 
-		large_allocator->m_allocator = create_alloc_large(internal_heap, mem_addr, mem_range, 64);
+        large_allocator->m_allocator = create_alloc_large(internal_heap, mem_addr, mem_range, 64);
 
         return large_allocator;
     }

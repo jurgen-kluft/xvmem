@@ -18,24 +18,27 @@ namespace xcore
     static u32 allocsize_to_bwidth(u32 allocsize, u32 pagesize);
     static u64 allocsize_to_blockrange(u32 allocsize, u32 pagesize);
 
-    struct xbinfo_t
+    struct xblock_info_t
     {
         void reset()
         {
-            m_words_clr = 0xff;
-            m_words_set = 0;
+            m_clr = 0xff;
+            m_set = 0;
         }
-        u8 m_words_clr;
-        u8 m_words_set;
+        u8 m_clr;
+        u8 m_set;
     };
 
+    // One block is able to 'cover 32 * 8 = 256 elements
+    // Block info will tell use quickly where to find a
+    // free element.
     struct xblock_t
     {
         u32 m_words[8];
     };
 
-    static inline bool is_block_full(xbinfo_t* block) { return block->m_words_set == 0xff; }
-    static inline bool is_block_empty(xbinfo_t* block) { return block->m_words_clr == 0xff; }
+    static inline bool is_block_full(xblock_info_t* block) { return block->m_set == 0xff; }
+    static inline bool is_block_empty(xblock_info_t* block) { return block->m_clr == 0xff; }
     static inline u32  get_word_index(u8 words_set) { return xfindFirstBit(~(words_set | 0xffffff00)); }
     static bool        has_empty_slot(u32 slot, u32 w);
     static u32         get_empty_slot(u32 slot, u32 w);
@@ -57,7 +60,7 @@ namespace xcore
         u32               m_pagesize;
         u32               m_block_count;
         xblock_t**        m_block_array;
-        xbinfo_t*         m_binfo_array;
+        xblock_info_t*    m_binfo_array;
         xalist_t::node_t* m_list_array;
         xalist_t          m_block_empty_list;
         xalist_t          m_block_used_list;
@@ -71,7 +74,7 @@ namespace xcore
         u64 const         block_range = allocsize_to_blockrange(allocsize, pagesize);
         u32 const         block_count = (u32)(mem_range / block_range);
         xblock_t**        block_array = (xblock_t**)main_heap->allocate(sizeof(xblock_t*) * block_count);
-        xbinfo_t*         binfo_array = (xbinfo_t*)main_heap->allocate(sizeof(xbinfo_t) * block_count);
+        xblock_info_t*    binfo_array = (xblock_info_t*)main_heap->allocate(sizeof(xblock_info_t) * block_count);
         xalist_t::node_t* list_nodes  = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * block_count);
 
         xalloc_fsa_large* instance          = main_heap->construct<xalloc_fsa_large>();
@@ -123,8 +126,8 @@ namespace xcore
         m_main_heap->deallocate(this);
     }
 
-    static xblock_t* get_block_at(xalloc_fsa_large* instance, u32 i) { return instance->m_block_array[i]; }
-    static xbinfo_t* get_binfo_at(xalloc_fsa_large* instance, u32 i) { return &instance->m_binfo_array[i]; }
+    static xblock_t*      get_block_at(xalloc_fsa_large* instance, u32 i) { return instance->m_block_array[i]; }
+    static xblock_info_t* get_binfo_at(xalloc_fsa_large* instance, u32 i) { return &instance->m_binfo_array[i]; }
 
     static xblock_t* create_block_at(xalloc_fsa_large* instance, u32 block_index)
     {
@@ -146,16 +149,15 @@ namespace xcore
 
     static void* allocate_from(xalloc_fsa_large* instance, u32 index, u32 allocsize)
     {
-        xblock_t* block = instance->m_block_array[index];
-        xbinfo_t* binfo = &instance->m_binfo_array[index];
+        xblock_t*      block = instance->m_block_array[index];
+        xblock_info_t* binfo = &instance->m_binfo_array[index];
 
-        u32 const w  = allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize);
-        u32 const wi = get_word_index(binfo->m_words_set);                 // index of word that is not full
-        u32 const wd = block->m_words[wi];                                 // word data
-        u32 const ws = get_empty_slot(wd, w);                              // get index of empty slot in word data
-        u32 const ew = 32 / w;                                             // number of elements per word
-        u32 const ab = allocsize_to_bits(allocsize, instance->m_pagesize); // get the actual bits of the requested alloc-size
-
+        u32 const w   = allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize);
+        u32 const wi  = get_word_index(binfo->m_set);                                         // index of word that is not full
+        u32 const wd  = block->m_words[wi];                                                   // word data
+        u32 const ws  = get_empty_slot(wd, w);                                                // get index of empty slot in word data
+        u32 const ew  = 32 / w;                                                               // number of elements per word
+        u32 const ab  = allocsize_to_bits(allocsize, instance->m_pagesize);                   // get the actual bits of the requested alloc-size
         u64 const bs  = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize); // memory size of one block
         void*     ptr = advance_ptr(instance->m_address_base, (u64)index * bs);               // memory base of this block
         ptr           = advance_ptr(ptr, ((wi * ew) + ws) * instance->m_allocsize);           // the word-index and slot index determine the offset
@@ -163,17 +165,17 @@ namespace xcore
         block->m_words[wi] = block->m_words[wi] | (ab << (ws * w)); // write the bits into the element slot
         if (!has_empty_slot(block->m_words[wi], w))
         {
-            binfo->m_words_set = binfo->m_words_set | (1 << wi); // Mark this word as full
+            binfo->m_set = binfo->m_set | (1 << wi); // Mark this word as full
         }
-        binfo->m_words_clr = binfo->m_words_clr & ~(1 << wi); // Mark this word as not clear
+        binfo->m_clr = binfo->m_clr & ~(1 << wi); // Mark this word as not clear
 
         return ptr;
     }
 
     static u32 deallocate_from(xalloc_fsa_large* instance, u32 const index, void* const ptr)
     {
-        xblock_t* const block = instance->m_block_array[index];
-        xbinfo_t* const binfo = &instance->m_binfo_array[index];
+        xblock_t* const      block = instance->m_block_array[index];
+        xblock_info_t* const binfo = &instance->m_binfo_array[index];
 
         void* const block_base = advance_ptr(instance->m_address_base, (u64)index * allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize));
         u32 const   i          = (u32)(((u64)ptr - (u64)block_base) / (u64)instance->m_allocsize);
@@ -184,10 +186,10 @@ namespace xcore
         u32 const   em         = ((1 << w) - 1);                                                   // element mask
         u32 const   np         = (block->m_words[wi] >> (w * ei)) & em;                            // get the content of the element
         block->m_words[wi]     = block->m_words[wi] & ~(em << (w * ei));                           // mask out the element
-        binfo->m_words_set     = binfo->m_words_set & ~(1 << wi);                                  // make it known that this word is not full
+        binfo->m_set           = binfo->m_set & ~(1 << wi);                                        // make it known that this word is not full
         if (block->m_words[wi] == 0)
         {
-            binfo->m_words_clr = binfo->m_words_clr | (1 << wi); // make it known that this word is clear
+            binfo->m_clr = binfo->m_clr | (1 << wi); // make it known that this word is clear
         }
         return bits_to_allocsize(np, w, instance->m_pagesize);
     }
@@ -210,9 +212,9 @@ namespace xcore
         }
         else
         {
-            u16 const i     = m_block_used_list.m_head;
-            xbinfo_t* binfo = get_binfo_at(this, i);
-            void*     ptr   = allocate_from(this, i, size);
+            u16 const      i     = m_block_used_list.m_head;
+            xblock_info_t* binfo = get_binfo_at(this, i);
+            void*          ptr   = allocate_from(this, i, size);
             if (is_block_full(binfo))
             {
                 m_block_used_list.remove_item(m_list_array, i);
@@ -230,10 +232,10 @@ namespace xcore
         // If block was full remove it from 'full' list
         // If block is now empty -> free block
         // Else add block to 'used' list
-        u32       size        = 0;
-        u64 const block_range = allocsize_to_blockrange(m_allocsize, m_pagesize);
-        u32 const block_index = (u32)(((u64)ptr - (u64)m_address_base) / block_range);
-        xbinfo_t* binfo       = get_binfo_at(this, block_index);
+        u32            size        = 0;
+        u64 const      block_range = allocsize_to_blockrange(m_allocsize, m_pagesize);
+        u32 const      block_index = (u32)(((u64)ptr - (u64)m_address_base) / block_range);
+        xblock_info_t* binfo       = get_binfo_at(this, block_index);
         if (is_block_full(binfo))
         {
             size = deallocate_from(this, block_index, ptr);

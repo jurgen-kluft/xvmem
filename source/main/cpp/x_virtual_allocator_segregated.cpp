@@ -51,7 +51,7 @@ namespace xcore
 
     void xvmem_allocator_segregated::v_release()
     {
-        m_vmem->release(m_mem_base);
+        m_vmem->release(m_mem_base, m_mem_range);
         m_segregated->release();
         m_main_heap->deallocate(this);
     }

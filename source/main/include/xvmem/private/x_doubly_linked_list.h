@@ -9,7 +9,7 @@ namespace xcore
 {
     struct xalist_t
     {
-        static const u16 NIL = 0xffff;
+        static const u16 NIL;
 
         xalist_t()
             : m_count(0)

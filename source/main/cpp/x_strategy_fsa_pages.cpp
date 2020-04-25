@@ -13,7 +13,7 @@ namespace xcore
 {
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
     static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
-    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (size_t)((uptr)next_ptr - (uptr)ptr); }
+    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (uptr)((uptr)next_ptr - (uptr)ptr); }
 
     struct xpage_t
     {
@@ -128,21 +128,21 @@ namespace xcore
 
         xalist_t::node_t* next_node(xalist_t::node_t* const node);
         xalist_t::node_t* prev_node(xalist_t::node_t* const node);
-        u16       next_node(u16 const node) const;
-        u16       prev_node(u16 const node) const;
+        u16               next_node(u16 const node) const;
+        u16               prev_node(u16 const node) const;
         xalist_t::node_t* indexto_node(u16 const node) const;
-        u16       indexof_node(xalist_t::node_t* const node) const;
+        u16               indexof_node(xalist_t::node_t* const node) const;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*   m_main_allocator;
-        void*     m_base_address;
-        u32       m_page_size;
-        u16       m_free_page_index;
-        xalist_t  m_free_page_list;
-        u16 const m_page_cnt;
+        xalloc*           m_main_allocator;
+        void*             m_base_address;
+        u32               m_page_size;
+        u16               m_free_page_index;
+        xalist_t          m_free_page_list;
+        u16 const         m_page_cnt;
         xalist_t::node_t* m_page_list;
-        xpage_t*  m_pages;
+        xpage_t*          m_pages;
     };
 
     xpage_t* xpages_t::alloc_page(u32 const elem_size)
@@ -156,7 +156,7 @@ namespace xcore
         {
             // Get the page pointer and remove it from the list of virtual pages
             ppage = indexto_page(m_free_page_list.m_head);
-			m_free_page_list.remove_head(m_page_list);
+            m_free_page_list.remove_head(m_page_list);
 
             // TODO: Decommit the physical memory
         }
@@ -182,7 +182,7 @@ namespace xcore
     void xpages_t::free_page(xpage_t* const ppage)
     {
         u16 const ipage = indexof_page(ppage);
-		m_free_page_list.insert(m_page_list, ipage);
+        m_free_page_list.insert(m_page_list, ipage);
     }
 
     u32 xpages_t::address_to_elem_size(void* const address) const
@@ -312,14 +312,13 @@ namespace xcore
         ASSERT(ptr != nullptr);
     }
 
-
     xpages_t* create_fsa_pages(xalloc* main_allocator, void* base_address, u64 memory_range, u32 page_size)
     {
         ASSERT(main_allocator != nullptr);
-        u32 const           page_cnt     = (u32)(memory_range / page_size);
-        xpage_t*            page_array   = (xpage_t*)main_allocator->allocate(sizeof(xpage_t) * page_cnt, sizeof(void*));
-        xalist_t::node_t*   page_list_data = (xalist_t::node_t*)main_allocator->allocate(sizeof(xalist_t::node_t) * page_cnt, sizeof(void*));
-        xpages_t*           pages        = main_allocator->construct<xpages_t>(main_allocator, base_address, page_size, page_cnt, page_list_data, page_array);
+        u32 const         page_cnt       = (u32)(memory_range / page_size);
+        xpage_t*          page_array     = (xpage_t*)main_allocator->allocate(sizeof(xpage_t) * page_cnt, sizeof(void*));
+        xalist_t::node_t* page_list_data = (xalist_t::node_t*)main_allocator->allocate(sizeof(xalist_t::node_t) * page_cnt, sizeof(void*));
+        xpages_t*         pages          = main_allocator->construct<xpages_t>(main_allocator, base_address, page_size, page_cnt, page_list_data, page_array);
 
         u32 const n = page_cnt;
         for (u32 i = 0; i < n; ++i)
@@ -348,7 +347,7 @@ namespace xcore
     {
         xpage_t*  ppage = pages->alloc_page(elem_size);
         u16 const ipage = pages->indexof_page(ppage);
-		page_list.insert(pages->m_page_list, ipage);
+        page_list.insert(pages->m_page_list, ipage);
         page_list.m_count += 1;
         return pages->address_of_page(ppage);
     }
@@ -358,7 +357,7 @@ namespace xcore
         u16 const ipage = page_list.m_head;
         if (ipage == xalist_t::NIL)
             return nullptr;
-		page_list.remove_item(pages->m_page_list, ipage);
+        page_list.remove_item(pages->m_page_list, ipage);
         page_list.m_count -= 1;
         xpage_t*    ppage = pages->indexto_page(ipage);
         void* const apage = pages->address_of_page(ppage);
@@ -371,7 +370,7 @@ namespace xcore
         while (page_list.m_count > 0)
         {
             u16 const ipage = page_list.m_head;
-			page_list.remove_item(pages->m_page_list, ipage);
+            page_list.remove_item(pages->m_page_list, ipage);
             xpage_t* ppage = pages->indexto_page(ipage);
             pages->free_page(ppage);
             page_list.m_count -= 1;
@@ -390,7 +389,7 @@ namespace xcore
         {
             ppage = pages->alloc_page(elem_size);
             ipage = pages->indexof_page(ppage);
-			page_list.insert(pages->m_page_list, ipage);
+            page_list.insert(pages->m_page_list, ipage);
             page_list.m_count += 1;
         }
         else
@@ -406,7 +405,7 @@ namespace xcore
             ptr = ppage->allocate(apage);
             if (ppage->is_full())
             {
-				page_list.remove_item(pages->m_page_list, ipage);
+                page_list.remove_item(pages->m_page_list, ipage);
                 page_list.m_count -= 1;
             }
         }
@@ -419,7 +418,7 @@ namespace xcore
         return ppage->m_elem_size;
     }
 
-    u32 idx_of_elem(xpages_t* pages, void* const ptr) { return pages->ptr2idx(ptr); }
+    u32   idx_of_elem(xpages_t* pages, void* const ptr) { return pages->ptr2idx(ptr); }
     void* ptr_of_elem(xpages_t* pages, u32 const index) { return pages->idx2ptr(index); }
 
     void free_elem(xpages_t* pages, xalist_t& page_list, void* const ptr, xalist_t& page_empty_list)
@@ -436,13 +435,13 @@ namespace xcore
         if (ppage->is_empty())
         {
             ASSERT(false);
-			pages->indexto_node(ipage)->is_linked();
-			page_list.remove_item(pages->m_page_list, ipage);
-			page_empty_list.insert(pages->m_page_list, ipage);
+            pages->indexto_node(ipage)->is_linked();
+            page_list.remove_item(pages->m_page_list, ipage);
+            page_empty_list.insert(pages->m_page_list, ipage);
         }
         else if (was_full)
         {
-			page_list.insert(pages->m_page_list, ipage);
+            page_list.insert(pages->m_page_list, ipage);
         }
     }
 

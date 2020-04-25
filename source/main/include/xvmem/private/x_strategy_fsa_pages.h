@@ -8,18 +8,19 @@
 namespace xcore
 {
     // Usage:
-    //   Create an instance of ``xfsastrat::xpages_t`` by calling ``xfsastrat::create()``
-    //   When you are done and want to release the instance, call ``xfsastrat::destroy()``
-
-    // ``xfsastrat::alloc_elem()``:
+    //   Create an instance of ``xpages_t`` by calling ``create()``
+    //   When you are done and want to release the instance, call ``destroy()``
+    //
+    // ``alloc_elem()``:
     //   When this function returns NULL the next thing to do is to call ``alloc_page``.
     //   You will receive a ``void*`` that can be used to do an actual virtual memory commit.
+    //   Now you can call ``alloc_elem()`` again and it should succeed.
     //
-    // ``xfsastrat::free_elem()``:
+    // ``free_elem()``:
     //   Freeing an element can result in a page becoming ``empty``, this will be returned in
     //   ``pages_empty_list``. You can see how many pages are in the list and if you want to
     //   remove one (or more) you can repeatedly call ``free_one_page``.
-    //   If you want to free every item of the page list you can call ``free_all_pages``.
+    //   If you want to free all pages in the page list you can call ``free_all_pages``.
     //
 
     class xalloc;

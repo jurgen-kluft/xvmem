@@ -96,9 +96,9 @@ namespace xcore
 
         s32 compare_node_f(const u64 pkey, const node_t* node)
         {
-            naddr_t const* n    = (naddr_t const*)(node);
-            //u32 const      size = (u32)(pkey >> 32);
-            u32 const      addr = (u32)(pkey & 0xffffffff);
+            naddr_t const* n = (naddr_t const*)(node);
+            // u32 const      size = (u32)(pkey >> 32);
+            u32 const addr = (u32)(pkey & 0xffffffff);
             if (addr < n->m_addr)
                 return -1;
             if (addr > n->m_addr)
@@ -140,7 +140,7 @@ namespace xcore
 
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
     static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
-    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (size_t)((uptr)next_ptr - (uptr)ptr); }
+    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (uptr)((uptr)next_ptr - (uptr)ptr); }
 
     static u64 adjust_size_for_alignment(u64 requested_size, u32 requested_alignment, u32 default_alignment)
     {
@@ -172,10 +172,10 @@ namespace xcore
 
     class xalloc_coalesce : public xalloc
     {
-	public:
-		virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
+    public:
+        virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
         virtual u32   v_deallocate(void* ptr) X_FINAL;
-		virtual void  v_release();
+        virtual void  v_release();
 
         xalloc*    m_main_heap;
         xfsadexed* m_node_heap;
@@ -359,7 +359,7 @@ namespace xcore
 
         // Insert our alloc node into the address tree so that we can find it when
         // deallocate is called.
-		add_to_addr_db(*this, inode, pnode);
+        add_to_addr_db(*this, inode, pnode);
 
         // Done...
         return ptr;
@@ -468,10 +468,7 @@ namespace xcore
         pnode->m_next_addr    = inext;
     }
 
-    void add_to_addr_db(xalloc_coalesce& self, u32 inode, naddr_t* pnode)
-    {
-        insert(self.m_addr_db, &bst_addr::config, self.m_node_heap, pnode->get_key(), inode);
-    }
+    void add_to_addr_db(xalloc_coalesce& self, u32 inode, naddr_t* pnode) { insert(self.m_addr_db, &bst_addr::config, self.m_node_heap, pnode->get_key(), inode); }
 
     bool remove_from_addr_db(xalloc_coalesce& self, void* ptr, u32& inode, naddr_t*& pnode)
     {

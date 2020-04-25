@@ -71,7 +71,7 @@ namespace xcore
         if (align > size)
             size = align;
 
-		// TODO: Handle large alignments
+        // TODO: Handle large alignments
 
         if (size <= m_fsa_max_size)
         {
@@ -106,31 +106,33 @@ namespace xcore
 
     u32 xvmem_allocator::v_deallocate(void* ptr)
     {
+        u32 alloc_size = 0;
         if (helper_is_in_memrange(m_fsa_mem_base, m_fsa_mem_range, ptr))
         {
-            u32 const alloc_size = m_fsa_allocator->deallocate(ptr);
+            alloc_size = m_fsa_allocator->deallocate(ptr);
             ASSERT(alloc_size >= m_fsa_min_size && alloc_size <= m_fsa_max_size);
         }
         else if (helper_is_in_memrange(m_med_mem_base, m_med_mem_range, ptr))
         {
-            m_med_allocator_vcd->deallocate(ptr);
+            alloc_size = m_med_allocator_vcd->deallocate(ptr);
         }
         else if (helper_is_in_memrange(m_led_mem_base, m_led_mem_range, ptr))
         {
-            m_led_allocator_vcd->deallocate(ptr);
+            alloc_size = m_led_allocator_vcd->deallocate(ptr);
         }
         else if (helper_is_in_memrange(m_seg_mem_base, m_seg_mem_range, ptr))
         {
-            m_seg_allocator_vcd->deallocate(ptr);
+            alloc_size = m_seg_allocator_vcd->deallocate(ptr);
         }
         else if (helper_is_in_memrange(m_large_mem_base, m_large_mem_range, ptr))
         {
-            m_large_allocator_vcd->deallocate(ptr);
+            alloc_size = m_large_allocator_vcd->deallocate(ptr);
         }
         else
         {
             ASSERTS(false, "error: deallocating an address that is not owned by this allocator!");
         }
+        return alloc_size;
     }
 
     void xvmem_allocator::v_release()
@@ -143,7 +145,7 @@ namespace xcore
         // TODO: release all reserved virtual memory
 
         m_node16_heap->release();
-		m_node32_heap->release();
+        m_node32_heap->release();
     }
 
     void xvmem_allocator::init(xalloc* main_heap, xvmem* vmem)

@@ -20,6 +20,8 @@ namespace xcore
         virtual u32   v_deallocate(void* ptr) X_FINAL;
         virtual void  v_release();
 
+        XCORE_CLASS_PLACEMENT_NEW_DELETE
+
         xalloc* m_main_heap; // Internal allocator to allocate ourselves and bookkeeping data from
         xalloc* m_allocator; // The allocator that does the allocations/deallocations
         xvmem*  m_vmem;      // Virtual memory interface
@@ -49,19 +51,16 @@ namespace xcore
         return alloc_size;
     }
 
-    void xalloc_page_vcd_direct::v_release()
-    {
-        m_main_heap->deallocate(this);
-    }
+    void xalloc_page_vcd_direct::v_release() { m_main_heap->deallocate(this); }
 
     xalloc* create_page_vcd_direct(xalloc* main_heap, xalloc* allocator, xvmem* vmem, u32 page_size)
     {
         xalloc_page_vcd_direct* proxy = main_heap->construct<xalloc_page_vcd_direct>();
 
-        proxy->m_main_heap   = main_heap;
-        proxy->m_allocator   = allocator;
-        proxy->m_vmem        = vmem;
-        proxy->m_page_size   = page_size;
+        proxy->m_main_heap = main_heap;
+        proxy->m_allocator = allocator;
+        proxy->m_vmem      = vmem;
+        proxy->m_page_size = page_size;
 
         return proxy;
     }

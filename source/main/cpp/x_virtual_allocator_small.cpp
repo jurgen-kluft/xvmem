@@ -50,7 +50,7 @@ namespace xcore
         u32 const       m_alloc_size;
     };
 
-    xfsa* gCreateVMemBasedFsa(xalloc* main_allocator, xfsastrat::xpages_t* vpages, u32 allocsize)
+    xfsa* gCreateVMemBasedFsa(xalloc* main_allocator, xpages_t* vpages, u32 allocsize)
     {
         xfsa_vmem* fsa = main_allocator->construct<xfsa_vmem>(main_allocator, vpages, allocsize);
         return fsa;
@@ -104,7 +104,7 @@ namespace xcore
 
     // Constraints:
     // - xvpages is not allowed to manage a memory range more than (4G * allocsize) (32-bit indices)
-    xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_allocator, xfsastrat::xpages_t* vpages, u32 allocsize)
+    xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_allocator, xpages_t* vpages, u32 allocsize)
     {
         xvfsa_dexed* fsa = main_allocator->construct<xvfsa_dexed>(main_allocator, vpages, allocsize);
         return fsa;

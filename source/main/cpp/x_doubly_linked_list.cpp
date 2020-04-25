@@ -7,6 +7,8 @@
 
 namespace xcore
 {
+    const u16 xalist_t::NIL = 0xffff;
+
     void xalist_t::insert(node_t* list, u16 item)
     {
         node_t* const pitem = idx2node(list, item);
@@ -69,55 +71,55 @@ namespace xcore
         m_count -= 1;
     }
 
-	xalist_t::node_t* xalist_t::remove_head(node_t* list)
-	{
-		if (m_head == NIL)
-		{
-			return nullptr;
-		}
-		u16 const iitem = m_head;
+    xalist_t::node_t* xalist_t::remove_head(node_t* list)
+    {
+        if (m_head == NIL)
+        {
+            return nullptr;
+        }
+        u16 const     iitem = m_head;
         node_t* const pitem = idx2node(list, iitem);
-		u16 const inext = pitem->m_next;
+        u16 const     inext = pitem->m_next;
         node_t* const pnext = idx2node(list, inext);
-		u16 const iprev = pitem->m_prev;
-		node_t* const pprev = idx2node(list, iprev);
-		pprev->m_next = inext;
-		pnext->m_prev = iprev;
-		pitem->link(NIL, NIL);
-		if (m_count == 1)
-		{
-			m_head = NIL;
-		}
-		else
-		{
-			m_head = inext;
-		}
-		m_count -= 1;
-		return pitem;
-	}
+        u16 const     iprev = pitem->m_prev;
+        node_t* const pprev = idx2node(list, iprev);
+        pprev->m_next       = inext;
+        pnext->m_prev       = iprev;
+        pitem->link(NIL, NIL);
+        if (m_count == 1)
+        {
+            m_head = NIL;
+        }
+        else
+        {
+            m_head = inext;
+        }
+        m_count -= 1;
+        return pitem;
+    }
 
-	xalist_t::node_t* xalist_t::remove_tail(node_t* list)
-	{
-		if (m_head == NIL)
-		{
-			return nullptr;
-		}
-		u16 const inext = m_head;
+    xalist_t::node_t* xalist_t::remove_tail(node_t* list)
+    {
+        if (m_head == NIL)
+        {
+            return nullptr;
+        }
+        u16 const     inext = m_head;
         node_t* const pnext = idx2node(list, inext);
-		u16 const iitem = pnext->m_prev;
+        u16 const     iitem = pnext->m_prev;
         node_t* const pitem = idx2node(list, iitem);
-		u16 const iprev = pitem->m_prev;
-		node_t* const pprev = idx2node(list, iprev);
-		pprev->m_next = inext;
-		pnext->m_prev = iprev;
-		pitem->link(NIL, NIL);
-		if (m_count == 1)
-		{
-			m_head = NIL;
-		}
-		m_count -= 1;
-		return pitem;
-	}
+        u16 const     iprev = pitem->m_prev;
+        node_t* const pprev = idx2node(list, iprev);
+        pprev->m_next       = inext;
+        pnext->m_prev       = iprev;
+        pitem->link(NIL, NIL);
+        if (m_count == 1)
+        {
+            m_head = NIL;
+        }
+        m_count -= 1;
+        return pitem;
+    }
 
     xalist_t::node_t* xalist_t::idx2node(node_t* list, u16 i)
     {
