@@ -41,9 +41,7 @@ public:
     }
 
     virtual bool release(void* baseptr, u64 address_range) { return true; }
-
     virtual bool commit(void* address, u32 page_size, u32 page_count) { return true; }
-
     virtual bool decommit(void* address, u32 page_size, u32 page_count) { return true; }
 };
 
@@ -54,7 +52,6 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
         xvmem_test vmem;
 
         UNITTEST_FIXTURE_SETUP() { vmem.init(gTestAllocator, (u64)64 * 1024 * 1024, 64 * 1024); }
-
         UNITTEST_FIXTURE_TEARDOWN() { vmem.exit(); }
 
         UNITTEST_TEST(create_then_release)
