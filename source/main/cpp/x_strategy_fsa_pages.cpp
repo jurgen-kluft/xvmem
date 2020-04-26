@@ -348,7 +348,6 @@ namespace xcore
         xpage_t*  ppage = pages->alloc_page(elem_size);
         u16 const ipage = pages->indexof_page(ppage);
         page_list.insert(pages->m_page_list, ipage);
-        page_list.m_count += 1;
         return pages->address_of_page(ppage);
     }
 
@@ -358,7 +357,6 @@ namespace xcore
         if (ipage == xalist_t::NIL)
             return nullptr;
         page_list.remove_item(pages->m_page_list, ipage);
-        page_list.m_count -= 1;
         xpage_t*    ppage = pages->indexto_page(ipage);
         void* const apage = pages->address_of_page(ppage);
         pages->free_page(ppage);
@@ -367,13 +365,12 @@ namespace xcore
 
     void free_all_pages(xpages_t* pages, xalist_t& page_list)
     {
-        while (page_list.m_count > 0)
+        while (!page_list.is_empty())
         {
             u16 const ipage = page_list.m_head;
             page_list.remove_item(pages->m_page_list, ipage);
             xpage_t* ppage = pages->indexto_page(ipage);
             pages->free_page(ppage);
-            page_list.m_count -= 1;
         }
     }
 
@@ -390,7 +387,6 @@ namespace xcore
             ppage = pages->alloc_page(elem_size);
             ipage = pages->indexof_page(ppage);
             page_list.insert(pages->m_page_list, ipage);
-            page_list.m_count += 1;
         }
         else
         {
@@ -406,7 +402,6 @@ namespace xcore
             if (ppage->is_full())
             {
                 page_list.remove_item(pages->m_page_list, ipage);
-                page_list.m_count -= 1;
             }
         }
         return ptr;
@@ -434,8 +429,7 @@ namespace xcore
         ppage->deallocate(pages->address_of_page(ppage), ptr);
         if (ppage->is_empty())
         {
-            ASSERT(false);
-            pages->indexto_node(ipage)->is_linked();
+            ASSERT(pages->indexto_node(ipage)->is_linked());
             page_list.remove_item(pages->m_page_list, ipage);
             page_empty_list.insert(pages->m_page_list, ipage);
         }

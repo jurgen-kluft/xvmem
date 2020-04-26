@@ -91,14 +91,18 @@ namespace xcore
         instance->m_block_used_list         = xalist_t();
         instance->m_block_full_list         = xalist_t();
         instance->m_block_empty_list        = xalist_t();
+
+		// Direct initialization of the empty list of blocks
         instance->m_block_empty_list.m_head = 0;
+		instance->m_block_empty_list.m_count = block_count;
 
         // Initialize the block list by linking all blocks into the empty list
         for (u32 i = 0; i < block_count; ++i)
         {
-            instance->m_list_array[0].link(i - 1, i + 1);
+            instance->m_list_array[i].link(i - 1, i + 1);
         }
-        instance->m_list_array[0].link(block_count - 1, 0);
+        instance->m_list_array[0].link(block_count - 1, 1);
+        instance->m_list_array[block_count - 1].link(block_count - 2, 0);
 
         // All block pointers are initially NULL
         for (u32 i = 0; i < block_count; ++i)

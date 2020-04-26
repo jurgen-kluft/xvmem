@@ -37,14 +37,14 @@ namespace xcore
         u32        m_fsa_max_size;        // 4096 B
         xalloc*    m_fsa_allocator;       //
         void*      m_med_mem_base;        // A memory base pointer
-        u64        m_med_mem_range;       // 768 MB
+        u32        m_med_mem_range;       // 768 MB
         u32        m_med_min_size;        // 4 KB
         u32        m_med_step_size;       // 256 B (size alignment)
         u32        m_med_max_size;        // 64 KB
         xalloc*    m_med_allocator;       //
         xalloc*    m_med_allocator_vcd;   // Virtual Commit/Decommit
         void*      m_led_mem_base;        // A memory base pointer
-        u64        m_led_mem_range;       // 768 MB
+        u32        m_led_mem_range;       // 768 MB
         u32        m_led_min_size;        // 64 KB
         u32        m_led_step_size;       // 4096 B (size alignment)
         u32        m_led_max_size;        // 512 KB
@@ -160,13 +160,13 @@ namespace xcore
         m_node16_heap = nullptr;
         m_node32_heap = nullptr;
 
-        m_med_mem_range = (u64)768 * 1024 * 1024;
+        m_med_mem_range = (u32)768 * 1024 * 1024;
         m_med_mem_base  = nullptr;
         m_med_min_size  = 4096;
         m_med_step_size = 256;
         m_med_max_size  = 64 * 1024;
 
-        m_led_mem_range = (u64)768 * 1024 * 1024;
+        m_led_mem_range = (u32)768 * 1024 * 1024;
         m_led_mem_base  = nullptr;
         m_led_min_size  = 64 * 1024;
         m_led_step_size = 4096;
@@ -177,7 +177,7 @@ namespace xcore
         u32 const med_mem_attrs = 0; // Page/Memory attributes
         vmem->reserve(m_med_mem_range, med_page_size, med_mem_attrs, m_med_mem_base);
         vmem->commit(m_med_mem_base, med_page_size, (u32)(m_med_mem_range / med_page_size));
-        m_med_allocator     = create_alloc_coalesce_direct(main_heap, m_node16_heap, m_med_mem_base, m_med_mem_range, m_med_min_size, m_med_max_size, m_med_step_size);
+        m_med_allocator     = create_alloc_coalesce_direct(main_heap, m_node16_heap, m_med_mem_base, m_med_mem_range, m_med_min_size, m_med_max_size, m_med_step_size, 4096);
         m_med_allocator_vcd = create_page_vcd_regions_cached(main_heap, m_med_allocator, vmem, m_med_mem_base, m_med_mem_range, med_page_size, 1 * 1024 * 1024, 50);
 
         // Reserve physical memory for the medium/large size allocator
@@ -185,7 +185,7 @@ namespace xcore
         u32 const led_mem_attrs = 0; // Page/Memory attributes
         vmem->reserve(m_led_mem_range, led_page_size, led_mem_attrs, m_led_mem_base);
         vmem->commit(m_led_mem_base, led_page_size, (u32)(m_led_mem_range / led_page_size));
-        m_led_allocator     = create_alloc_coalesce_direct(main_heap, m_node16_heap, m_led_mem_base, m_led_mem_range, m_led_min_size, m_led_max_size, m_led_step_size);
+        m_led_allocator     = create_alloc_coalesce_direct(main_heap, m_node16_heap, m_led_mem_base, m_led_mem_range, m_led_min_size, m_led_max_size, m_led_step_size, 4096);
         m_led_allocator_vcd = create_page_vcd_regions_cached(main_heap, m_med_allocator, vmem, m_led_mem_base, m_led_mem_range, led_page_size, 8 * 1024 * 1024, 50);
 
         // Segregated allocator

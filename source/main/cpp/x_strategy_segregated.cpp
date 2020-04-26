@@ -16,7 +16,9 @@ namespace xcore
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
         virtual u32   v_deallocate(void* ptr) X_FINAL;
-        virtual void  v_release();
+        virtual void  v_release() X_FINAL;
+
+		XCORE_CLASS_PLACEMENT_NEW_DELETE
 
         xalloc*  m_main_heap;
         void*    m_mem_base;
@@ -34,9 +36,7 @@ namespace xcore
     {
         ASSERT(xispo2(allocsize_min) && xispo2(allocsize_max) && xispo2(allocsize_align));
 
-        u32 const pagesize = 0;
-
-        xalloc_segregated* self = (xalloc_segregated*)main_heap->allocate(sizeof(xalloc_segregated));
+        xalloc_segregated* self = main_heap->construct<xalloc_segregated>();
         self->m_main_heap       = main_heap;
         self->m_mem_base        = mem_address;
         self->m_mem_range       = mem_range;
@@ -51,9 +51,9 @@ namespace xcore
         void*     fsa_mem_base  = mem_address;
         u64 const fsa_mem_range = mem_range / self->m_alloc_count;
         u32       fsa_size      = allocsize_min;
-        for (s32 i = 0; i < self->m_alloc_count; ++i)
+        for (u32 i = 0; i < self->m_alloc_count; ++i)
         {
-            self->m_allocators[i] = create_alloc_fsa_large(main_heap, node_heap, fsa_mem_base, fsa_mem_range, pagesize, fsa_size);
+            self->m_allocators[i] = create_alloc_fsa_large(main_heap, node_heap, fsa_mem_base, fsa_mem_range, allocsize_align, fsa_size);
             fsa_mem_base          = advance_ptr(fsa_mem_base, fsa_mem_range);
             fsa_size              = fsa_size << 1;
         }
@@ -63,12 +63,13 @@ namespace xcore
 
     void xalloc_segregated::v_release()
     {
-        for (s32 i = 0; i < m_alloc_count; ++i)
+        for (u32 i = 0; i < m_alloc_count; ++i)
         {
             m_allocators[i]->release();
             m_allocators[i] = nullptr;
         }
         m_main_heap->deallocate(m_allocators);
+		m_main_heap->deallocate(this);
     }
 
     void* xalloc_segregated::v_allocate(u32 size, u32 alignment)
@@ -85,7 +86,7 @@ namespace xcore
 
     u32 xalloc_segregated::v_deallocate(void* ptr)
     {
-        const u32 index = ((u64)ptr - (u64)m_mem_base) / (m_mem_range / m_alloc_count);
+        const u32 index = (u32)(((u64)ptr - (u64)m_mem_base) / (m_mem_range / m_alloc_count));
         const u32 size  = m_allocators[index]->deallocate(ptr);
 
         return size;

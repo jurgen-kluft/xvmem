@@ -32,6 +32,8 @@ namespace xcore
 			virtual void insert_size(u32 size_index, u32 addr_index);
 			virtual bool find_size(u32& size_index, u32& addr_index) const = 0;
 
+			XCORE_CLASS_PLACEMENT_NEW_DELETE
+
 		private:
 			u64  m_size_occ[SIZE_OCC]; // u64[2] (128 bits)
 			u16* m_size_db0;           // u16[128]
@@ -156,6 +158,8 @@ namespace xcore
 			virtual void remove_size(u32 size_index, u32 addr_index);
 			virtual void insert_size(u32 size_index, u32 addr_index);
 			virtual bool find_size(u32& size_index, u32& addr_index) const;
+
+			XCORE_CLASS_PLACEMENT_NEW_DELETE
 
 		private:
 			u64  m_size_occ[SIZE_OCC]; // u64[4] (2048 bits = 32 B)
@@ -282,6 +286,8 @@ namespace xcore
 			virtual void remove_size(u32 size_index, u32 addr_index);
 			virtual void insert_size(u32 size_index, u32 addr_index);
 			virtual bool find_size(u32& size_index, u32& addr_index) const;
+
+			XCORE_CLASS_PLACEMENT_NEW_DELETE
 
 		private:
 			u64  m_size_occ[SIZE_OCC]; // u64[4] (2048 bits = 32 B)

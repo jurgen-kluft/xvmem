@@ -17,10 +17,8 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
         static xfsadexed* sNodeHeap = nullptr;
 
         static const u64 sMemoryRange = (u64)128 * 1024 * 1024 * 1024;
-        static const u64 sSpaceRange  = (u64)256 * 1024 * 1024;
-        static const u64 sMinumSize   = (u64)64 * 10 * 1024;
+        static const u64 sMinumSize   = (u64)256 * 1024;
         static const u64 sMaximumSize = (u64)32 * 1024 * 1024;
-        static const u64 sStepSize    = (u64)2 * 1024 * 1024;
         static const u32 sPageSize    = (u64)64 * 1024;
 
         UNITTEST_FIXTURE_SETUP()

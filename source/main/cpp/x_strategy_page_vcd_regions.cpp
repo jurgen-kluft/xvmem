@@ -20,8 +20,8 @@ namespace xcore
         virtual u32   v_deallocate(void* ptr) X_FINAL;
         virtual void  v_release();
 
-        void commit_region(void* reg_base, u32 num_regions) { m_vmem->commit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); }
-        void decommit_region(void* reg_base, u32 num_regions) { m_vmem->decommit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size); }
+        void commit_region(void* reg_base, u32 num_regions) { m_vmem->commit(reg_base, m_page_size, (u32)((num_regions * m_reg_range) / m_page_size)); }
+        void decommit_region(void* reg_base, u32 num_regions) { m_vmem->decommit(reg_base, m_page_size, (u32)((num_regions * m_reg_range) / m_page_size)); }
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
@@ -153,7 +153,7 @@ namespace xcore
         proxy->m_mem_base    = address_base;
         proxy->m_mem_range   = address_range;
         proxy->m_reg_range   = region_size;
-        proxy->m_num_regions = address_range / region_size;
+        proxy->m_num_regions = (u32)(address_range / region_size);
         proxy->m_regions     = (xalloc_page_vcd_regions::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions::region_t) * proxy->m_num_regions);
 
         return proxy;

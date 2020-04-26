@@ -16,10 +16,10 @@ namespace xcore
 
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
 
-    class xalloc_page_vcd_regions : public xalloc
+    class xalloc_page_vcd_regions_cached : public xalloc
     {
     public:
-        xalloc_page_vcd_regions();
+        xalloc_page_vcd_regions_cached();
 
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
         virtual u32   v_deallocate(void* ptr) X_FINAL;
@@ -32,7 +32,7 @@ namespace xcore
             {
                 if (!region_1st_is_cached)
                 {
-                    m_vmem->commit(reg_base, m_page_size, (num_regions * m_reg_range) / m_page_size);
+                    m_vmem->commit(reg_base, m_page_size, (u32)((num_regions * m_reg_range) / m_page_size));
                 }
                 else
                 {
@@ -51,11 +51,11 @@ namespace xcore
                 else if (region_1st_is_cached && !region_2nd_is_cached)
                 {
                     m_regions_cache.remove_item(m_regions_list, region_index);
-                    m_vmem->commit(advance_ptr(reg_base, m_reg_range), m_page_size, m_reg_range / m_page_size);
+                    m_vmem->commit(advance_ptr(reg_base, m_reg_range), m_page_size, (u32)(m_reg_range / m_page_size));
                 }
                 else if (!region_1st_is_cached && region_2nd_is_cached)
                 {
-                    m_vmem->commit(reg_base, m_page_size, m_reg_range / m_page_size);
+                    m_vmem->commit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
                     m_regions_cache.remove_item(m_regions_list, region_index + 1);
                 }
             }
@@ -76,7 +76,7 @@ namespace xcore
                     xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
                     u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
                     void*             reg_base = advance_ptr(m_mem_base, iregion * m_reg_range);
-                    m_vmem->decommit(reg_base, m_page_size, m_reg_range / m_page_size);
+                    m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
                 }
             }
             else
@@ -96,7 +96,7 @@ namespace xcore
                         xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
                         u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
                         void*             reg_base = advance_ptr(m_mem_base, iregion * m_reg_range);
-                        m_vmem->decommit(reg_base, m_page_size, m_reg_range / m_page_size);
+                        m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
                     }
                 }
             }
@@ -123,7 +123,7 @@ namespace xcore
         xalist_t::node_t* m_regions_list;       // Every region has a list node
     };
 
-    xalloc_page_vcd_regions::xalloc_page_vcd_regions()
+    xalloc_page_vcd_regions_cached::xalloc_page_vcd_regions_cached()
         : m_main_heap(nullptr)
         , m_allocator(nullptr)
         , m_vmem(nullptr)
@@ -138,7 +138,7 @@ namespace xcore
     {
     }
 
-    void* xalloc_page_vcd_regions::v_allocate(u32 size, u32 alignment)
+    void* xalloc_page_vcd_regions_cached::v_allocate(u32 size, u32 alignment)
     {
         void*     ptr        = m_allocator->allocate(size, alignment);
         u32 const alloc_size = size; // size alignment ?
@@ -185,7 +185,7 @@ namespace xcore
         return ptr;
     }
 
-    u32 xalloc_page_vcd_regions::v_deallocate(void* ptr)
+    u32 xalloc_page_vcd_regions_cached::v_deallocate(void* ptr)
     {
         u32 const alloc_size = m_allocator->deallocate(ptr);
 
@@ -231,7 +231,7 @@ namespace xcore
         return alloc_size;
     }
 
-    void xalloc_page_vcd_regions::v_release()
+    void xalloc_page_vcd_regions_cached::v_release()
     {
         m_main_heap->deallocate(m_regions);
         m_main_heap->deallocate(this);
@@ -239,7 +239,7 @@ namespace xcore
 
     xalloc* create_page_vcd_regions_cached(xalloc* main_heap, xalloc* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size, u32 num_regions_to_cache)
     {
-        xalloc_page_vcd_regions* proxy = main_heap->construct<xalloc_page_vcd_regions>();
+        xalloc_page_vcd_regions_cached* proxy = main_heap->construct<xalloc_page_vcd_regions_cached>();
 
         proxy->m_main_heap    = main_heap;
         proxy->m_allocator    = allocator;
@@ -248,8 +248,8 @@ namespace xcore
         proxy->m_mem_base     = address_base;
         proxy->m_mem_range    = address_range;
         proxy->m_reg_range    = region_size;
-        proxy->m_num_regions  = address_range / region_size;
-        proxy->m_regions      = (xalloc_page_vcd_regions::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions::region_t) * proxy->m_num_regions);
+        proxy->m_num_regions  = (u32)(address_range / region_size);
+        proxy->m_regions      = (xalloc_page_vcd_regions_cached::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
         proxy->m_regions_list = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * proxy->m_num_regions);
 
         for (u32 i = 0; i < proxy->m_num_regions; ++i)

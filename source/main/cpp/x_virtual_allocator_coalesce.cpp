@@ -64,7 +64,8 @@ namespace xcore
         allocator->m_vmem      = vmem;
         allocator->m_mem_base  = allocator->m_mem_base;
         allocator->m_mem_range = mem_size;
-        allocator->m_allocator = create_alloc_coalesce_direct(main_heap, node_heap, mem_base, mem_size, alloc_size_min, alloc_size_max, alloc_size_step);
+		ASSERT(mem_size < (u32)2 * 1024 * 1024 * 1024);
+        allocator->m_allocator = create_alloc_coalesce_direct(main_heap, node_heap, mem_base, (u32)mem_size, alloc_size_min, alloc_size_max, alloc_size_step, 4096);
 
         return allocator;
     }

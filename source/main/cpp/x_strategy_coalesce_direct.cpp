@@ -8,7 +8,7 @@
 #include "xvmem/private/x_strategy_coalesce.h"
 #include "xvmem/x_virtual_memory.h"
 
-#include "x_strategy_coalesce_size_db.cpp"
+#include "x_strategy_coalesce_size_db.inline.cpp"
 
 namespace xcore
 {
@@ -23,6 +23,7 @@ namespace xcore
             static u32 const FLAG_FREE = 0x0;
             static u32 const FLAG_USED = 0x80000000;
             static u32 const FLAG_MASK = 0x80000000;
+			static u32 const ADDR_MASK = 0x7fffffff;
 
             u32 m_addr;      // (m_addr * size step) + base addr
             u32 m_size;      // [Free, Locked] + Size
@@ -39,9 +40,9 @@ namespace xcore
 
             XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-            inline u32  get_addr() const { return (u32)(m_addr & 0x7ffffff); }
-            inline void set_addr(u32 addr) { m_addr = (m_addr & 0x80000000) | (addr & 0x7fffffff); }
-            inline u32  get_addr_index(u32 const addr_range) const { return (m_addr & 0x7ffffff) / addr_range; }
+            inline u32  get_addr() const { return (u32)(m_addr & ADDR_MASK); }
+            inline void set_addr(u32 addr) { m_addr = (m_addr & FLAG_MASK) | (addr & ADDR_MASK); }
+            inline u32  get_addr_index(u32 const addr_range) const { return (m_addr & ADDR_MASK) / addr_range; }
             inline void set_size(u32 size, u8 size_index) { m_size = (size_index << 24) | (size >> 10); }
             inline u32  get_size() const { return (m_size & 0x00FFFFFF) << 10; }
             inline u32  get_size_index() const { return ((m_size >> 24) & 0x7F); }
@@ -208,7 +209,7 @@ namespace xcore
             instance->m_node_heap = node_heap;
 			instance->m_allocation_count = 0;
 
-            u32 const size_index_count = (size_max - size_min / size_step) + 1; // The +1 is for the size index entry that keeps track of the nodes > max_size
+            u32 const size_index_count = ((size_max - size_min) / size_step) + 1; // The +1 is for the size index entry that keeps track of the nodes > max_size
             ASSERT(size_index_count < 256);                                     // There is only one byte reserved to keep track of the size index
 
             instance->m_size_cfg.m_size_index_count = size_index_count;
@@ -218,7 +219,7 @@ namespace xcore
 
 			ASSERT(xispo2(addr_count));	// The address node count should be a power-of-2
             instance->m_addr_db.m_addr_count = addr_count;
-            instance->m_addr_db.m_addr_range = (memory_range / addr_count);
+            instance->m_addr_db.m_addr_range = (u32)(memory_range / addr_count);
             instance->m_addr_db.m_nodes      = (u32*)main_heap->allocate(addr_count * sizeof(u32), sizeof(void*));
             instance->m_addr_db.reset();
 
@@ -235,16 +236,26 @@ namespace xcore
             head_node->set_addr(0);
             head_node->set_size(xalloc_coalesce_direct::ADDR_OFFSET, 0);
             tail_node->set_used();
-            tail_node->set_addr(memory_range + xalloc_coalesce_direct::ADDR_OFFSET);
+            tail_node->set_addr((u32)memory_range + xalloc_coalesce_direct::ADDR_OFFSET);
             tail_node->set_size(xalloc_coalesce_direct::ADDR_OFFSET, 0);
             main_node->set_addr(xalloc_coalesce_direct::ADDR_OFFSET);
-            main_node->set_size(memory_range, size_index_count - 1);
+            main_node->set_size((u32)memory_range, size_index_count - 1);
 
             // head <-> main <-> tail
             main_node->m_prev_addr = head_inode;
             main_node->m_next_addr = tail_inode;
             head_node->m_next_addr = main_inode;
             tail_node->m_prev_addr = main_inode;
+
+			if (addr_count > 2048 && addr_count <= 4096)
+			{
+				instance->m_size_db = main_heap->construct<xsize_db_s256_a4096>();
+				instance->m_size_db->initialize(main_heap);
+			}
+			else 
+			{
+				ASSERT(false);	// Not implemented
+			}
 
             instance->m_size_db->insert_size(main_node->get_size_index(), 0);
             instance->m_addr_db.m_nodes[0] = head_inode;
@@ -262,12 +273,15 @@ namespace xcore
                 pnode = idx2node(inode);
             }
 
+			m_size_db->release(m_main_heap);
+			m_main_heap->deallocate(m_size_db);
             m_main_heap->deallocate(m_addr_db.m_nodes);
+			m_main_heap->deallocate(this);
         }
 
         void xaddr_db::reset()
         {
-            for (s32 i = 0; i < m_addr_count; ++i)
+            for (u32 i = 0; i < m_addr_count; ++i)
                 m_nodes[i] = node_t::NIL;
         }
 
@@ -512,14 +526,9 @@ namespace xcore
 
     using namespace xcoalescestrat_direct;
 
-	xalloc* create_alloc_coalesce_direct(xalloc* main_heap, xfsadexed* node_heap, void* mem_base, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step)
+	xalloc* create_alloc_coalesce_direct(xalloc* main_heap, xfsadexed* node_heap, void* mem_base, u32 mem_range, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 addr_cnt)
 	{
 		xalloc_coalesce_direct* allocator = main_heap->construct<xalloc_coalesce_direct>();
-
-		u32 const addr_cnt = mem_range / 4096;
-		u32 const num_sizes = (alloc_size_max - alloc_size_min) / alloc_size_step;
-		ASSERT(num_sizes < 255);
-
 		initialize(allocator, main_heap, node_heap, alloc_size_min, alloc_size_max, alloc_size_step, mem_range, addr_cnt);
 		return allocator;
 	}
