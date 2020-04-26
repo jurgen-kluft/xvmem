@@ -92,6 +92,108 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			gDestroyList(list_data);
 		}
 
+        UNITTEST_TEST(insert_N_remove_head) 
+		{
+			xalist_t::node_t* list_data = gCreateList(1024);
+			xalist_t list;
+
+			CHECK_TRUE(list.is_empty());
+			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+
+			const s32 count = 256;
+			for (s32 i=0; i<count; ++i)
+			{
+				list.insert(list_data, i);
+			}
+
+			CHECK_FALSE(list.is_empty());
+			CHECK_EQUAL(count, list.m_count);
+			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
+
+			for (s32 i=0; i<count; ++i)
+			{
+				xalist_t::node_t* node = list.remove_head(list_data);
+				CHECK_FALSE(node->is_linked());
+				CHECK_EQUAL(xalist_t::NIL, node->m_next);
+				CHECK_EQUAL(xalist_t::NIL, node->m_prev);
+			}
+
+			CHECK_TRUE(list.is_empty());
+			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+
+			gDestroyList(list_data);
+		}
+
+        UNITTEST_TEST(insert_N_remove_tail) 
+		{
+			xalist_t::node_t* list_data = gCreateList(1024);
+			xalist_t list;
+
+			CHECK_TRUE(list.is_empty());
+			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+
+			const s32 count = 256;
+			for (s32 i=0; i<count; ++i)
+			{
+				list.insert(list_data, i);
+			}
+
+			CHECK_FALSE(list.is_empty());
+			CHECK_EQUAL(count, list.m_count);
+			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
+
+			for (s32 i=0; i<count; ++i)
+			{
+				xalist_t::node_t* node = list.remove_tail(list_data);
+				CHECK_FALSE(node->is_linked());
+				CHECK_EQUAL(xalist_t::NIL, node->m_next);
+				CHECK_EQUAL(xalist_t::NIL, node->m_prev);
+			}
+
+			CHECK_TRUE(list.is_empty());
+			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+
+			gDestroyList(list_data);
+		}
+
+        UNITTEST_TEST(insert_N_remove_item) 
+		{
+			xalist_t::node_t* list_data = gCreateList(1024);
+			xalist_t list;
+
+			CHECK_TRUE(list.is_empty());
+			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+
+			const s32 count = 256;
+			for (s32 i=0; i<count; ++i)
+			{
+				list.insert(list_data, i);
+			}
+
+			CHECK_FALSE(list.is_empty());
+			CHECK_EQUAL(count, list.m_count);
+			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
+
+			for (s32 i=0; i<count; ++i)
+			{
+				xalist_t::node_t* node = list.remove_item(list_data, i);
+				CHECK_FALSE(node->is_linked());
+				CHECK_EQUAL(xalist_t::NIL, node->m_next);
+				CHECK_EQUAL(xalist_t::NIL, node->m_prev);
+			}
+
+			CHECK_TRUE(list.is_empty());
+			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+
+			gDestroyList(list_data);
+		}
+
     }
 }
 UNITTEST_SUITE_END

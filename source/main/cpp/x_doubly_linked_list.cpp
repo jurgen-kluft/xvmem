@@ -51,24 +51,28 @@ namespace xcore
         m_count += 1;
     }
 
-    void xalist_t::remove_item(node_t* list, u16 item)
+    xalist_t::node_t* xalist_t::remove_item(node_t* list, u16 item)
     {
-        node_t* const phead = idx2node(list, m_head);
         node_t* const pitem = idx2node(list, item);
         node_t* const pprev = idx2node(list, pitem->m_prev);
         node_t* const pnext = idx2node(list, pitem->m_next);
         pprev->m_next       = pitem->m_next;
         pnext->m_prev       = pitem->m_prev;
-        pitem->link(item, item);
-        if (m_head == item)
-        {
-            m_head = node2idx(list, pnext);
-            if (m_head == item)
-            {
-                m_head = NIL;
-            }
-        }
-        m_count -= 1;
+        pitem->unlink();
+		if (m_count == 1)
+		{
+			m_head = NIL;
+	        m_count = 0;
+		}
+        else
+		{
+			if (m_head == item)
+			{
+				m_head = node2idx(list, pnext);
+			}
+	       m_count--;
+		}
+		return pitem;
     }
 
     xalist_t::node_t* xalist_t::remove_head(node_t* list)

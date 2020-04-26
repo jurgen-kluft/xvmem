@@ -36,7 +36,7 @@ namespace xcore
         inline bool is_empty() const { return m_count == 0; }
         void        insert(node_t* list, u16 item);      // Inserts 'item' at the head
         void        insert_tail(node_t* list, u16 item); // Inserts 'item' at the tail end
-        void        remove_item(node_t* list, u16 item);
+        node_t*     remove_item(node_t* list, u16 item);
         node_t*     remove_head(node_t* list);
         node_t*     remove_tail(node_t* list);
         node_t*     idx2node(node_t* list, u16 i);
