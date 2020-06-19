@@ -157,8 +157,8 @@ namespace xcore
 
         // TODO: Create node heap for nodes with size 16B
         // We prefer to create a separate virtual memory based FSA allocator.
-        m_node16_heap = nullptr;
-        m_node32_heap = nullptr;
+        m_node16_heap = gCreateVMemBasedDexedFsa(main_heap, vmem, 16 * 1024 * 1024, 16);
+        m_node32_heap = gCreateVMemBasedDexedFsa(main_heap, vmem, 32 * 1024 * 1024, 32);
 
         m_med_mem_range = (u32)768 * 1024 * 1024;
         m_med_mem_base  = nullptr;
@@ -169,7 +169,7 @@ namespace xcore
         m_led_mem_range = (u32)768 * 1024 * 1024;
         m_led_mem_base  = nullptr;
         m_led_min_size  = 64 * 1024;
-        m_led_step_size = 4096;
+        m_led_step_size = 2048;
         m_led_max_size  = 512 * 1024;
 
         // Reserve physical memory for the small/medium size allocator
@@ -186,7 +186,7 @@ namespace xcore
         vmem->reserve(m_led_mem_range, led_page_size, led_mem_attrs, m_led_mem_base);
         vmem->commit(m_led_mem_base, led_page_size, (u32)(m_led_mem_range / led_page_size));
         m_led_allocator     = create_alloc_coalesce_direct(main_heap, m_node16_heap, m_led_mem_base, m_led_mem_range, m_led_min_size, m_led_max_size, m_led_step_size, 4096);
-        m_led_allocator_vcd = create_page_vcd_regions_cached(main_heap, m_med_allocator, vmem, m_led_mem_base, m_led_mem_range, led_page_size, 8 * 1024 * 1024, 50);
+        m_led_allocator_vcd = create_page_vcd_regions_cached(main_heap, m_med_allocator, vmem, m_led_mem_base, m_led_mem_range, led_page_size, 8 * 1024 * 1024, 8);
 
         // Segregated allocator
         m_seg_min_size  = (u32)512 * 1024;       // 512 KB

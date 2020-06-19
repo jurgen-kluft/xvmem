@@ -11,6 +11,7 @@ UNITTEST_SUITE_LIST(xVMemUnitTest);
 
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, doubly_linked_list);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, binarysearch_tree);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, main_allocator);
 // UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce_direct);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_small);
@@ -44,8 +45,8 @@ namespace xcore
 
     public:
         UnitTestAllocator(xcore::xalloc* allocator) { mAllocator = allocator; }
-        virtual void* Allocate(xsize_t size) { return mAllocator->allocate((u32)size, sizeof(void*)); }
-        virtual void  Deallocate(void* ptr) { mAllocator->deallocate(ptr); }
+        virtual void*   Allocate(xsize_t size) { return mAllocator->allocate((u32)size, sizeof(void*)); }
+        virtual size_t  Deallocate(void* ptr) { return mAllocator->deallocate(ptr); }
     };
 
     class TestAllocator : public xalloc
