@@ -263,7 +263,7 @@ namespace xcore
 
         void xalloc_coalesce_direct::v_release()
         {
-            u32     inode = m_addr_db.m_nodes[0]; // Should be 'head' node
+            u32     inode = m_addr_db.m_nodes[0]; // 'head' node
             node_t* pnode = idx2node(inode);
             while (pnode != nullptr)
             {
@@ -291,12 +291,12 @@ namespace xcore
             pnode->set_used();
             u32       node_sidx = pnode->get_size_index();
             u32 const node_aidx = pnode->get_addr_index(m_addr_range);
-            size_db->remove_size(node_sidx, node_aidx);
 
-            // Rescan address node 'node_aidx' if it still has nodes with the same size-index 'node-aidx'
-            if (has_size_index(node_aidx, node_alloc, node_sidx))
+            // If node 'node_aidx' still has nodes with the same size-index 'node-aidx' then we do not need to
+			// remove this from the size-db.
+            if (!has_size_index(node_aidx, node_alloc, node_sidx))
             {
-                size_db->insert_size(node_sidx, node_aidx);
+	            size_db->remove_size(node_sidx, node_aidx);
             }
         }
 

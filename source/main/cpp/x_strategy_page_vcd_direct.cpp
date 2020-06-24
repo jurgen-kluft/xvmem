@@ -51,7 +51,7 @@ namespace xcore
         return alloc_size;
     }
 
-    void xalloc_page_vcd_direct::v_release() { m_main_heap->deallocate(this); }
+    void xalloc_page_vcd_direct::v_release() { m_main_heap->destruct(this); }
 
     xalloc* create_page_vcd_direct(xalloc* main_heap, xalloc* allocator, xvmem* vmem, u32 page_size)
     {

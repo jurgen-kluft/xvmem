@@ -139,7 +139,7 @@ namespace xcore
     void xalloc_page_vcd_regions::v_release()
     {
         m_main_heap->deallocate(m_regions);
-        m_main_heap->deallocate(this);
+        m_main_heap->destruct(this);
     }
 
     xalloc* create_page_vcd_regions(xalloc* main_heap, xalloc* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size)

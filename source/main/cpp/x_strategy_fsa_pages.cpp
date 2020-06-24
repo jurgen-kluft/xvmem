@@ -110,6 +110,7 @@ namespace xcore
             , m_page_list(list_data)
             , m_pages(page_array)
         {
+            m_free_page_list.initialize(list_data, page_cnt);
         }
 
         xpage_t* alloc_page(u32 const elem_size);
@@ -319,15 +320,6 @@ namespace xcore
         xpage_t*          page_array     = (xpage_t*)main_allocator->allocate(sizeof(xpage_t) * page_cnt, sizeof(void*));
         xalist_t::node_t* page_list_data = (xalist_t::node_t*)main_allocator->allocate(sizeof(xalist_t::node_t) * page_cnt, sizeof(void*));
         xpages_t*         pages          = main_allocator->construct<xpages_t>(main_allocator, base_address, page_size, page_cnt, page_list_data, page_array);
-
-        u32 const n = page_cnt;
-        for (u32 i = 0; i < n; ++i)
-        {
-            page_array[i].init();
-            page_list_data[i].link(i - 1, i + 1);
-        }
-        page_list_data[0].link(n - 1, 1);
-        page_list_data[n - 1].link(n - 2, 0);
 
         return pages;
     }

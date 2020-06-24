@@ -145,7 +145,6 @@ namespace xcore
 
         u32 const region_index_L = (u32)(((u64)ptr - (u64)m_mem_base) / m_reg_range);
         u16 const region_ref_L   = m_regions[region_index_L].m_counter;
-        m_regions[region_index_L].m_counter += 1;
         u32 const region_index_R = (u32)((((u64)ptr + alloc_size) - (u64)m_mem_base) / m_reg_range);
         u16 const region_ref_R   = m_regions[region_index_R].m_counter;
 
@@ -154,6 +153,7 @@ namespace xcore
 
         if (region_index_L == region_index_R)
         {
+            m_regions[region_index_L].m_counter += 1;
             if (region_ref_L == 0)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
@@ -162,6 +162,7 @@ namespace xcore
         }
         else
         {
+            m_regions[region_index_L].m_counter += 1;
             m_regions[region_index_R].m_counter += 1;
 
             ASSERT((region_index_R - region_index_L) == 1);
@@ -191,7 +192,6 @@ namespace xcore
 
         u32 const region_index_L = (u32)(((u64)ptr - (u64)m_mem_base) / m_reg_range);
         u16 const region_ref_L   = m_regions[region_index_L].m_counter;
-        m_regions[region_index_L].m_counter -= 1;
         u32 const region_index_R = (u32)((((u64)ptr + alloc_size) - (u64)m_mem_base) / m_reg_range);
         u16 const region_ref_R   = m_regions[region_index_R].m_counter;
 
@@ -200,6 +200,7 @@ namespace xcore
 
         if (region_index_L == region_index_R)
         {
+            m_regions[region_index_L].m_counter -= 1;
             if (region_ref_L == 1)
             {
                 void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
@@ -208,6 +209,7 @@ namespace xcore
         }
         else
         {
+            m_regions[region_index_L].m_counter -= 1;
             m_regions[region_index_R].m_counter -= 1;
 
             ASSERT((region_index_R - region_index_L) == 1);
@@ -234,7 +236,7 @@ namespace xcore
     void xalloc_page_vcd_regions_cached::v_release()
     {
         m_main_heap->deallocate(m_regions);
-        m_main_heap->deallocate(this);
+        m_main_heap->destruct(this);
     }
 
     xalloc* create_page_vcd_regions_cached(xalloc* main_heap, xalloc* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size, u32 num_regions_to_cache)

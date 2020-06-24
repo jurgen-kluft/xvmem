@@ -9,6 +9,19 @@ namespace xcore
 {
     const u16 xalist_t::NIL = 0xffff;
 
+    void xalist_t::initialize(node_t* list, u16 max_count)
+    {
+        for (u32 i = 0; i < max_count; ++i)
+        {
+            list[i].link(i - 1, i + 1);
+        }
+        list[0].link(max_count - 1, 1);
+        list[max_count - 1].link(max_count - 2, 0);
+
+        m_count = max_count;
+        m_head  = 0;
+    }
+
     void xalist_t::insert(node_t* list, u16 item)
     {
         node_t* const pitem = idx2node(list, item);
@@ -59,20 +72,20 @@ namespace xcore
         pprev->m_next       = pitem->m_next;
         pnext->m_prev       = pitem->m_prev;
         pitem->unlink();
-		if (m_count == 1)
-		{
-			m_head = NIL;
-	        m_count = 0;
-		}
+        if (m_count == 1)
+        {
+            m_head  = NIL;
+            m_count = 0;
+        }
         else
-		{
-			if (m_head == item)
-			{
-				m_head = node2idx(list, pnext);
-			}
-	       m_count--;
-		}
-		return pitem;
+        {
+            if (m_head == item)
+            {
+                m_head = node2idx(list, pnext);
+            }
+            m_count--;
+        }
+        return pitem;
     }
 
     xalist_t::node_t* xalist_t::remove_head(node_t* list)

@@ -26,14 +26,22 @@ public:
         m_main_allocator = main_allocator;
         m_page_size      = page_size;
 
-		// The first one is for FSA
+		// The first one is for FSA and is intrusive so we need actual memory
 		m_index = 0;
 		m_mem_range[0] = 512 * 1024 * 1024;
-		m_mem_address[0] = gTestAllocator->allocate((u32)m_mem_range[0], 64*1024);
-        for (s32 i=1; i<8; i++)
+		m_mem_address[0] = gTestAllocator->allocate((u32)m_mem_range[0], 512*1024*1024);
+		m_mem_range[1] = 32 * 1024 * 1024;
+		m_mem_address[1] = gTestAllocator->allocate((u32)m_mem_range[1], 32*1024*1024);
+		m_mem_range[2] = 32 * 1024 * 1024;
+		m_mem_address[2] = gTestAllocator->allocate((u32)m_mem_range[2], 32*1024*1024);
+		m_mem_range[3] = 1 * 1024 * 1024 * 1024;
+		m_mem_address[3] = (void*)((u64)m_mem_address[0] + m_mem_range[3]);
+		m_mem_range[4] = 1 * 1024 * 1024 * 1024;
+		m_mem_address[4] = (void*)((u64)m_mem_address[1] + m_mem_range[4]);
+        for (s32 i=5; i<7; i++)
 		{
-			m_mem_range[i] = ((u64)i * 64 * 1024 * 1024 * 1024);
-			m_mem_address[i] = (void*)((u64)m_mem_address[0] + m_mem_range[i]);
+			m_mem_range[i] = ((u64)128 * 1024 * 1024 * 1024);
+			m_mem_address[i] = (void*)((u64)m_mem_address[i-1] + m_mem_range[i-1]);
 		}
     }
 
@@ -46,6 +54,7 @@ public:
 
     virtual bool reserve(u64 address_range, u32& page_size, u32 attributes, void*& baseptr)
     {
+		ASSERT(m_index < 8);
         page_size = m_page_size;
         baseptr   = m_mem_address[m_index];
 		m_index += 1;

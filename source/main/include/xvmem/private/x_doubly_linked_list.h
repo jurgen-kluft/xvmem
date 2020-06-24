@@ -33,17 +33,23 @@ namespace xcore
             u16         m_prev, m_next;
         };
 
+        void initialize(node_t* list, u16 max_count);
+
         inline bool is_empty() const { return m_count == 0; }
-		inline void reset() { m_count = 0; m_head = NIL; }
-        void        insert(node_t* list, u16 item);      // Inserts 'item' at the head
-        void        insert_tail(node_t* list, u16 item); // Inserts 'item' at the tail end
-        node_t*     remove_item(node_t* list, u16 item);
-        node_t*     remove_head(node_t* list);
-        node_t*     remove_tail(node_t* list);
-        node_t*     idx2node(node_t* list, u16 i);
-        u16         node2idx(node_t* list, node_t* n);
-        u16         m_count;
-        u16         m_head;
+        inline void reset()
+        {
+            m_count = 0;
+            m_head  = NIL;
+        }
+        void    insert(node_t* list, u16 item);      // Inserts 'item' at the head
+        void    insert_tail(node_t* list, u16 item); // Inserts 'item' at the tail end
+        node_t* remove_item(node_t* list, u16 item);
+        node_t* remove_head(node_t* list);
+        node_t* remove_tail(node_t* list);
+        node_t* idx2node(node_t* list, u16 i);
+        u16     node2idx(node_t* list, node_t* n);
+        u16     m_count;
+        u16     m_head;
     };
 
 } // namespace xcore

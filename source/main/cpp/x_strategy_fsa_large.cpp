@@ -77,32 +77,27 @@ namespace xcore
         xblock_info_t*    binfo_array = (xblock_info_t*)main_heap->allocate(sizeof(xblock_info_t) * block_count);
         xalist_t::node_t* list_nodes  = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * block_count);
 
-        xalloc_fsa_large* instance          = main_heap->construct<xalloc_fsa_large>();
-        instance->m_main_heap               = main_heap;
-        instance->m_node_heap               = node_heap;
-        instance->m_address_base            = mem_base;
-        instance->m_address_range           = mem_range;
-        instance->m_allocsize               = xceilpo2(allocsize);
-        instance->m_pagesize                = pagesize;
-        instance->m_block_count             = block_count;
-        instance->m_block_array             = block_array;
-        instance->m_binfo_array             = binfo_array;
-        instance->m_list_array              = list_nodes;
-        instance->m_block_used_list         = xalist_t();
-        instance->m_block_full_list         = xalist_t();
-        instance->m_block_empty_list        = xalist_t();
+        xalloc_fsa_large* instance   = main_heap->construct<xalloc_fsa_large>();
+        instance->m_main_heap        = main_heap;
+        instance->m_node_heap        = node_heap;
+        instance->m_address_base     = mem_base;
+        instance->m_address_range    = mem_range;
+        instance->m_allocsize        = xceilpo2(allocsize);
+        instance->m_pagesize         = pagesize;
+        instance->m_block_count      = block_count;
+        instance->m_block_array      = block_array;
+        instance->m_binfo_array      = binfo_array;
+        instance->m_list_array       = list_nodes;
+        instance->m_block_used_list  = xalist_t();
+        instance->m_block_full_list  = xalist_t();
+        instance->m_block_empty_list = xalist_t();
 
-		// Direct initialization of the empty list of blocks
-        instance->m_block_empty_list.m_head = 0;
-		instance->m_block_empty_list.m_count = block_count;
+        // Direct initialization of the empty list of blocks
+        instance->m_block_empty_list.m_head  = 0;
+        instance->m_block_empty_list.m_count = block_count;
 
         // Initialize the block list by linking all blocks into the empty list
-        for (u32 i = 0; i < block_count; ++i)
-        {
-            instance->m_list_array[i].link(i - 1, i + 1);
-        }
-        instance->m_list_array[0].link(block_count - 1, 1);
-        instance->m_list_array[block_count - 1].link(block_count - 2, 0);
+        instance->m_block_empty_list.initialize(list_nodes, block_count);
 
         // All block pointers are initially NULL
         for (u32 i = 0; i < block_count; ++i)
