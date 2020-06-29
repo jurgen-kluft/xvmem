@@ -11,7 +11,7 @@ namespace xcore
 		class xsize_db
 		{
 		public:
-			virtual void initialize(xalloc*) = 0;
+			virtual void initialize(xalloc*, u32 addrcnt) = 0;
 			virtual void release(xalloc*) = 0;
 			virtual void reset() = 0;
 			virtual void remove_size(u32 size_index, u32 addr_index) = 0;
@@ -22,9 +22,9 @@ namespace xcore
 		class xsize_db_s128_a256 : public xsize_db
 		{
 		public:
-			enum { DB0_WIDTH = 16, DB1_WIDTH = 16, SIZE_CNT = 128, SIZE_OCC = SIZE_CNT / 64, WIDTH_OCC = 64, ADDR_CNT = 256};
+			enum { DB0_WIDTH = 16, DB1_WIDTH = 16, SIZE_CNT = 128, SIZE_OCC = SIZE_CNT / 64, WIDTH_OCC = 64, ADDR_CNT = 256, DB1_SIZE = ADDR_CNT / DB1_WIDTH };
         
-			virtual void initialize(xalloc*);
+			virtual void initialize(xalloc*, u32 addrcnt);
 			virtual void release(xalloc*);
 			virtual void reset();
 
@@ -40,10 +40,10 @@ namespace xcore
 			u16* m_size_db1;           // u16[128 * 16]
 		};
 
-		void xsize_db_s128_a256::initialize(xalloc* allocator)
+		void xsize_db_s128_a256::initialize(xalloc* allocator, u32 addrcnt)
 		{
 			m_size_db0 = (u16*)allocator->allocate(SIZE_CNT * (DB0_WIDTH/8), sizeof(void*));
-			m_size_db1 = (u16*)allocator->allocate(SIZE_CNT * ((ADDR_CNT/DB1_WIDTH) * (DB1_WIDTH/8)), sizeof(void*));
+			m_size_db1 = (u16*)allocator->allocate(SIZE_CNT * (DB1_SIZE * (DB1_WIDTH/8)), sizeof(void*));
 			reset();
 		}
 
@@ -70,7 +70,7 @@ namespace xcore
 			u32 const awi    = addr_index / DB1_WIDTH;
 			u32 const abi    = addr_index & (DB1_WIDTH - 1);
 			u32 const ssi    = size_index;
-			u32 const sdbi   = (ssi * DB0_WIDTH) + awi;
+			u32 const sdbi   = (ssi * DB1_SIZE) + awi;
 			m_size_db1[sdbi] = m_size_db1[sdbi] & ~((u16)1 << abi);
 			if (m_size_db1[sdbi] == 0)
 			{
@@ -93,7 +93,7 @@ namespace xcore
 			u32 const awi    = addr_index / DB1_WIDTH;
 			u32 const abi    = addr_index & (DB1_WIDTH - 1);
 			u32 const ssi    = size_index;
-			u32 const sdbi   = (ssi * DB0_WIDTH) + awi;
+			u32 const sdbi   = (ssi * DB1_SIZE) + awi;
 			u16 const osbi   = (m_size_db1[sdbi] & ((u16)1 << abi));
 			m_size_db1[sdbi] = m_size_db1[sdbi] | (u16)(1 << abi);
 			if (osbi == 0)
@@ -139,7 +139,7 @@ namespace xcore
 
 			size_index     = ssi;                                 // communicate back the size index we need to search for
 			u32 const sdb0 = (u32)xfindFirstBit(m_size_db0[ssi]); // get the addr node that has that size
-			u32 const sdbi = (ssi * DB0_WIDTH) + sdb0;
+			u32 const sdbi = (ssi * DB1_SIZE) + sdb0;
 			u32 const adbi = (u32)((sdb0 * DB1_WIDTH) + xfindFirstBit(m_size_db1[sdbi]));
 			addr_index = adbi;
 			return true;
@@ -149,9 +149,9 @@ namespace xcore
 		class xsize_db_s256_a2048 : public xsize_db
 		{
 		public:
-			enum { DB0_WIDTH = 64, DB1_WIDTH = 32, SIZE_CNT = 256, SIZE_OCC = SIZE_CNT / 64, WIDTH_OCC = 64, ADDR_CNT = 2048};
+			enum { DB0_WIDTH = 64, DB1_WIDTH = 32, SIZE_CNT = 256, SIZE_OCC = SIZE_CNT / 64, WIDTH_OCC = 64, ADDR_CNT = 2048, DB1_SIZE = ADDR_CNT / DB1_WIDTH };
 
-			virtual void initialize(xalloc*);
+			virtual void initialize(xalloc*, u32 addrcnt);
 			virtual void release(xalloc*);
 			virtual void reset();
 
@@ -168,10 +168,10 @@ namespace xcore
 		};
 
 
-		void xsize_db_s256_a2048::initialize(xalloc* allocator)
+		void xsize_db_s256_a2048::initialize(xalloc* allocator, u32 addrcnt)
 		{
 			m_size_db0 = (u64*)allocator->allocate(SIZE_CNT * (DB0_WIDTH/8), sizeof(void*));
-			m_size_db1 = (u32*)allocator->allocate(SIZE_CNT * (DB0_WIDTH * (DB1_WIDTH/8)), sizeof(void*));
+			m_size_db1 = (u32*)allocator->allocate(SIZE_CNT * (DB1_SIZE * (DB1_WIDTH/8)), sizeof(void*));
 			reset();
 		}
 
@@ -198,7 +198,7 @@ namespace xcore
 			u32 const awi    = addr_index / DB1_WIDTH;
 			u32 const abi    = addr_index & (DB1_WIDTH - 1);
 			u32 const ssi    = size_index;
-			u32 const sdbi   = (ssi * DB0_WIDTH) + awi;
+			u32 const sdbi   = (ssi * DB1_SIZE) + awi;
 			m_size_db1[sdbi] = m_size_db1[sdbi] & ~((u32)1 << abi);
 			if (m_size_db1[sdbi] == 0)
 			{
@@ -221,7 +221,7 @@ namespace xcore
 			u32 const awi    = addr_index / DB1_WIDTH;
 			u32 const abi    = addr_index & (DB1_WIDTH - 1);
 			u32 const ssi    = size_index;
-			u32 const sdbi   = (ssi * DB0_WIDTH) + awi;
+			u32 const sdbi   = (ssi * DB1_SIZE) + awi;
 			u32 const osbi   = (m_size_db1[sdbi] & ((u32)1 << abi));
 			m_size_db1[sdbi] = m_size_db1[sdbi] | ((u32)1 << abi);
 			if (osbi == 0)
@@ -267,7 +267,7 @@ namespace xcore
 
 			size_index     = ssi;                                 // communicate back the size index we need to search for
 			u32 const sdb0 = (u32)xfindFirstBit(m_size_db0[ssi]); // get the addr node that has that size
-			u32 const sdbi = (ssi * DB0_WIDTH) + sdb0;
+			u32 const sdbi = (ssi * DB1_SIZE) + sdb0;
 			u32 const adbi = (u32)((sdb0 * DB1_WIDTH) + xfindFirstBit(m_size_db1[sdbi]));
 			addr_index = adbi;
 			return true;
@@ -277,9 +277,9 @@ namespace xcore
 		class xsize_db_s256_a4096 : public xsize_db
 		{
 		public:
-			enum { DB0_WIDTH = 64, DB1_WIDTH = 64, SIZE_CNT = 256, SIZE_OCC = SIZE_CNT / 64, WIDTH_OCC = 64, ADDR_CNT = 4096};
+			enum { DB0_WIDTH = 64, DB1_WIDTH = 64, SIZE_CNT = 256, SIZE_OCC = SIZE_CNT / 64, WIDTH_OCC = 64, ADDR_CNT = 4096, DB1_SIZE = ADDR_CNT / DB1_WIDTH };
 
-			virtual void initialize(xalloc*);
+			virtual void initialize(xalloc*, u32 addrcnt);
 			virtual void release(xalloc*);
 			virtual void reset();
 
@@ -293,13 +293,15 @@ namespace xcore
 			u64  m_size_occ[SIZE_OCC]; // u64[4] (2048 bits = 32 B)
 			u64* m_size_db0;           // u64[256] = 16 KB
 			u64* m_size_db1;           // u64[256 * 64] = 128 KB
+			u32  m_size_db1_size;      // u64[..]
 		};
 
 
-		void xsize_db_s256_a4096::initialize(xalloc* allocator)
+		void xsize_db_s256_a4096::initialize(xalloc* allocator, u32 addrcnt)
 		{
 			m_size_db0 = (u64*)allocator->allocate(SIZE_CNT * (DB0_WIDTH/8), sizeof(void*));
-			m_size_db1 = (u64*)allocator->allocate(SIZE_CNT * (DB0_WIDTH * (DB1_WIDTH/8)), sizeof(void*));
+			m_size_db1_size = (addrcnt + (DB1_WIDTH-1)) / DB1_WIDTH;
+			m_size_db1 = (u64*)allocator->allocate(SIZE_CNT * (m_size_db1_size * (DB1_WIDTH/8)), sizeof(void*));
 			reset();
 		}
 
@@ -322,11 +324,11 @@ namespace xcore
 		void xsize_db_s256_a4096::remove_size(u32 size_index, u32 addr_index)
 		{
 			ASSERT(size_index < SIZE_CNT);
-			ASSERT(addr_index < ADDR_CNT);
+			ASSERT(addr_index < (m_size_db1_size * 64));
 			u32 const awi    = addr_index / DB1_WIDTH;
 			u32 const abi    = addr_index & (DB1_WIDTH - 1);
 			u32 const ssi    = size_index;
-			u32 const sdbi   = (ssi * DB0_WIDTH) + awi;
+			u32 const sdbi   = (ssi * m_size_db1_size) + awi;
 			m_size_db1[sdbi] = m_size_db1[sdbi] & ~((u64)1 << abi);
 			if (m_size_db1[sdbi] == 0)
 			{
@@ -345,11 +347,11 @@ namespace xcore
 		void xsize_db_s256_a4096::insert_size(u32 size_index, u32 addr_index)
 		{
 			ASSERT(size_index < SIZE_CNT);
-			ASSERT(addr_index < ADDR_CNT);
+			ASSERT(addr_index < (m_size_db1_size * 64));
 			u32 const awi    = addr_index / DB1_WIDTH;
 			u32 const abi    = addr_index & (DB1_WIDTH - 1);
 			u32 const ssi    = size_index;
-			u32 const sdbi   = (ssi * DB0_WIDTH) + awi;
+			u32 const sdbi   = (ssi * m_size_db1_size) + awi;
 			u64 const osbi   = (m_size_db1[sdbi] & ((u64)1 << abi));
 			m_size_db1[sdbi] = m_size_db1[sdbi] | ((u64)1 << abi);
 			if (osbi == 0)
@@ -395,7 +397,7 @@ namespace xcore
 
 			size_index     = ssi;                                 // communicate back the size index we need to search for
 			u32 const sdb0 = (u32)xfindFirstBit(m_size_db0[ssi]); // get the addr node that has that size
-			u32 const sdbi = (ssi * DB0_WIDTH) + sdb0;
+			u32 const sdbi = (ssi * m_size_db1_size) + sdb0;
 			u32 const adbi = (u32)((sdb0 * DB1_WIDTH) + xfindFirstBit(m_size_db1[sdbi]));
 			addr_index = adbi;
 			return true;

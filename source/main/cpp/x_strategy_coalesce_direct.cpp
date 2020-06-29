@@ -102,12 +102,6 @@ namespace xcore
         class xalloc_coalesce_direct : public xalloc
         {
         public:
-            enum
-            {
-                ADDR_OFFSET = 1024
-            };
-
-            // Main API
             virtual void* v_allocate(u32 size, u32 alignment);
             virtual u32   v_deallocate(void* p);
             virtual void  v_release();
@@ -140,6 +134,7 @@ namespace xcore
             xfsadexed* m_node_heap;
 
             // Local variables
+            void*     m_mem_base;
             xsize_cfg m_size_cfg;
             xsize_db* m_size_db;
             xaddr_db  m_addr_db;
@@ -172,12 +167,12 @@ namespace xcore
             }
             ASSERT(pnode->is_used());
 
-            return (void*)((uptr)pnode->get_addr() - ADDR_OFFSET);
+            return (void*)((uptr)pnode->get_addr() + (uptr)m_mem_base);
         }
 
         u32 xalloc_coalesce_direct::v_deallocate(void* p)
         {
-            u32 const addr       = (u32)(uptr)p + ADDR_OFFSET;
+            u32 const addr       = (u32)((uptr)p - (uptr)m_mem_base);
             u32 const addr_index = (addr / m_addr_db.m_addr_range);
 
             node_t* pnode = m_addr_db.get_node_with_addr(addr_index, m_node_heap, addr);
@@ -202,7 +197,7 @@ namespace xcore
             }
         }
 
-        static void initialize(xalloc_coalesce_direct* instance, xalloc* main_heap, xfsadexed* node_heap, u32 size_min, u32 size_max, u32 size_step, u64 memory_range, u32 addr_count)
+        static void initialize(xalloc_coalesce_direct* instance, xalloc* main_heap, xfsadexed* node_heap, u32 size_min, u32 size_max, u32 size_step, void* memory_base, u64 memory_range, u32 addr_count)
         {
             instance->m_main_heap = main_heap;
             instance->m_node_heap = node_heap;
@@ -210,6 +205,7 @@ namespace xcore
             u32 const size_index_count = ((size_max - size_min) / size_step) + 1; // The +1 is for the size index entry that keeps track of the nodes > max_size
             ASSERT(size_index_count < 256);                                       // There is only one byte reserved to keep track of the size index
 
+            instance->m_mem_base                    = memory_base;
             instance->m_size_cfg.m_size_index_count = size_index_count;
             instance->m_size_cfg.m_alloc_size_min   = size_min;
             instance->m_size_cfg.m_alloc_size_max   = size_max;
@@ -232,11 +228,11 @@ namespace xcore
             main_node->init();
             head_node->set_used();
             head_node->set_addr(0);
-            head_node->set_size(xalloc_coalesce_direct::ADDR_OFFSET, 0);
+            head_node->set_size(0, 0);
             tail_node->set_used();
-            tail_node->set_addr((u32)memory_range + xalloc_coalesce_direct::ADDR_OFFSET);
-            tail_node->set_size(xalloc_coalesce_direct::ADDR_OFFSET, 0);
-            main_node->set_addr(xalloc_coalesce_direct::ADDR_OFFSET);
+            tail_node->set_addr((u32)memory_range);
+            tail_node->set_size(0, 0);
+            main_node->set_addr(0);
             main_node->set_size((u32)memory_range, size_index_count - 1);
 
             // head <-> main <-> tail
@@ -248,7 +244,7 @@ namespace xcore
             if (addr_count > 2048 && addr_count <= 4096)
             {
                 instance->m_size_db = main_heap->construct<xsize_db_s256_a4096>();
-                instance->m_size_db->initialize(main_heap);
+                instance->m_size_db->initialize(main_heap, addr_count);
             }
             else
             {
@@ -367,52 +363,66 @@ namespace xcore
 
         void xaddr_db::dealloc(u32 inode, node_t* pnode, bool merge_prev, bool merge_next, xsize_db* size_db, xsize_cfg const& size_cfg, xfsadexed* node_heap)
         {
-            if (merge_next)
-            {
-                u32 const inext = pnode->m_next_addr;
-                node_t*   pnext = (node_t*)node_heap->idx2ptr(inext);
-
-                u32 const node_size_index = pnode->get_size_index();
-                u32 const node_addr_index = pnode->get_addr_index(m_addr_range);
-                size_db->remove_size(node_size_index, node_addr_index);
-                u32 const next_size_index = pnext->get_size_index();
-                u32 const next_addr_index = pnext->get_addr_index(m_addr_range);
-                size_db->remove_size(next_size_index, next_addr_index);
-
-                u32 const next_size = pnext->get_size();
-                u32 const node_size = pnode->get_size() + next_size;
-                pnode->set_size(node_size, size_cfg.size_to_index(node_size));
-
-                remove_node(inext, pnext, node_heap); // we can safely remove 'next' from the address db
-                node_heap->deallocate(pnext);
-
-                rescan_for_size_index(node_addr_index, node_size_index, size_db, node_heap);
-                rescan_for_size_index(next_addr_index, next_size_index, size_db, node_heap);
-                rescan_for_size_index(pnode->get_addr_index(m_addr_range), pnode->get_size_index(), size_db, node_heap);
-            }
-            if (merge_prev)
-            {
-                u32 const iprev = pnode->m_prev_addr;
-                node_t*   pprev = (node_t*)node_heap->idx2ptr(iprev);
-
-                u32 const prev_size_index = pprev->get_size_index();
-                u32 const prev_addr_index = pprev->get_addr_index(m_addr_range);
-                size_db->remove_size(prev_size_index, prev_addr_index);
+			if (!merge_next && !merge_prev)
+			{
                 u32 const node_size_index = pnode->get_size_index();
                 u32 const node_addr_index = pnode->get_addr_index(m_addr_range);
                 size_db->remove_size(node_size_index, node_addr_index);
 
-                u32 const node_size = pnode->get_size();
-                u32 const prev_size = pprev->get_size() + node_size;
-                pprev->set_size(prev_size, size_cfg.size_to_index(prev_size));
-
-                remove_node(inode, pnode, node_heap); // we can safely remove 'prev' from the address db
+                remove_node(inode, pnode, node_heap); // we can safely remove 'node' from the address db
                 node_heap->deallocate(pnode);
 
-                rescan_for_size_index(prev_addr_index, prev_size_index, size_db, node_heap);
                 rescan_for_size_index(node_addr_index, node_size_index, size_db, node_heap);
-                rescan_for_size_index(pprev->get_addr_index(m_addr_range), pprev->get_size_index(), size_db, node_heap);
-            }
+			}
+			else
+			{
+				if (merge_next)
+				{
+					u32 const inext = pnode->m_next_addr;
+					node_t*   pnext = (node_t*)node_heap->idx2ptr(inext);
+
+					u32 const node_size_index = pnode->get_size_index();
+					u32 const node_addr_index = pnode->get_addr_index(m_addr_range);
+					size_db->remove_size(node_size_index, node_addr_index);
+					u32 const next_size_index = pnext->get_size_index();
+					u32 const next_addr_index = pnext->get_addr_index(m_addr_range);
+					size_db->remove_size(next_size_index, next_addr_index);
+
+					u32 const next_size = pnext->get_size();
+					u32 const node_size = pnode->get_size() + next_size;
+					pnode->set_size(node_size, size_cfg.size_to_index(node_size));
+
+					remove_node(inext, pnext, node_heap); // we can safely remove 'next' from the address db
+					node_heap->deallocate(pnext);
+
+					rescan_for_size_index(node_addr_index, node_size_index, size_db, node_heap);
+					rescan_for_size_index(next_addr_index, next_size_index, size_db, node_heap);
+					rescan_for_size_index(pnode->get_addr_index(m_addr_range), pnode->get_size_index(), size_db, node_heap);
+				}
+				if (merge_prev)
+				{
+					u32 const iprev = pnode->m_prev_addr;
+					node_t*   pprev = (node_t*)node_heap->idx2ptr(iprev);
+
+					u32 const prev_size_index = pprev->get_size_index();
+					u32 const prev_addr_index = pprev->get_addr_index(m_addr_range);
+					size_db->remove_size(prev_size_index, prev_addr_index);
+					u32 const node_size_index = pnode->get_size_index();
+					u32 const node_addr_index = pnode->get_addr_index(m_addr_range);
+					size_db->remove_size(node_size_index, node_addr_index);
+
+					u32 const node_size = pnode->get_size();
+					u32 const prev_size = pprev->get_size() + node_size;
+					pprev->set_size(prev_size, size_cfg.size_to_index(prev_size));
+
+					remove_node(inode, pnode, node_heap); // we can safely remove 'prev' from the address db
+					node_heap->deallocate(pnode);
+
+					rescan_for_size_index(prev_addr_index, prev_size_index, size_db, node_heap);
+					rescan_for_size_index(node_addr_index, node_size_index, size_db, node_heap);
+					rescan_for_size_index(pprev->get_addr_index(m_addr_range), pprev->get_size_index(), size_db, node_heap);
+				}
+			}
         }
 
         void xaddr_db::remove_node(u32 inode, node_t* pnode, xdexer* dexer)
@@ -526,7 +536,7 @@ namespace xcore
     xalloc* create_alloc_coalesce_direct(xalloc* main_heap, xfsadexed* node_heap, void* mem_base, u32 mem_range, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 addr_cnt)
     {
         xalloc_coalesce_direct* allocator = main_heap->construct<xalloc_coalesce_direct>();
-        initialize(allocator, main_heap, node_heap, alloc_size_min, alloc_size_max, alloc_size_step, mem_range, addr_cnt);
+        initialize(allocator, main_heap, node_heap, alloc_size_min, alloc_size_max, alloc_size_step, mem_base, mem_range, addr_cnt);
         return allocator;
     }
 
