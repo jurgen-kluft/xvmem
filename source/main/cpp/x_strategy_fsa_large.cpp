@@ -256,6 +256,12 @@ namespace xcore
 
     u32 bits_to_allocsize(u32 b, u32 w, u32 pagesize)
     {
+#if 1
+        ASSERT(w==1 || w==2 || w==4 || w==8 || w==16); // 'w' should be 1,2,4,8 or 16
+        u32 const r = (1<<(w-1));
+        u32 const n = (b & (r - 1)) + (((b & (r - 1)) == 0) ? r : 0);
+        return n * pagesize;
+#else
         if (w == 1)
         {
             return pagesize;
@@ -289,29 +295,27 @@ namespace xcore
             ASSERT(false); // 'w' should be 1,2,4,8 or 16
             return pagesize;
         }
+#endif
     }
 
     u32 allocsize_to_bits(u32 allocsize, u32 pagesize)
     {
-        u32 const p = xceilpo2((allocsize + pagesize - 1) / pagesize);
+        u32 const n = ((allocsize + pagesize - 1) / pagesize);
+        u32 const p = xceilpo2(n);
         if (p & 0xFF00)
         {
-            u32 const n = ((allocsize + pagesize - 1) / pagesize);
             return 0x8000 | n;
         }
         else if (p & 0x00F0)
         {
-            u32 const n = ((allocsize + pagesize - 1) / pagesize);
             return 0x80 | n;
         }
         else if (p & 0x000C)
         {
-            u32 const n = ((allocsize + pagesize - 1) / pagesize);
             return 0x8 | n;
         }
         else if (p & 0x0002)
         {
-            u32 const n = ((allocsize + pagesize - 1) / pagesize);
             return 0x2 | n;
         }
         else if (p & 0x0001)
@@ -339,7 +343,6 @@ namespace xcore
             w = 2;
         else if (p & 0x0001)
             w = 1;
-
         return w;
     }
 

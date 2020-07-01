@@ -8,13 +8,35 @@
 #include "xvmem/private/x_strategy_coalesce.h"
 #include "xvmem/x_virtual_memory.h"
 
-#include "x_strategy_coalesce_size_db.inline.cpp"
-
 namespace xcore
 {
     namespace xcoalescestrat_direct
     {
         static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
+
+		class xsize_db
+		{
+		public:
+			enum { DB0_WIDTH = 64, DB1_WIDTH = 64, WIDTH_OCC = 64 };
+
+			void initialize(xalloc*, u32 sizecnt, u32 addrcnt);
+			void release(xalloc*);
+			void reset();
+
+			void remove_size(u32 size_index, u32 addr_index);
+			void insert_size(u32 size_index, u32 addr_index);
+			bool find_size(u32& size_index, u32& addr_index) const;
+
+			XCORE_CLASS_PLACEMENT_NEW_DELETE
+
+		private:
+			u64  m_size_occ[4];       // u64[4] (maximum of <= 256 unique sizes)
+			u16  m_size_cnt;          // number of unique sizes that we are handling
+			u16  m_size_db0_cnt;      // db0 = first bit layer into db1
+			u32  m_size_db1_cnt;      // db1 = full bit layout of addrcnt for each size
+			u64* m_size_db0;          // u64[m_size_db0_cnt] = 16 KB
+			u64* m_size_db1;          // u64[m_size_db0_cnt * m_size_db1_cnt] = 128 KB
+		};
 
         // NOTE: This node should be exactly 16 bytes.
         struct node_t
@@ -241,10 +263,10 @@ namespace xcore
             head_node->m_next_addr = main_inode;
             tail_node->m_prev_addr = main_inode;
 
-            if (addr_count > 2048 && addr_count <= 4096)
+            if (addr_count >= 64 && addr_count <= 4096)
             {
-                instance->m_size_db = main_heap->construct<xsize_db_s256_a4096>();
-                instance->m_size_db->initialize(main_heap, addr_count);
+                instance->m_size_db = main_heap->construct<xsize_db>();
+                instance->m_size_db->initialize(main_heap, size_index_count, addr_count);
             }
             else
             {
@@ -529,6 +551,115 @@ namespace xcore
             }
             return count;
         }
+
+
+		void xsize_db::initialize(xalloc* allocator, u32 sizecnt, u32 addrcnt)
+		{
+			m_size_cnt = sizecnt;
+			m_size_db1_cnt = (addrcnt + (DB1_WIDTH-1)) / DB1_WIDTH;
+			m_size_db0_cnt = (m_size_db1_cnt + (DB0_WIDTH-1)) / DB0_WIDTH;
+			m_size_db0 = (u64*)allocator->allocate(m_size_cnt * m_size_db0_cnt * (DB0_WIDTH/8), sizeof(void*));
+			m_size_db1 = (u64*)allocator->allocate(m_size_cnt * m_size_db1_cnt * (DB1_WIDTH/8), sizeof(void*));
+			reset();
+		}
+
+		void xsize_db::release(xalloc* allocator)
+		{
+			allocator->deallocate(m_size_db0);
+			allocator->deallocate(m_size_db1);
+		}
+
+		void xsize_db::reset()
+		{
+			for (u32 i = 0; i < 4; ++i)
+				m_size_occ[i] = 0;
+			for (u16 i = 0; i < (m_size_cnt * m_size_db0_cnt); ++i)
+				m_size_db0[i] = 0;
+			for (u32 i = 0; i < (m_size_cnt * m_size_db1_cnt); ++i)
+				m_size_db1[i] = 0;
+		}
+
+		void xsize_db::remove_size(u32 size_index, u32 addr_index)
+		{
+			ASSERT(size_index < m_size_cnt);
+			ASSERT(addr_index < (m_size_db1_cnt * 64));
+			u32 const awi    = addr_index / DB1_WIDTH;
+			u32 const abi    = addr_index & (DB1_WIDTH - 1);
+			u32 const ssi    = size_index;
+			u32 const sdbi   = (ssi * m_size_db1_cnt) + awi;
+			m_size_db1[sdbi] = m_size_db1[sdbi] & ~((u64)1 << abi);
+			if (m_size_db1[sdbi] == 0)
+			{
+				m_size_db0[ssi] = m_size_db0[ssi] & ~((u64)1 << awi);
+				if (m_size_db0[ssi] == 0)
+				{
+					// Also clear size occupancy
+					u32 const owi    = ssi / WIDTH_OCC;
+					u32 const obi    = ssi & (WIDTH_OCC - 1);
+					ASSERT(owi < 4);
+					m_size_occ[owi] = m_size_occ[owi] & ~((u64)1 << obi);
+				}
+			}
+		}
+
+		void xsize_db::insert_size(u32 size_index, u32 addr_index)
+		{
+			ASSERT(size_index < m_size_cnt);
+			ASSERT(addr_index < (m_size_db1_cnt * 64));
+			u32 const awi    = addr_index / DB1_WIDTH;
+			u32 const abi    = addr_index & (DB1_WIDTH - 1);
+			u32 const ssi    = size_index;
+			u32 const sdbi   = (ssi * m_size_db1_cnt) + awi;
+			u64 const osbi   = (m_size_db1[sdbi] & ((u64)1 << abi));
+			m_size_db1[sdbi] = m_size_db1[sdbi] | ((u64)1 << abi);
+			if (osbi == 0)
+			{
+				u64 const osb0  = m_size_db0[ssi];
+				m_size_db0[ssi] = m_size_db0[ssi] | ((u64)1 << awi);
+				if (osb0 == 0)
+				{
+					// Also set size occupancy
+					u32 const owi    = ssi / WIDTH_OCC;
+					u32 const obi    = ssi & (WIDTH_OCC - 1);
+					ASSERT(owi < 4);
+					m_size_occ[owi] = m_size_occ[owi] | ((u64)1 << obi);
+				}
+			}
+		}
+
+		// Returns the addr node index that has a node with a best-fit 'size'
+		bool xsize_db::find_size(u32& size_index, u32& addr_index) const
+		{
+			ASSERT(size_index < m_size_cnt);
+			u32 owi = size_index / WIDTH_OCC;
+			u32 obi = size_index & (WIDTH_OCC - 1);
+			u64 obm = ~(((u64)1 << obi) - 1);
+			u32 ssi = 0;
+			if ((m_size_occ[owi] & obm) != 0)
+			{
+				ssi = (owi * WIDTH_OCC) + xfindFirstBit(m_size_occ[owi] & obm);
+			}
+			else
+			{
+				do
+				{
+					owi += 1;
+				} while (owi < 4 && m_size_occ[owi] == 0);
+
+				if (owi == 4)
+					return false;
+
+				ASSERT(owi < 4);
+				ssi = (owi * WIDTH_OCC) + xfindFirstBit(m_size_occ[owi]);
+			}
+
+			size_index     = ssi;                                 // communicate back the size index we need to search for
+			u32 const sdb0 = (u32)xfindFirstBit(m_size_db0[ssi]); // get the addr node that has that size
+			u32 const sdbi = (ssi * m_size_db1_cnt) + sdb0;
+			u32 const adbi = (u32)((sdb0 * DB1_WIDTH) + xfindFirstBit(m_size_db1[sdbi]));
+			addr_index = adbi;
+			return true;
+		}
     } // namespace xcoalescestrat_direct
 
     using namespace xcoalescestrat_direct;

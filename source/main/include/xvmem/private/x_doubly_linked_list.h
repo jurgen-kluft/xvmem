@@ -46,6 +46,8 @@ namespace xcore
         node_t* remove_item(node_t* list, u16 item);
         node_t* remove_head(node_t* list);
         node_t* remove_tail(node_t* list);
+        u16     remove_headi(node_t* list);
+        u16     remove_taili(node_t* list);
         node_t* idx2node(node_t* list, u16 i);
         u16     node2idx(node_t* list, node_t* n);
         u16     m_count;

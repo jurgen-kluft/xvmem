@@ -41,16 +41,19 @@ namespace xcore
         self->m_mem_base        = mem_address;
         self->m_mem_range       = mem_range;
 
-        self->m_alloc_size_min   = allocsize_min;
+		// Allocators do not include the minimum value (except for the first allocator (FSA))
+		// We only include the most maximum allocation size. So here we align allocsize_min 
+		// to a power-of-2 value and take the next po2 value.
+        self->m_alloc_size_min   = xfloorpo2(allocsize_min) << 1;
         self->m_alloc_size_max   = allocsize_max;
         self->m_alloc_size_align = allocsize_align;
 
-        self->m_alloc_count = 1 + xilog2(allocsize_max) - xilog2(allocsize_min);
+        self->m_alloc_count = xilog2(allocsize_max) - xilog2(allocsize_min);
         self->m_allocators  = (xalloc**)main_heap->allocate(sizeof(xalloc*) * self->m_alloc_count);
 
         void*     fsa_mem_base  = mem_address;
         u64 const fsa_mem_range = mem_range / self->m_alloc_count;
-        u32       fsa_size      = allocsize_min;
+        u32       fsa_size      = allocsize_min << 1;
         for (u32 i = 0; i < self->m_alloc_count; ++i)
         {
             self->m_allocators[i] = create_alloc_fsa_large(main_heap, node_heap, fsa_mem_base, fsa_mem_range, allocsize_align, fsa_size);

@@ -31,6 +31,8 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 
 - RegionSize = 512 x 1024 x 1024
 - PageSize = 4 KB (if possible), otherwise 64 KB
+- Min >= 8 (this is the first allocator so it should also include this minimum)
+- Max <= 4096
 - Min/Max/Step = 8/64/8, 64/512/16, 512/1024/64, 1024/2048/128, 2048/4096/256
 
 #### Pros / Cons
@@ -45,7 +47,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 ## Coalesce Allocator Direct 1 (512 MB)
 
 - Can use more than one instance
-- Size range: 4 KB < Size < 64 KB
+- Size range: 4 KB < Size <= 64 KB
   - Size alignment: 256
   - Size-DB: 256 entries
 - A memory range of 512 MB
@@ -57,7 +59,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 ## Coalesce Allocator Direct 2 (512 MB)
 
 - Can use more than one instance
-- Size range: 64 KB < Size < 512 KB
+- Size range: 64 KB < Size <= 512 KB
 - Size alignment: 4096
 - Size-DB: 128 entries
 - A memory range of 512 MB
@@ -100,15 +102,15 @@ Pros and Cons:
 
 ## Proxy allocators for 'commit/decommit' of virtual memory
 
-1. Direct   
-   Upon allocation virtual memory is committed   
-   Upon deallocation virtual memory is decommitted   
-2. Regions   
-   Upon allocation, newly intersecting regions are committed   
-   Upon deallocation, intersecting regions that become non-intersected are decommitted   
-3. Regions with caching      
-   A region is not directly committed or decommitted but it is first added to a list    
-   When the list reaches its maximum the oldest ones are decommitted   
+1. Direct
+   Upon allocation virtual memory is committed
+   Upon deallocation virtual memory is decommitted
+2. Regions
+   Upon allocation, newly intersecting regions are committed
+   Upon deallocation, intersecting regions that become non-intersected are decommitted
+3. Regions with caching
+   A region is not directly committed or decommitted but it is first added to a list
+   When the list reaches its maximum the oldest ones are decommitted
 
 ## Temporal Allocator [WIP]
 
