@@ -76,11 +76,17 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 
             const s32 cnt = 32;
             void*     ptrs[cnt];
-            for (s32 i = 0; i < cnt; ++i)
+
+			s32 i;
+            for (i = 0; i < 13; ++i)
             {
                 ptrs[i] = c->allocate(10 * 1024, 8);
             }
-            s32 i = 0;
+            for (; i < cnt; ++i)
+            {
+                ptrs[i] = c->allocate(10 * 1024, 8);
+            }
+            i = 0;
             for (; i < (cnt - 1); ++i)
             {
                 u32 const s1 = c->deallocate(ptrs[i]);

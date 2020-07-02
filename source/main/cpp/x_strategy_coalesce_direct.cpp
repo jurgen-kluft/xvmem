@@ -41,11 +41,12 @@ namespace xcore
         // NOTE: This node should be exactly 16 bytes.
         struct node_t
         {
-            static u32 const NIL       = 0xffffffff;
-            static u32 const FLAG_FREE = 0x0;
-            static u32 const FLAG_USED = 0x80000000;
-            static u32 const FLAG_MASK = 0x80000000;
-            static u32 const ADDR_MASK = 0x7fffffff;
+            static u32 const NIL         = 0xffffffff;
+            static u32 const FLAG_FREE   = 0x0;
+            static u32 const FLAG_USED   = 0x80000000;
+			static u32 const FLAG_LOCKED = 0x40000000;
+            static u32 const FLAG_MASK   = 0xC0000000;
+            static u32 const ADDR_MASK   = 0x3fffffff;
 
             u32 m_addr;      // (m_addr * size step) + base addr
             u32 m_size;      // [Free, Locked] + Size
@@ -70,6 +71,8 @@ namespace xcore
             inline u32  get_size_index() const { return ((m_size >> 24) & 0x7F); }
             inline void set_used() { m_addr = m_addr | FLAG_USED; }
             inline void set_free() { m_addr = m_addr & ~FLAG_USED; }
+			inline void set_locked() { m_addr = m_addr | FLAG_LOCKED; }
+			inline bool is_locked() const { return (m_addr & FLAG_LOCKED) == FLAG_LOCKED; }
             inline bool is_used() const { return (m_addr & FLAG_MASK) == FLAG_USED; }
             inline bool is_free() const { return (m_addr & FLAG_MASK) == 0; }
         };
@@ -249,9 +252,11 @@ namespace xcore
             tail_node->init();
             main_node->init();
             head_node->set_used();
-            head_node->set_addr(0);
+			head_node->set_locked();
+            head_node->set_addr(0x0);
             head_node->set_size(0, 0);
             tail_node->set_used();
+			tail_node->set_locked();
             tail_node->set_addr((u32)memory_range);
             tail_node->set_size(0, 0);
             main_node->set_addr(0);
@@ -320,6 +325,7 @@ namespace xcore
         {
             u32 const node_sidx = pnode->get_size_index();
             u32 const node_aidx = pnode->get_addr_index(m_addr_range);
+            size_db->remove_size(node_sidx, node_aidx);
 
             // we need to insert the new node between pnode and it's next node
             u32 const     inext = pnode->m_next_addr;
@@ -368,11 +374,6 @@ namespace xcore
             u32 const new_sidx = pnew->get_size_index();
             size_db->insert_size(new_sidx, new_aidx);
 
-            // Check if node_aidx still has other nodes of the same size-index 'node-aidx'
-            if (!has_size_index(node_aidx, node_alloc, node_sidx) && node_sidx != new_sidx)
-            {
-                size_db->remove_size(node_sidx, node_aidx);
-            }
         }
 
         void xaddr_db::rescan_for_size_index(u32 const addr_index, u8 const size_index, xsize_db* size_db, xdexer* dexer)

@@ -11,15 +11,13 @@ UNITTEST_SUITE_LIST(xVMemUnitTest);
 
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, doubly_linked_list);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, binarysearch_tree);
-UNITTEST_SUITE_DECLARE(xVMemUnitTest, main_allocator);
-// UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce_direct);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_small);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_large);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_large);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_page_vcd_direct);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_segregated);
-// UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_segregated2);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, main_allocator);
 
 namespace xcore
 {
