@@ -18,7 +18,7 @@ namespace xcore
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
         virtual u32   v_deallocate(void* ptr) X_FINAL;
-        virtual void  v_release();
+        virtual void  v_release() X_FINAL;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 

@@ -48,7 +48,7 @@ namespace xcore
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
         virtual u32   v_deallocate(void* ptr) X_FINAL;
-        virtual void  v_release();
+        virtual void  v_release() X_FINAL;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
@@ -88,13 +88,6 @@ namespace xcore
         instance->m_block_array      = block_array;
         instance->m_binfo_array      = binfo_array;
         instance->m_list_array       = list_nodes;
-        instance->m_block_used_list  = xalist_t();
-        instance->m_block_full_list  = xalist_t();
-        instance->m_block_empty_list = xalist_t();
-
-        // Direct initialization of the empty list of blocks
-        instance->m_block_empty_list.m_head  = 0;
-        instance->m_block_empty_list.m_count = block_count;
 
         // Initialize the block list by linking all blocks into the empty list
         instance->m_block_empty_list.initialize(list_nodes, block_count);
@@ -102,6 +95,7 @@ namespace xcore
         // All block pointers are initially NULL
         for (u32 i = 0; i < block_count; ++i)
         {
+			instance->m_binfo_array[i].reset();
             instance->m_block_array[i] = nullptr;
         }
 
@@ -125,8 +119,17 @@ namespace xcore
         m_main_heap->deallocate(this);
     }
 
-    static xblock_t*      get_block_at(xalloc_fsa_large* instance, u32 i) { return instance->m_block_array[i]; }
-    static xblock_info_t* get_binfo_at(xalloc_fsa_large* instance, u32 i) { return &instance->m_binfo_array[i]; }
+    static inline xblock_t*      get_block_at(xalloc_fsa_large* instance, u32 i) 
+	{
+		ASSERT(i < instance->m_block_count);
+		return instance->m_block_array[i]; 
+	}
+
+    static inline xblock_info_t* get_binfo_at(xalloc_fsa_large* instance, u32 i)
+	{
+		ASSERT(i < instance->m_block_count);
+		return &instance->m_binfo_array[i]; 
+	}
 
     static xblock_t* create_block_at(xalloc_fsa_large* instance, u32 block_index)
     {
@@ -234,6 +237,7 @@ namespace xcore
         u32            size        = 0;
         u64 const      block_range = allocsize_to_blockrange(m_allocsize, m_pagesize);
         u32 const      block_index = (u32)(((u64)ptr - (u64)m_address_base) / block_range);
+		ASSERT(block_index < m_block_count);
         xblock_info_t* binfo       = get_binfo_at(this, block_index);
         if (is_block_full(binfo))
         {

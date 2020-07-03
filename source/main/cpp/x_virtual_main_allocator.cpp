@@ -130,11 +130,16 @@ namespace xcore
 
     void xvmem_allocator::v_release()
     {
-        m_fsa_allocator->release();
-        m_med_allocator[0]->release();
-        m_med_allocator[1]->release();
-        m_seg_allocator->release();
+        m_large_allocator_vcd->release();
+        m_seg_allocator_vcd->release();
+		m_med_allocator_vcd[1]->release();
+        m_med_allocator_vcd[0]->release();
+
         m_large_allocator->release();
+        m_seg_allocator->release();
+        m_med_allocator[1]->release();
+        m_med_allocator[0]->release();
+        m_fsa_allocator->release();
 
         // TODO: release all reserved virtual memory
 

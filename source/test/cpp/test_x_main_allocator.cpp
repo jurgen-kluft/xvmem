@@ -28,21 +28,26 @@ public:
         // The first one is for FSA and is intrusive so we need actual memory
         m_index          = 0;
         m_mem_range[0]   = 32 * 1024 * 1024;
-        m_mem_address[0] = gTestAllocator->allocate((u32)m_mem_range[0], 512 * 1024 * 1024);
+        m_mem_address[0] = gTestAllocator->allocate((u32)m_mem_range[0], 32 * 1024 * 1024);
         m_mem_range[1]   = 4 * 1024 * 1024;
-        m_mem_address[1] = gTestAllocator->allocate((u32)m_mem_range[1], 32 * 1024 * 1024);
+        m_mem_address[1] = gTestAllocator->allocate((u32)m_mem_range[1], 4 * 1024 * 1024);
         m_mem_range[2]   = 4 * 1024 * 1024;
-        m_mem_address[2] = gTestAllocator->allocate((u32)m_mem_range[2], 32 * 1024 * 1024);
+        m_mem_address[2] = gTestAllocator->allocate((u32)m_mem_range[2], 4 * 1024 * 1024);
         m_mem_range[3]   = 128 * 1024 * 1024;
-        m_mem_address[3] = (void*)((u64)m_mem_address[0] + m_mem_range[3]);
+        m_mem_address[3] = (void*)((u64)m_mem_address[2] + m_mem_range[3]);
         m_mem_range[4]   = 128 * 1024 * 1024;
-        m_mem_address[4] = (void*)((u64)m_mem_address[1] + m_mem_range[4]);
+        m_mem_address[4] = (void*)((u64)m_mem_address[3] + m_mem_range[4]);
         for (s32 i = 5; i < 7; i++)
         {
             m_mem_range[i]   = ((u64)128 * 1024 * 1024 * 1024);
             m_mem_address[i] = (void*)((u64)m_mem_address[i - 1] + m_mem_range[i - 1]);
         }
     }
+
+	void reset()
+	{
+		m_index = 0;
+	}
 
     void exit() { m_main_allocator->deallocate(m_mem_address[0]); }
 
@@ -162,6 +167,8 @@ UNITTEST_SUITE_BEGIN(main_allocator)
         {
             xalloc* allocator = gCreateVmAllocator(&s_alloc, &s_vmem_test, &s_vmem_testconfig);
             allocator->release();
+
+			s_vmem_test.reset();
         }
     }
 }

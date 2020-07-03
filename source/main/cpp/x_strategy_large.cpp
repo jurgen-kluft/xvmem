@@ -64,6 +64,7 @@ namespace xcore
 
     void xalloc_large::v_release()
     {
+        m_main_heap->deallocate(m_entry_nodes);
         m_main_heap->deallocate(m_entry_array);
         m_main_heap->deallocate(this);
     }

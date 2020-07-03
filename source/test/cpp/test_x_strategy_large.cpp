@@ -14,7 +14,6 @@ UNITTEST_SUITE_BEGIN(strategy_large)
     UNITTEST_FIXTURE(main)
     {
         static const u64 sMemoryRange = (u64)128 * 1024 * 1024 * 1024;
-        static const u64 sSpaceRange  = (u64)256 * 1024 * 1024;
         static const u64 sMinumSize   = (u64)32 * 1024 * 1024;
         static const u64 sMaximumSize = (u64)512 * 1024 * 1024;
         static const u32 sPageSize    = (u64)64 * 1024;

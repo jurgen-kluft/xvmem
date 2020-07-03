@@ -10,6 +10,8 @@
 UNITTEST_SUITE_LIST(xVMemUnitTest);
 
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, doubly_linked_list);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, size_db);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, addr_db);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, binarysearch_tree);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce_direct);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_small);

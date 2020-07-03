@@ -21,24 +21,24 @@ namespace xcore
             virtual u32   v_deallocate(void* p);
             virtual void  v_release();
 
-            inline void dealloc_node(u32 inode, node_t* pnode)
+            inline void dealloc_node(u32 inode, xaddr_db::node_t* pnode)
             {
                 ASSERT(m_node_heap->idx2ptr(inode) == pnode);
                 m_node_heap->deallocate(pnode);
             }
 
-            inline node_t* idx2node(u32 idx)
+            inline xaddr_db::node_t* idx2node(u32 idx)
             {
-                node_t* pnode = nullptr;
-                if (idx != node_t::NIL)
-                    pnode = (node_t*)m_node_heap->idx2ptr(idx);
+                xaddr_db::node_t* pnode = nullptr;
+                if (idx != xaddr_db::node_t::NIL)
+                    pnode = (xaddr_db::node_t*)m_node_heap->idx2ptr(idx);
                 return pnode;
             }
 
-            inline u32 node2idx2(node_t* n)
+            inline u32 node2idx2(xaddr_db::node_t* n)
             {
                 if (n == nullptr)
-                    return node_t::NIL;
+                    return xaddr_db::node_t::NIL;
                 return m_node_heap->ptr2idx(n);
             }
 
@@ -51,7 +51,7 @@ namespace xcore
             // Local variables
             void*     m_mem_base;
             xsize_cfg m_size_cfg;
-            xsize_db* m_size_db;
+            xsize_db  m_size_db;
             xaddr_db  m_addr_db;
         };
 
@@ -61,11 +61,11 @@ namespace xcore
 
             u32 size_index = m_size_cfg.size_to_index(size);
             u32 addr_index;
-            if (!m_size_db->find_size(size_index, addr_index))
+            if (!m_size_db.find_size(size_index, addr_index))
                 return nullptr;
 
-            node_t*   pnode = m_addr_db.get_node_with_size_index(addr_index, m_node_heap, size_index);
-            u32 const inode = node2idx2(pnode);
+            xaddr_db::node_t* pnode = m_addr_db.get_node_with_size_index(addr_index, m_node_heap, size_index);
+            u32 const         inode = node2idx2(pnode);
 
             // Did we find a node with 'free' space?
             if (pnode == nullptr)
@@ -74,11 +74,11 @@ namespace xcore
             // Should we split the node?
             if (size <= pnode->get_size() && ((pnode->get_size() - size) >= m_size_cfg.m_alloc_size_min))
             {
-                m_addr_db.alloc_by_split(inode, pnode, size, m_node_heap, m_size_db, m_size_cfg);
+                m_addr_db.alloc_by_split(inode, pnode, size, m_node_heap, &m_size_db, m_size_cfg);
             }
             else
             {
-                m_addr_db.alloc(inode, pnode, m_node_heap, m_size_db, m_size_cfg);
+                m_addr_db.alloc(inode, pnode, m_node_heap, &m_size_db, m_size_cfg);
             }
             ASSERT(pnode->is_used());
 
@@ -90,20 +90,20 @@ namespace xcore
             u32 const addr       = (u32)((uptr)p - (uptr)m_mem_base);
             u32 const addr_index = (addr / m_addr_db.m_addr_range);
 
-            node_t* pnode = m_addr_db.get_node_with_addr(addr_index, m_node_heap, addr);
-            u32     inode = m_node_heap->ptr2idx(pnode);
+            xaddr_db::node_t* pnode = m_addr_db.get_node_with_addr(addr_index, m_node_heap, addr);
+            u32               inode = m_node_heap->ptr2idx(pnode);
             if (pnode != nullptr)
             {
                 pnode->set_free();
 
-                u32 const  size       = pnode->get_size();
-                u32        inode_prev = pnode->m_prev_addr;
-                u32        inode_next = pnode->m_next_addr;
-                node_t*    pnode_prev = idx2node(inode_prev);
-                node_t*    pnode_next = idx2node(inode_next);
-                bool const merge_prev = pnode_prev->is_free();
-                bool const merge_next = pnode_next->is_free();
-                m_addr_db.dealloc(inode, pnode, merge_prev, merge_next, m_size_db, m_size_cfg, m_node_heap);
+                u32 const         size       = pnode->get_size();
+                u32               inode_prev = pnode->m_prev_addr;
+                u32               inode_next = pnode->m_next_addr;
+                xaddr_db::node_t* pnode_prev = idx2node(inode_prev);
+                xaddr_db::node_t* pnode_next = idx2node(inode_next);
+                bool const        merge_prev = pnode_prev->is_free();
+                bool const        merge_next = pnode_next->is_free();
+                m_addr_db.dealloc(inode, pnode, merge_prev, merge_next, &m_size_db, m_size_cfg, m_node_heap);
                 return size;
             }
             else
@@ -126,29 +126,26 @@ namespace xcore
             instance->m_size_cfg.m_alloc_size_max   = size_max;
             instance->m_size_cfg.m_alloc_size_step  = size_step;
 
-            ASSERT(xispo2(addr_count)); // The address node count should be a power-of-2
-            instance->m_addr_db.m_addr_count = addr_count;
-            instance->m_addr_db.m_addr_range = (u32)(memory_range / addr_count);
-            instance->m_addr_db.m_nodes      = (u32*)main_heap->allocate(addr_count * sizeof(u32), sizeof(void*));
-            instance->m_addr_db.reset();
+            instance->m_addr_db.initialize(main_heap, memory_range, addr_count);
 
-            node_t*   head_node  = instance->m_node_heap->construct<node_t>();
-            u32 const head_inode = instance->m_node_heap->ptr2idx(head_node);
-            node_t*   tail_node  = instance->m_node_heap->construct<node_t>();
-            u32 const tail_inode = instance->m_node_heap->ptr2idx(tail_node);
-            node_t*   main_node  = instance->m_node_heap->construct<node_t>();
-            u32 const main_inode = instance->m_node_heap->ptr2idx(main_node);
+            xaddr_db::node_t* head_node  = instance->m_node_heap->construct<xaddr_db::node_t>();
+            u32 const         head_inode = instance->m_node_heap->ptr2idx(head_node);
+            xaddr_db::node_t* tail_node  = instance->m_node_heap->construct<xaddr_db::node_t>();
+            u32 const         tail_inode = instance->m_node_heap->ptr2idx(tail_node);
+            xaddr_db::node_t* main_node  = instance->m_node_heap->construct<xaddr_db::node_t>();
+            u32 const         main_inode = instance->m_node_heap->ptr2idx(main_node);
             head_node->init();
             tail_node->init();
             main_node->init();
-            head_node->set_used();
-			head_node->set_locked();
+
+            head_node->set_locked();
             head_node->set_addr(0x0);
             head_node->set_size(0, 0);
-            tail_node->set_used();
-			tail_node->set_locked();
+
+            tail_node->set_locked();
             tail_node->set_addr((u32)memory_range);
             tail_node->set_size(0, 0);
+
             main_node->set_addr(0);
             main_node->set_size((u32)memory_range, size_index_count - 1);
 
@@ -160,22 +157,21 @@ namespace xcore
 
             if (addr_count >= 64 && addr_count <= 4096)
             {
-                instance->m_size_db = main_heap->construct<xsize_db>();
-                instance->m_size_db->initialize(main_heap, size_index_count, addr_count);
+                instance->m_size_db.initialize(main_heap, size_index_count, addr_count);
             }
             else
             {
                 ASSERT(false); // Not implemented
             }
 
-            instance->m_size_db->insert_size(main_node->get_size_index(), 0);
+            instance->m_size_db.insert_size(main_node->get_size_index(), 0);
             instance->m_addr_db.m_nodes[0] = head_inode;
         }
 
         void xalloc_coalesce_direct::v_release()
         {
-            u32     inode = m_addr_db.m_nodes[0]; // 'head' node
-            node_t* pnode = idx2node(inode);
+            u32               inode = m_addr_db.m_nodes[0]; // 'head' node
+            xaddr_db::node_t* pnode = idx2node(inode);
             while (pnode != nullptr)
             {
                 u32 const inext = pnode->m_next_addr;
@@ -184,9 +180,9 @@ namespace xcore
                 pnode = idx2node(inode);
             }
 
-            m_size_db->release(m_main_heap);
-            m_main_heap->deallocate(m_size_db);
-            m_main_heap->deallocate(m_addr_db.m_nodes);
+            m_size_db.release(m_main_heap);
+            m_addr_db.release(m_main_heap);
+
             m_main_heap->deallocate(this);
         }
 

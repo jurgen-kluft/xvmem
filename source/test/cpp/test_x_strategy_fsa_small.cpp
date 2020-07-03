@@ -11,7 +11,7 @@ using namespace xcore;
 
 extern xalloc* gTestAllocator;
 
-class xvmem_test : public xvmem
+class xvmem_test_fsa_small : public xvmem
 {
 public:
     xalloc* m_main_allocator;
@@ -49,7 +49,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
 {
     UNITTEST_FIXTURE(main)
     {
-        xvmem_test vmem;
+        xvmem_test_fsa_small vmem;
 
         UNITTEST_FIXTURE_SETUP() { vmem.init(gTestAllocator, (u64)64 * 1024 * 1024, 64 * 1024); }
         UNITTEST_FIXTURE_TEARDOWN() { vmem.exit(); }
