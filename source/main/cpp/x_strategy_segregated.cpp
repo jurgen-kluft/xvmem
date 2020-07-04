@@ -18,7 +18,7 @@ namespace xcore
         virtual u32   v_deallocate(void* ptr) X_FINAL;
         virtual void  v_release() X_FINAL;
 
-		XCORE_CLASS_PLACEMENT_NEW_DELETE
+        XCORE_CLASS_PLACEMENT_NEW_DELETE
 
         xalloc*  m_main_heap;
         void*    m_mem_base;
@@ -41,9 +41,9 @@ namespace xcore
         self->m_mem_base        = mem_address;
         self->m_mem_range       = mem_range;
 
-		// Allocators do not include the minimum value (except for the first allocator (FSA))
-		// We only include the most maximum allocation size. So here we align allocsize_min 
-		// to a power-of-2 value and take the next po2 value.
+        // Allocators do not include the minimum value (except for the first allocator (FSA))
+        // We only include the most maximum allocation size. So here we align allocsize_min
+        // to a power-of-2 value and take the next po2 value.
         self->m_alloc_size_min   = xfloorpo2(allocsize_min) << 1;
         self->m_alloc_size_max   = allocsize_max;
         self->m_alloc_size_align = allocsize_align;
@@ -72,7 +72,7 @@ namespace xcore
             m_allocators[i] = nullptr;
         }
         m_main_heap->deallocate(m_allocators);
-		m_main_heap->deallocate(this);
+        m_main_heap->deallocate(this);
     }
 
     void* xalloc_segregated::v_allocate(u32 size, u32 alignment)

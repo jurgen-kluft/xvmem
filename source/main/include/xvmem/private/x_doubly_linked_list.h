@@ -13,6 +13,7 @@ namespace xcore
 
         xalist_t()
             : m_count(0)
+            , m_size(0)
             , m_head(NIL)
         {
         }
@@ -48,10 +49,27 @@ namespace xcore
         node_t* remove_tail(node_t* list);
         u16     remove_headi(node_t* list);
         u16     remove_taili(node_t* list);
-        node_t* idx2node(node_t* list, u16 i);
-        u16     node2idx(node_t* list, node_t* n);
-        u16     m_count;
-        u16     m_head;
+
+        node_t* idx2node(node_t* list, u16 i) const
+        {
+            ASSERT(i < m_size);
+            if (i == xalist_t::NIL)
+                return nullptr;
+            return &list[i];
+        }
+
+        u16 node2idx(node_t* list, node_t* node) const
+        {
+            if (node == nullptr)
+                return xalist_t::NIL;
+            u16 const index = (u16)(((u64)node - (u64)&list[0]) / sizeof(xalist_t::node_t));
+            ASSERT(index < m_size);
+            return index;
+        }
+
+        u16 m_count;
+        u16 m_size;
+        u16 m_head;
     };
 
 } // namespace xcore

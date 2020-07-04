@@ -15,11 +15,9 @@ namespace xcore
     {
         static inline u32 KB(u32 value) { return value * (u32)1024; }
         static inline u32 MB(u32 value) { return value * (u32)1024 * (u32)1024; }
-        static inline u32 GB(u32 value) { return value * (u32)1024 * (u32)1024; }
 
-        static inline u64 KBx(u64 value) { return value * (u64)1024; }
         static inline u64 MBx(u64 value) { return value * (u64)1024 * (u64)1024; }
-        static inline u64 GBx(u64 value) { return value * (u64)1024 * (u64)1024; }
+        static inline u64 GBx(u64 value) { return value * (u64)1024 * (u64)1024 * (u64)1024; }
 
         xvmem_config()
         {
@@ -34,11 +32,11 @@ namespace xcore
             m_med_addr_node_cnt[0] = 4096;     // Medium-Size-Allocator; Number of address nodes to split the memory range
             m_med_region_size[0]   = MB(1);    // Medium-Size-Allocator; Size of commit/decommit regions
             m_med_region_cached[0] = 50;       // Keep 50 medium size regions cached
-            m_med_mem_range[1]     = MB(768);  // MedLarge-Size-Allocator; The virtual memory range
+            m_med_mem_range[1]     = MB(512);  // MedLarge-Size-Allocator; The virtual memory range
             m_med_min_size[1]      = KB(64);   // MedLarge-Size-Allocator; Minimum allocation size
             m_med_step_size[1]     = KB(2);    // 64 KB % 2 KB % 512 KB
             m_med_max_size[1]      = KB(512);  // MedLarge-Size-Allocator; Maximum allocation size
-            m_med_addr_node_cnt[1] = 4096;     // MedLarge-Size-Allocator; Number of address nodes to split the memory range
+            m_med_addr_node_cnt[1] = 512;      // MedLarge-Size-Allocator; Number of address nodes to split the memory range
             m_med_region_size[1]   = MB(8);    // MedLarge-Size-Allocator; Size of commit/decommit regions
             m_med_region_cached[1] = 8;        // Keep 8 medium-2-large regions cached
             m_seg_min_size         = KB(512);  //
@@ -51,19 +49,19 @@ namespace xcore
 
         bool validate(const char*& reason)
         {
-			for (s32 i=0; i < m_med_count; ++i)
-			{
-				if ((m_med_mem_range[i] / m_med_addr_node_cnt[i]) <= m_med_max_size[i])
-				{
-		            reason = "Memory range division should be larger than the maximum allocation size.";
-					return false;
-				}
-				if (((m_med_max_size[i] - m_med_min_size[i]) / m_med_step_size[i]) >= 255)
-				{
-		            reason = "Direct Coalesce Allocator can only handle a limitted amount (<255) of unique sizes.";
-					return false;
-				}
-			}
+            for (s32 i = 0; i < m_med_count; ++i)
+            {
+                if ((m_med_mem_range[i] / m_med_addr_node_cnt[i]) <= (2 * m_med_max_size[i]))
+                {
+                    reason = "Memory range division should be larger than the maximum allocation size.";
+                    return false;
+                }
+                if (((m_med_max_size[i] - m_med_min_size[i]) / m_med_step_size[i]) >= 255)
+                {
+                    reason = "Direct Coalesce Allocator can only handle a limitted amount (<255) of unique sizes.";
+                    return false;
+                }
+            }
             reason = "success";
             return true;
         }

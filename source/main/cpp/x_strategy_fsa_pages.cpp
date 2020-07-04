@@ -67,8 +67,7 @@ namespace xcore
         // Note: page should NOT be full when calling this function!
         if (m_free_list != xalist_t::NIL)
         {
-            u32 const ielem = m_free_list;
-            ASSERT(ielem < xalist_t::NIL);
+            u32 const  ielem = m_free_list;
             u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
             m_free_list      = pelem[0];
             m_elem_used++;
@@ -77,8 +76,7 @@ namespace xcore
         else if (m_free_index < m_elem_total)
         {
             m_elem_used++;
-            u32 const ielem = m_free_index++;
-            ASSERT(ielem < xalist_t::NIL);
+            u32 const  ielem = m_free_index++;
             u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
             return (void*)pelem;
         }
@@ -90,8 +88,7 @@ namespace xcore
 
     void xpage_t::deallocate(void* const block_base_address, void* const ptr)
     {
-        u32 const ielem = index_of_elem(this, block_base_address, ptr);
-        ASSERT(ielem < xalist_t::NIL);
+        u32 const  ielem = index_of_elem(this, block_base_address, ptr);
         u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
         pelem[0]         = m_free_list;
         m_free_list      = ielem;
@@ -239,6 +236,7 @@ namespace xcore
     {
         if (node == xalist_t::NIL)
             return xalist_t::NIL;
+        ASSERT(node < m_page_cnt);
         return m_page_list[node].m_next;
     }
 
@@ -246,6 +244,7 @@ namespace xcore
     {
         if (node == xalist_t::NIL)
             return xalist_t::NIL;
+        ASSERT(node < m_page_cnt);
         return m_page_list[node].m_prev;
     }
 
@@ -253,6 +252,7 @@ namespace xcore
     {
         if (node == xalist_t::NIL)
             return nullptr;
+        ASSERT(node < m_page_cnt);
         return &m_page_list[node];
     }
 
@@ -261,6 +261,7 @@ namespace xcore
         if (node == nullptr)
             return xalist_t::NIL;
         u16 const index = (u16)(((u64)node - (u64)&m_page_list[0]) / sizeof(xalist_t::node_t));
+        ASSERT(index < m_page_cnt);
         return index;
     }
 
@@ -290,6 +291,7 @@ namespace xcore
     {
         if (page == xalist_t::NIL)
             return nullptr;
+        ASSERT(page < m_page_cnt);
         return &m_pages[page];
     }
 
@@ -298,6 +300,7 @@ namespace xcore
         if (page == nullptr)
             return xalist_t::NIL;
         u16 const index = (u16)(((u64)page - (u64)&m_pages[0]) / sizeof(xpage_t));
+        ASSERT(index < m_page_cnt);
         return index;
     }
 

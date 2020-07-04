@@ -77,17 +77,17 @@ namespace xcore
         xblock_info_t*    binfo_array = (xblock_info_t*)main_heap->allocate(sizeof(xblock_info_t) * block_count);
         xalist_t::node_t* list_nodes  = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * block_count);
 
-        xalloc_fsa_large* instance   = main_heap->construct<xalloc_fsa_large>();
-        instance->m_main_heap        = main_heap;
-        instance->m_node_heap        = node_heap;
-        instance->m_address_base     = mem_base;
-        instance->m_address_range    = mem_range;
-        instance->m_allocsize        = xceilpo2(allocsize);
-        instance->m_pagesize         = pagesize;
-        instance->m_block_count      = block_count;
-        instance->m_block_array      = block_array;
-        instance->m_binfo_array      = binfo_array;
-        instance->m_list_array       = list_nodes;
+        xalloc_fsa_large* instance = main_heap->construct<xalloc_fsa_large>();
+        instance->m_main_heap      = main_heap;
+        instance->m_node_heap      = node_heap;
+        instance->m_address_base   = mem_base;
+        instance->m_address_range  = mem_range;
+        instance->m_allocsize      = xceilpo2(allocsize);
+        instance->m_pagesize       = pagesize;
+        instance->m_block_count    = block_count;
+        instance->m_block_array    = block_array;
+        instance->m_binfo_array    = binfo_array;
+        instance->m_list_array     = list_nodes;
 
         // Initialize the block list by linking all blocks into the empty list
         instance->m_block_empty_list.initialize(list_nodes, block_count);
@@ -95,7 +95,7 @@ namespace xcore
         // All block pointers are initially NULL
         for (u32 i = 0; i < block_count; ++i)
         {
-			instance->m_binfo_array[i].reset();
+            instance->m_binfo_array[i].reset();
             instance->m_block_array[i] = nullptr;
         }
 
@@ -119,17 +119,17 @@ namespace xcore
         m_main_heap->deallocate(this);
     }
 
-    static inline xblock_t*      get_block_at(xalloc_fsa_large* instance, u32 i) 
-	{
-		ASSERT(i < instance->m_block_count);
-		return instance->m_block_array[i]; 
-	}
+    static inline xblock_t* get_block_at(xalloc_fsa_large* instance, u32 i)
+    {
+        ASSERT(i < instance->m_block_count);
+        return instance->m_block_array[i];
+    }
 
     static inline xblock_info_t* get_binfo_at(xalloc_fsa_large* instance, u32 i)
-	{
-		ASSERT(i < instance->m_block_count);
-		return &instance->m_binfo_array[i]; 
-	}
+    {
+        ASSERT(i < instance->m_block_count);
+        return &instance->m_binfo_array[i];
+    }
 
     static xblock_t* create_block_at(xalloc_fsa_large* instance, u32 block_index)
     {
@@ -234,11 +234,11 @@ namespace xcore
         // If block was full remove it from 'full' list
         // If block is now empty -> free block
         // Else add block to 'used' list
-        u32            size        = 0;
-        u64 const      block_range = allocsize_to_blockrange(m_allocsize, m_pagesize);
-        u32 const      block_index = (u32)(((u64)ptr - (u64)m_address_base) / block_range);
-		ASSERT(block_index < m_block_count);
-        xblock_info_t* binfo       = get_binfo_at(this, block_index);
+        u32       size        = 0;
+        u64 const block_range = allocsize_to_blockrange(m_allocsize, m_pagesize);
+        u32 const block_index = (u32)(((u64)ptr - (u64)m_address_base) / block_range);
+        ASSERT(block_index < m_block_count);
+        xblock_info_t* binfo = get_binfo_at(this, block_index);
         if (is_block_full(binfo))
         {
             size = deallocate_from(this, block_index, ptr);
@@ -261,8 +261,8 @@ namespace xcore
     u32 bits_to_allocsize(u32 b, u32 w, u32 pagesize)
     {
 #if 1
-        ASSERT(w==1 || w==2 || w==4 || w==8 || w==16); // 'w' should be 1,2,4,8 or 16
-        u32 const r = (1<<(w-1));
+        ASSERT(w == 1 || w == 2 || w == 4 || w == 8 || w == 16); // 'w' should be 1,2,4,8 or 16
+        u32 const r = (1 << (w - 1));
         u32 const n = (b & (r - 1)) + (((b & (r - 1)) == 0) ? r : 0);
         return n * pagesize;
 #else

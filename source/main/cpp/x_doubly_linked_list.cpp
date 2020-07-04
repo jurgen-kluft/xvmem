@@ -11,6 +11,8 @@ namespace xcore
 
     void xalist_t::initialize(node_t* list, u16 max_count)
     {
+        ASSERT(max_count > 0);
+
         for (u32 i = 0; i < max_count; ++i)
         {
             list[i].link(i - 1, i + 1);
@@ -19,6 +21,7 @@ namespace xcore
         list[max_count - 1].link(max_count - 2, 0);
 
         m_count = max_count;
+        m_size  = max_count;
         m_head  = 0;
     }
 
@@ -72,6 +75,7 @@ namespace xcore
         pprev->m_next                 = pitem->m_next;
         pnext->m_prev                 = pitem->m_prev;
         pitem->unlink();
+        ASSERT(list.m_count >= 1);
         if (list.m_count == 1)
         {
             list.m_head  = xalist_t::NIL;
@@ -106,6 +110,8 @@ namespace xcore
         pprev->m_next                 = inext;
         pnext->m_prev                 = iprev;
         pitem->link(xalist_t::NIL, xalist_t::NIL);
+
+        ASSERT(list.m_count >= 1);
         if (list.m_count == 1)
         {
             list.m_head = xalist_t::NIL;
@@ -138,6 +144,8 @@ namespace xcore
         pprev->m_next                 = inext;
         pnext->m_prev                 = iprev;
         pitem->link(xalist_t::NIL, xalist_t::NIL);
+
+        ASSERT(list.m_count >= 1);
         if (list.m_count == 1)
         {
             list.m_head = xalist_t::NIL;
@@ -186,21 +194,6 @@ namespace xcore
         xalist_t::node_t* node;
         u16               index;
         s_remove_tail(*this, list, node, index);
-        return index;
-    }
-
-    xalist_t::node_t* xalist_t::idx2node(node_t* list, u16 i)
-    {
-        if (i == NIL)
-            return nullptr;
-        return &list[i];
-    }
-
-    u16 xalist_t::node2idx(node_t* list, node_t* node)
-    {
-        if (node == nullptr)
-            return NIL;
-        u16 const index = (u16)(((u64)node - (u64)&list[0]) / sizeof(node_t));
         return index;
     }
 
