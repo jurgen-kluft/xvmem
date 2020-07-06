@@ -11,8 +11,6 @@
 
 namespace xcore
 {
-    static void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-
     static u32 allocsize_to_bits(u32 allocsize, u32 pagesize);
     static u32 bits_to_allocsize(u32 b, u32 w, u32 pagesize);
     static u32 allocsize_to_bwidth(u32 allocsize, u32 pagesize);
@@ -90,7 +88,9 @@ namespace xcore
         instance->m_list_array     = list_nodes;
 
         // Initialize the block list by linking all blocks into the empty list
-        instance->m_block_empty_list.initialize(list_nodes, block_count);
+        instance->m_block_empty_list.initialize(list_nodes, block_count, block_count);
+        instance->m_block_used_list = xalist_t(0, block_count);
+        instance->m_block_full_list = xalist_t(0, block_count);
 
         // All block pointers are initially NULL
         for (u32 i = 0; i < block_count; ++i)
@@ -110,13 +110,14 @@ namespace xcore
             if (m_block_array[i] != nullptr)
             {
                 m_node_heap->deallocate(m_block_array[i]);
+				m_block_array[i] = nullptr;
             }
         }
 
         m_main_heap->deallocate(m_block_array);
         m_main_heap->deallocate(m_binfo_array);
         m_main_heap->deallocate(m_list_array);
-        m_main_heap->deallocate(this);
+        m_main_heap->destruct(this);
     }
 
     static inline xblock_t* get_block_at(xalloc_fsa_large* instance, u32 i)
@@ -161,8 +162,8 @@ namespace xcore
         u32 const ew  = 32 / w;                                                               // number of elements per word
         u32 const ab  = allocsize_to_bits(allocsize, instance->m_pagesize);                   // get the actual bits of the requested alloc-size
         u64 const bs  = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize); // memory size of one block
-        void*     ptr = advance_ptr(instance->m_address_base, (u64)index * bs);               // memory base of this block
-        ptr           = advance_ptr(ptr, ((wi * ew) + ws) * instance->m_allocsize);           // the word-index and slot index determine the offset
+        void*     ptr = x_advance_ptr(instance->m_address_base, (u64)index * bs);               // memory base of this block
+        ptr           = x_advance_ptr(ptr, ((wi * ew) + ws) * instance->m_allocsize);           // the word-index and slot index determine the offset
 
         block->m_words[wi] = block->m_words[wi] | (ab << (ws * w)); // write the bits into the element slot
         if (!has_empty_slot(block->m_words[wi], w))
@@ -179,7 +180,7 @@ namespace xcore
         xblock_t* const      block = instance->m_block_array[index];
         xblock_info_t* const binfo = &instance->m_binfo_array[index];
 
-        void* const block_base = advance_ptr(instance->m_address_base, (u64)index * allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize));
+        void* const block_base = x_advance_ptr(instance->m_address_base, (u64)index * allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize));
         u32 const   i          = (u32)(((u64)ptr - (u64)block_base) / (u64)instance->m_allocsize);
         u32 const   w          = allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize); // element width in bits
         u32 const   ew         = 32 / w;                                                           // number of elements per word
@@ -250,7 +251,7 @@ namespace xcore
             size = deallocate_from(this, block_index, ptr);
             if (is_block_empty(binfo))
             {
-                m_block_full_list.remove_item(m_list_array, block_index);
+                m_block_used_list.remove_item(m_list_array, block_index);
                 destroy_block_at(this, block_index);
                 m_block_empty_list.insert(m_list_array, block_index);
             }

@@ -23,6 +23,8 @@ namespace xcore
             , m_pages_notfull_list()
             , m_alloc_size(allocsize)
         {
+            m_pages_notfull_list = init_list(m_pages);
+            m_pages_empty_list   = init_list(m_pages);
         }
 
         virtual u32 v_size() const X_FINAL { return m_alloc_size; }
@@ -34,7 +36,7 @@ namespace xcore
 
             // Here we constrain the amount of empty pages to a fixed number
             // TODO: Currently hard-coded to '1'
-            if (m_pages_empty_list.m_count > 1)
+            if (m_pages_empty_list.size() > 1)
             {
                 free_one_page(m_pages, m_pages_empty_list);
             }
@@ -57,34 +59,33 @@ namespace xcore
         u32 const       m_alloc_size;
     };
 
-
     class xvfsa_dexed_own_pages : public xvfsa_dexed
     {
     public:
         inline xvfsa_dexed_own_pages(xalloc* main_heap, xpages_t* pages, xvmem* vmem, void* mem_base, u64 mem_range, u32 allocsize)
             : xvfsa_dexed(main_heap, pages, allocsize)
             , m_pages_owned(pages)
-			, m_vmem(vmem)
-			, m_mem_base(mem_base)
-			, m_mem_range(mem_range)
+            , m_vmem(vmem)
+            , m_mem_base(mem_base)
+            , m_mem_range(mem_range)
         {
         }
 
-        virtual void v_release() 
-		{
-			// release pages and vmem
-			destroy(m_pages_owned);
-			m_vmem->release(m_mem_base, m_mem_range);
-			m_main_heap->deallocate(this);
-		}
+        virtual void v_release()
+        {
+            // release pages and vmem
+            destroy(m_pages_owned);
+            m_vmem->release(m_mem_base, m_mem_range);
+            m_main_heap->destruct(this);
+        }
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
     protected:
-        xpages_t*		m_pages_owned;
-		xvmem*			m_vmem;
-		u64             m_mem_range;
-		void*           m_mem_base;
+        xpages_t* m_pages_owned;
+        xvmem*    m_vmem;
+        u64       m_mem_range;
+        void*     m_mem_base;
     };
 
     // Constraints:
@@ -95,17 +96,16 @@ namespace xcore
         return fsa;
     }
 
-	xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_heap, xvmem* vmem, u64 mem_range, u32 allocsize)
-	{
-		// create pages
-        void* mem_base      = nullptr;
-        u32   page_size     = 0;
+    xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_heap, xvmem* vmem, u64 mem_range, u32 allocsize)
+    {
+        // create pages
+        void*     mem_base  = nullptr;
+        u32       page_size = 0;
         u32 const mem_attrs = 0;
         vmem->reserve(mem_range, page_size, mem_attrs, mem_base);
-        xpages_t* vpages = create_fsa_pages(main_heap, mem_base, mem_range, page_size);
-
-        xvfsa_dexed* fsa = main_heap->construct<xvfsa_dexed_own_pages>(main_heap, vpages, vmem, mem_base, mem_range, allocsize);
+        xpages_t*    vpages = create_fsa_pages(main_heap, mem_base, mem_range, page_size);
+        xvfsa_dexed* fsa    = main_heap->construct<xvfsa_dexed_own_pages>(main_heap, vpages, vmem, mem_base, mem_range, allocsize);
         return fsa;
-	}
+    }
 
 }; // namespace xcore

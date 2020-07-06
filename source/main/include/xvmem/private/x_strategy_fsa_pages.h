@@ -29,6 +29,8 @@ namespace xcore
 
     xpages_t* create_fsa_pages(xalloc* main_allocator, void* base_address, u64 memory_range, u32 page_size);
     void      destroy(xpages_t* pages);
+
+	xalist_t  init_list(xpages_t* pages);
     void*     alloc_page(xpages_t* pages, xalist_t& page_list, u32 const elem_size);
     void*     free_one_page(xpages_t* pages, xalist_t& page_list);
     void      free_all_pages(xpages_t* pages, xalist_t& page_list);

@@ -72,7 +72,7 @@ namespace xcore
             m_allocators[i] = nullptr;
         }
         m_main_heap->deallocate(m_allocators);
-        m_main_heap->deallocate(this);
+        m_main_heap->destruct(this);
     }
 
     void* xalloc_segregated::v_allocate(u32 size, u32 alignment)

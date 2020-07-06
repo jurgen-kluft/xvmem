@@ -51,8 +51,6 @@ namespace xcore
         m_vmem->release(m_mem_base, m_mem_range);
     }
 
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-
     xalloc* gCreateVMemCoalesceBasedAllocator(xalloc* main_heap, xfsadexed* node_heap, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step)
     {
         xvmem_allocator_coalesce_direct* allocator = main_heap->construct<xvmem_allocator_coalesce_direct>();

@@ -76,12 +76,12 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             vmem.reserve(mem_range, page_size, page_attrs, mem_base);
             xpages_t* pages = create_fsa_pages(gTestAllocator, mem_base, mem_range, page_size);
 
-            xalist_t page_list;
-            CHECK_EQUAL(0, page_list.m_count);
+            xalist_t page_list = init_list(pages);
+            CHECK_EQUAL(0, page_list.size());
             alloc_page(pages, page_list, 32);
-            CHECK_EQUAL(1, page_list.m_count);
+            CHECK_EQUAL(1, page_list.size());
             free_one_page(pages, page_list);
-            CHECK_EQUAL(0, page_list.m_count);
+            CHECK_EQUAL(0, page_list.size());
 
             destroy(pages);
             vmem.release(mem_base, mem_range);
@@ -96,15 +96,15 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             vmem.reserve(mem_range, page_size, page_attrs, mem_base);
             xpages_t* pages = create_fsa_pages(gTestAllocator, mem_base, mem_range, page_size);
 
-            xalist_t page_list;
+            xalist_t page_list = init_list(pages);
             for (s32 i = 0; i < 1024; ++i)
             {
                 u32 const size = 32 + ((i / 64) * 32);
-                CHECK_EQUAL(0, page_list.m_count);
+                CHECK_EQUAL(0, page_list.size());
                 alloc_page(pages, page_list, size);
-                CHECK_EQUAL(1, page_list.m_count);
+                CHECK_EQUAL(1, page_list.size());
                 free_one_page(pages, page_list);
-                CHECK_EQUAL(0, page_list.m_count);
+                CHECK_EQUAL(0, page_list.size());
             }
 
             destroy(pages);
@@ -120,7 +120,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             vmem.reserve(mem_range, page_size, page_attrs, mem_base);
             xpages_t* pages = create_fsa_pages(gTestAllocator, mem_base, mem_range, page_size);
 
-            xalist_t page_list;
+            xalist_t page_list = init_list(pages);
             for (s32 i = 0; i < 1024; ++i)
             {
                 u32 const size = 32 + ((i / 64) * 32);
@@ -129,26 +129,26 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
                 const u32 cnt      = (64 * 1024) / size;
                 void**    elements = (void**)gTestAllocator->allocate(cnt * sizeof(void*), sizeof(void*));
 
-                xalist_t notfull_pages;
-                xalist_t empty_pages;
+                xalist_t notfull_pages = init_list(pages);
+                xalist_t empty_pages = init_list(pages);
                 {
                     elements[0] = alloc_elem(pages, notfull_pages, size);
                     for (u32 j = 1; j < cnt; ++j)
                     {
-                        CHECK_EQUAL(1, notfull_pages.m_count);
+                        CHECK_EQUAL(1, notfull_pages.size());
                         elements[j] = alloc_elem(pages, notfull_pages, size);
                     }
-                    CHECK_EQUAL(0, notfull_pages.m_count);
+                    CHECK_EQUAL(0, notfull_pages.size());
 
                     free_elem(pages, notfull_pages, elements[0], empty_pages);
                     for (u32 j = 1; j < cnt; ++j)
                     {
-                        CHECK_EQUAL(1, notfull_pages.m_count);
+                        CHECK_EQUAL(1, notfull_pages.size());
                         free_elem(pages, notfull_pages, elements[j], empty_pages);
                         elements[j] = nullptr;
                     }
-                    CHECK_EQUAL(0, notfull_pages.m_count);
-                    CHECK_EQUAL(1, empty_pages.m_count);
+                    CHECK_EQUAL(0, notfull_pages.size());
+                    CHECK_EQUAL(1, empty_pages.size());
                     free_one_page(pages, empty_pages);
                 }
 
@@ -172,8 +172,8 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             const s32 cnt = 1024;
             void*     element[cnt];
 
-            xalist_t used_pages;
-            xalist_t empty_pages;
+            xalist_t used_pages = init_list(pages);
+            xalist_t empty_pages = init_list(pages);
             u32      i = 0;
             {
                 u32 const size = 32 + ((i / 64) * 32);
@@ -189,8 +189,8 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
                     element[j] = nullptr;
                 }
             }
-            CHECK_EQUAL(used_pages.m_count, 0);
-            CHECK_EQUAL(1, empty_pages.m_count);
+            CHECK_EQUAL(used_pages.size(), 0);
+            CHECK_EQUAL(1, empty_pages.size());
             free_one_page(pages, empty_pages);
 
             destroy(pages);
@@ -209,8 +209,8 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             const s32 cnt = 1024;
             void*     element[cnt];
 
-            xalist_t used_pages;
-            xalist_t empty_pages;
+            xalist_t used_pages = init_list(pages);
+            xalist_t empty_pages = init_list(pages);
 
             for (s32 i = 0; i < 32; ++i)
             {
@@ -227,9 +227,9 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
                     free_elem(pages, used_pages, element[j], empty_pages);
                     element[j] = nullptr;
                 }
-                CHECK_NOT_EQUAL(0, empty_pages.m_count);
+                CHECK_NOT_EQUAL(0, empty_pages.size());
                 free_all_pages(pages, empty_pages);
-                CHECK_EQUAL(0, empty_pages.m_count);
+                CHECK_EQUAL(0, empty_pages.size());
             }
 
             destroy(pages);

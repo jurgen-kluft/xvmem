@@ -28,8 +28,6 @@ namespace xcore
         u32     m_page_size; //
     };
 
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-
     void* xalloc_page_vcd_direct::v_allocate(u32 size, u32 alignment)
     {
         void*     ptr        = m_allocator->allocate(size, alignment);

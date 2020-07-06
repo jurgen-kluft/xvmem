@@ -32,10 +32,10 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
         UNITTEST_TEST(init) 
 		{
 			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list;
+			xalist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			gDestroyList(list_data);
@@ -44,16 +44,16 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
         UNITTEST_TEST(insert_1) 
 		{
 			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list;
+			xalist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			list.insert(list_data, 0);
 
 			CHECK_FALSE(list.is_empty());
-			CHECK_EQUAL(1, list.m_count);
+			CHECK_EQUAL(1, list.size());
 			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
 
 			xalist_t::node_t* node = list.idx2node(list_data, 0);
@@ -67,22 +67,22 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
         UNITTEST_TEST(insert_1_remove_head) 
 		{
 			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list;
+			xalist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			list.insert(list_data, 0);
 
 			CHECK_FALSE(list.is_empty());
-			CHECK_EQUAL(1, list.m_count);
+			CHECK_EQUAL(1, list.size());
 			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
 
 			xalist_t::node_t* node = list.remove_head(list_data);
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			CHECK_FALSE(node->is_linked());
@@ -95,10 +95,10 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
         UNITTEST_TEST(insert_N_remove_head) 
 		{
 			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list;
+			xalist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			const s32 count = 256;
@@ -108,7 +108,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			}
 
 			CHECK_FALSE(list.is_empty());
-			CHECK_EQUAL(count, list.m_count);
+			CHECK_EQUAL(count, list.size());
 			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
 
 			for (s32 i=0; i<count; ++i)
@@ -120,7 +120,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			}
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			gDestroyList(list_data);
@@ -129,10 +129,10 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
         UNITTEST_TEST(insert_N_remove_tail) 
 		{
 			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list;
+			xalist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			const s32 count = 256;
@@ -142,7 +142,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			}
 
 			CHECK_FALSE(list.is_empty());
-			CHECK_EQUAL(count, list.m_count);
+			CHECK_EQUAL(count, list.size());
 			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
 
 			for (s32 i=0; i<count; ++i)
@@ -154,7 +154,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			}
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			gDestroyList(list_data);
@@ -163,10 +163,10 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
         UNITTEST_TEST(insert_N_remove_item) 
 		{
 			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list;
+			xalist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			const s32 count = 256;
@@ -176,7 +176,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			}
 
 			CHECK_FALSE(list.is_empty());
-			CHECK_EQUAL(count, list.m_count);
+			CHECK_EQUAL(count, list.size());
 			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
 
 			for (s32 i=0; i<count; ++i)
@@ -188,7 +188,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			}
 
 			CHECK_TRUE(list.is_empty());
-			CHECK_EQUAL(0, list.m_count);
+			CHECK_EQUAL(0, list.size());
 			CHECK_EQUAL(xalist_t::NIL, list.m_head);
 
 			gDestroyList(list_data);

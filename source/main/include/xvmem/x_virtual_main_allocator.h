@@ -51,7 +51,7 @@ namespace xcore
         {
             for (s32 i = 0; i < m_med_count; ++i)
             {
-                if ((m_med_mem_range[i] / m_med_addr_node_cnt[i]) <= (2 * m_med_max_size[i]))
+                if ((m_med_mem_range[i] / m_med_addr_node_cnt[i]) <= (m_med_max_size[i] + 1024))
                 {
                     reason = "Memory range division should be larger than the maximum allocation size.";
                     return false;

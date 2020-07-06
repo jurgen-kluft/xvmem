@@ -44,6 +44,7 @@ namespace xcore
             {
                 free_all_pages(m_fsa_pages, m_fvsa_pages_list[i]);
             }
+			destroy(m_fsa_pages);
 
             m_main_heap->deallocate(m_fvsa_size_to_index);
             m_main_heap->deallocate(m_fvsa_index_to_size);
@@ -164,9 +165,11 @@ namespace xcore
         fsa->m_fvsa_max_size        = max_size;
         fsa->m_fvsa_pages_list_size = num_allocators;
         fsa->m_fvsa_pages_list      = (xalist_t*)fsa->m_main_heap->allocate(sizeof(xalist_t) * fsa->m_fvsa_pages_list_size, sizeof(void*));
+
+		xalist_t const default_list = init_list(fsa->m_fsa_pages);
         for (u32 c = 0; c < fsa->m_fvsa_pages_list_size; ++c)
 		{
-			fsa->m_fvsa_pages_list[c].reset();
+			fsa->m_fvsa_pages_list[c] = default_list;
 		}
 
         return fsa;

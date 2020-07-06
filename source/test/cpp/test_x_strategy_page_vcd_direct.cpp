@@ -59,14 +59,28 @@ class xalloc_test : public xalloc
 {
 public:
     void* m_mem_base;
+	u32   m_page_size;
     u64   m_mem_range;
+	u64   m_mem_cursor;
     u32   m_alloc_count;
     u32   m_dealloc_count;
 
+	void reset(void* mem_base, u32 page_size)
+	{
+        m_mem_base      = mem_base;
+        m_page_size     = page_size;
+        m_mem_range     = (u64)32 * 1024 * 1024 * 1024;
+		m_mem_cursor    = 0;
+        m_alloc_count   = 0;
+        m_dealloc_count = 0;
+	}
+
     virtual void* v_allocate(u32 size, u32 alignment)
     {
+		u64 const mem_cursor = m_mem_cursor;
         m_alloc_count += 1;
-        return m_mem_base;
+		m_mem_cursor += (size + (m_page_size-1)) & ~(m_page_size-1);
+        return x_advance_ptr(m_mem_base, mem_cursor);
     }
 
     virtual u32 v_deallocate(void* ptr)
@@ -89,11 +103,7 @@ UNITTEST_SUITE_BEGIN(strategy_page_vcd_direct)
 
         UNITTEST_FIXTURE_SETUP()
         {
-            alloc_test.m_mem_base      = mem_base;
-            alloc_test.m_mem_range     = (u64)32 * 1024 * 1024 * 1024;
-            alloc_test.m_alloc_count   = 0;
-            alloc_test.m_dealloc_count = 0;
-
+			alloc_test.reset(mem_base, page_size);
             vmem.init(gTestAllocator, (u64)64 * 1024 * 1024, page_size);
         }
         UNITTEST_FIXTURE_TEARDOWN() { vmem.exit(); }
@@ -102,6 +112,7 @@ UNITTEST_SUITE_BEGIN(strategy_page_vcd_direct)
         {
             xalloc* page_vcd = create_page_vcd_direct(gTestAllocator, &alloc_test, &vmem, page_size);
             page_vcd->release();
+			alloc_test.reset(mem_base, page_size);
         }
 
         UNITTEST_TEST(alloc_dealloc)
@@ -118,6 +129,7 @@ UNITTEST_SUITE_BEGIN(strategy_page_vcd_direct)
             CHECK_EQUAL(vmem.m_commit_cnt, vmem.m_decommit_cnt);
 
             page_vcd->release();
+			alloc_test.reset(mem_base, page_size);
         }
     }
 }

@@ -138,10 +138,6 @@ namespace xcore
 
     } // namespace bst_size
 
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-    static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
-    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (uptr)((uptr)next_ptr - (uptr)ptr); }
-
     static u64 adjust_size_for_alignment(u64 requested_size, u32 requested_alignment, u32 default_alignment)
     {
         // Compute the 'size' that taking into account the alignment. This is done by taking

@@ -11,10 +11,6 @@
 
 namespace xcore
 {
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-    static inline void* align_ptr(void* ptr, u32 alignment) { return (void*)(((uptr)ptr + (alignment - 1)) & ~((uptr)alignment - 1)); }
-    static uptr         diff_ptr(void* ptr, void* next_ptr) { return (uptr)((uptr)next_ptr - (uptr)ptr); }
-
     struct xpage_t
     {
         // Constraints:
@@ -107,7 +103,7 @@ namespace xcore
             , m_page_list(list_data)
             , m_pages(page_array)
         {
-            m_free_page_list.initialize(list_data, page_cnt);
+            m_free_page_list.initialize(list_data, page_cnt, page_cnt);
         }
 
         xpage_t* alloc_page(u32 const elem_size);
@@ -198,7 +194,7 @@ namespace xcore
     void* xpages_t::address_of_page(xpage_t* const page) const
     {
         u64 const ipage = indexof_page(page);
-        return advance_ptr(m_base_address, ipage * m_page_size);
+        return x_advance_ptr(m_base_address, ipage * m_page_size);
     }
 
     void* xpages_t::idx2ptr(u32 const index) const
@@ -337,6 +333,11 @@ namespace xcore
         pages->m_main_allocator->deallocate(pages->m_pages);
         pages->m_main_allocator->deallocate(pages);
     }
+
+	xalist_t  init_list(xpages_t* pages)
+	{
+		return xalist_t(0, pages->m_page_cnt);
+	}
 
     void* alloc_page(xpages_t* pages, xalist_t& page_list, u32 const elem_size)
     {

@@ -145,6 +145,8 @@ namespace xcore
 
         m_node16_heap->release();
         m_node32_heap->release();
+
+		m_main_heap->destruct(this);
     }
 
     void xvmem_allocator::init(xalloc* main_heap, xvmem* vmem, xvmem_config const* const cfg)

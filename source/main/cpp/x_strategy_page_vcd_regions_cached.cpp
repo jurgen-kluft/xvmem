@@ -14,8 +14,6 @@ namespace xcore
     //    This allocator is a proxy and keeps track of regions of memory to
     //    be able to decommit pages back to the system.
 
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-
     class xalloc_page_vcd_regions_cached : public xalloc
     {
     public:
@@ -23,7 +21,7 @@ namespace xcore
 
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
         virtual u32   v_deallocate(void* ptr) X_FINAL;
-        virtual void  v_release();
+        virtual void  v_release() X_FINAL;
 
         void commit_region(void* reg_base, u32 region_index, u32 num_regions)
         {
@@ -51,7 +49,7 @@ namespace xcore
                 else if (region_1st_is_cached && !region_2nd_is_cached)
                 {
                     m_regions_cache.remove_item(m_regions_list, region_index);
-                    m_vmem->commit(advance_ptr(reg_base, m_reg_range), m_page_size, (u32)(m_reg_range / m_page_size));
+                    m_vmem->commit(x_advance_ptr(reg_base, m_reg_range), m_page_size, (u32)(m_reg_range / m_page_size));
                 }
                 else if (!region_1st_is_cached && region_2nd_is_cached)
                 {
@@ -71,11 +69,11 @@ namespace xcore
                 m_regions_cache.insert_tail(m_regions_list, region_index);
 
                 // Is cache is maxed out?  ->  decommit the oldest
-                if (m_regions_cache.m_count == m_max_regions_cached)
+                if (m_regions_cache.size() == m_max_regions_cached)
                 {
                     xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
                     u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
-                    void*             reg_base = advance_ptr(m_mem_base, iregion * m_reg_range);
+                    void*             reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
                     m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
                 }
             }
@@ -91,11 +89,11 @@ namespace xcore
                     m_regions_cache.insert_tail(m_regions_list, region_index + i);
 
                     // Is cache is maxed out?  ->  decommit the oldest
-                    if (m_regions_cache.m_count == m_max_regions_cached)
+                    if (m_regions_cache.size() == m_max_regions_cached)
                     {
                         xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
                         u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
-                        void*             reg_base = advance_ptr(m_mem_base, iregion * m_reg_range);
+                        void*             reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
                         m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
                     }
                 }
@@ -156,7 +154,7 @@ namespace xcore
             m_regions[region_index_L].m_counter += 1;
             if (region_ref_L == 0)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 commit_region(region_mem_base, region_index_L, 1);
             }
         }
@@ -168,17 +166,17 @@ namespace xcore
             ASSERT((region_index_R - region_index_L) == 1);
             if (region_ref_L == 0 && region_ref_R != 0)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 commit_region(region_mem_base, region_index_L, 1);
             }
             else if (region_ref_L == 0 && region_ref_R == 0)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 commit_region(region_mem_base, region_index_L, 2);
             }
             else if (region_ref_L != 0 && region_ref_R == 0)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_R * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_R * m_reg_range);
                 u32 const   num_regions     = 1;
                 commit_region(region_mem_base, region_index_R, 1);
             }
@@ -203,7 +201,7 @@ namespace xcore
             m_regions[region_index_L].m_counter -= 1;
             if (region_ref_L == 1)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 decommit_region(region_mem_base, region_index_L, 1);
             }
         }
@@ -215,17 +213,17 @@ namespace xcore
             ASSERT((region_index_R - region_index_L) == 1);
             if (region_ref_L == 1 && region_ref_R > 1)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 decommit_region(region_mem_base, region_index_L, 1);
             }
             else if (region_ref_L == 1 && region_ref_R == 1)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 decommit_region(region_mem_base, region_index_L, 2);
             }
             else if (region_ref_L > 1 && region_ref_R == 1)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_R * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_R * m_reg_range);
                 decommit_region(region_mem_base, region_index_R, 1);
             }
         }
@@ -235,6 +233,7 @@ namespace xcore
 
     void xalloc_page_vcd_regions_cached::v_release()
     {
+        m_main_heap->deallocate(m_regions_list);
         m_main_heap->deallocate(m_regions);
         m_main_heap->destruct(this);
     }
@@ -243,20 +242,21 @@ namespace xcore
     {
         xalloc_page_vcd_regions_cached* proxy = main_heap->construct<xalloc_page_vcd_regions_cached>();
 
-        proxy->m_main_heap    = main_heap;
-        proxy->m_allocator    = allocator;
-        proxy->m_vmem         = vmem;
-        proxy->m_page_size    = page_size;
-        proxy->m_mem_base     = address_base;
-        proxy->m_mem_range    = address_range;
-        proxy->m_reg_range    = region_size;
-        proxy->m_num_regions  = (u32)(address_range / region_size);
-        proxy->m_regions      = (xalloc_page_vcd_regions_cached::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
-        proxy->m_regions_list = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * proxy->m_num_regions);
+        proxy->m_main_heap     = main_heap;
+        proxy->m_allocator     = allocator;
+        proxy->m_vmem          = vmem;
+        proxy->m_page_size     = page_size;
+        proxy->m_mem_base      = address_base;
+        proxy->m_mem_range     = address_range;
+        proxy->m_reg_range     = region_size;
+        proxy->m_num_regions   = (u32)(address_range / region_size);
+        proxy->m_regions       = (xalloc_page_vcd_regions_cached::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
+        proxy->m_regions_cache = xalist_t(0, proxy->m_num_regions);
+        proxy->m_regions_list  = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * proxy->m_num_regions);
 
+        x_memclr(proxy->m_regions, sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
         for (u32 i = 0; i < proxy->m_num_regions; ++i)
         {
-            proxy->m_regions[i].m_counter = 0;
             proxy->m_regions_list[i].unlink();
         }
         return proxy;

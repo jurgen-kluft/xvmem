@@ -41,8 +41,6 @@ namespace xcore
         region_t* m_regions;     // The array of regions
     };
 
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-
     void* xalloc_page_vcd_regions::v_allocate(u32 size, u32 alignment)
     {
         void*     ptr        = m_allocator->allocate(size, alignment);
@@ -61,7 +59,7 @@ namespace xcore
         {
             if (region_ref_L == 0)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 commit_region(region_mem_base, 1);
             }
         }
@@ -72,17 +70,17 @@ namespace xcore
             ASSERT((region_index_R - region_index_L) == 1);
             if (region_ref_L == 0 && region_ref_R != 0)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 commit_region(region_mem_base, 1);
             }
             else if (region_ref_L == 0 && region_ref_R == 0)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 commit_region(region_mem_base, 2);
             }
             else if (region_ref_L != 0 && region_ref_R == 0)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_R * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_R * m_reg_range);
                 u32 const   num_regions     = 1;
                 commit_region(region_mem_base, 1);
             }
@@ -107,7 +105,7 @@ namespace xcore
         {
             if (region_ref_L == 1)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 decommit_region(region_mem_base, 1);
             }
         }
@@ -118,17 +116,17 @@ namespace xcore
             ASSERT((region_index_R - region_index_L) == 1);
             if (region_ref_L == 1 && region_ref_R > 1)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 decommit_region(region_mem_base, 1);
             }
             else if (region_ref_L == 1 && region_ref_R == 1)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_L * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_L * m_reg_range);
                 decommit_region(region_mem_base, 2);
             }
             else if (region_ref_L > 1 && region_ref_R == 1)
             {
-                void* const region_mem_base = advance_ptr(m_mem_base, region_index_R * m_reg_range);
+                void* const region_mem_base = x_advance_ptr(m_mem_base, region_index_R * m_reg_range);
                 decommit_region(region_mem_base, 1);
             }
         }
@@ -155,6 +153,7 @@ namespace xcore
         proxy->m_reg_range   = region_size;
         proxy->m_num_regions = (u32)(address_range / region_size);
         proxy->m_regions     = (xalloc_page_vcd_regions::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions::region_t) * proxy->m_num_regions);
+		x_memclr(proxy->m_regions, sizeof(xalloc_page_vcd_regions::region_t) * proxy->m_num_regions);
 
         return proxy;
     }

@@ -9,20 +9,21 @@ namespace xcore
 {
     const u16 xalist_t::NIL = 0xffff;
 
-    void xalist_t::initialize(node_t* list, u16 max_count)
+    void xalist_t::initialize(node_t* list, u16 size, u16 max_size)
     {
-        ASSERT(max_count > 0);
+        ASSERT(max_size > 0);
+        ASSERT(size <= max_size);
+        m_size     = size;
+        m_size_max = max_size;
+        m_head     = NIL;
 
-        for (u32 i = 0; i < max_count; ++i)
+        m_head = 0;
+        for (u32 i = 0; i < max_size; ++i)
         {
             list[i].link(i - 1, i + 1);
         }
-        list[0].link(max_count - 1, 1);
-        list[max_count - 1].link(max_count - 2, 0);
-
-        m_count = max_count;
-        m_size  = max_count;
-        m_head  = 0;
+        list[0].link(max_size - 1, 1);
+        list[max_size - 1].link(max_size - 2, 0);
     }
 
     void xalist_t::insert(node_t* list, u16 item)
@@ -43,7 +44,7 @@ namespace xcore
             pprev->m_next = item;
         }
         m_head = item;
-        m_count += 1;
+        m_size += 1;
     }
 
     void xalist_t::insert_tail(node_t* list, u16 item)
@@ -64,7 +65,7 @@ namespace xcore
             pnext->m_prev = item;
             pprev->m_next = item;
         }
-        m_count += 1;
+        m_size += 1;
     }
 
     static void s_remove_item(xalist_t& list, xalist_t::node_t* nodes, u16 item, xalist_t::node_t*& out_node, u16& out_idx)
@@ -75,11 +76,11 @@ namespace xcore
         pprev->m_next                 = pitem->m_next;
         pnext->m_prev                 = pitem->m_prev;
         pitem->unlink();
-        ASSERT(list.m_count >= 1);
-        if (list.m_count == 1)
+        ASSERT(list.m_size >= 1);
+        if (list.m_size == 1)
         {
-            list.m_head  = xalist_t::NIL;
-            list.m_count = 0;
+            list.m_head = xalist_t::NIL;
+            list.m_size = 0;
         }
         else
         {
@@ -87,7 +88,7 @@ namespace xcore
             {
                 list.m_head = list.node2idx(nodes, pnext);
             }
-            list.m_count--;
+            list.m_size--;
         }
         out_node = pitem;
         out_idx  = item;
@@ -111,8 +112,8 @@ namespace xcore
         pnext->m_prev                 = iprev;
         pitem->link(xalist_t::NIL, xalist_t::NIL);
 
-        ASSERT(list.m_count >= 1);
-        if (list.m_count == 1)
+        ASSERT(list.m_size >= 1);
+        if (list.m_size == 1)
         {
             list.m_head = xalist_t::NIL;
         }
@@ -120,7 +121,7 @@ namespace xcore
         {
             list.m_head = inext;
         }
-        list.m_count -= 1;
+        list.m_size -= 1;
 
         out_node = pitem;
         out_idx  = iitem;
@@ -145,12 +146,12 @@ namespace xcore
         pnext->m_prev                 = iprev;
         pitem->link(xalist_t::NIL, xalist_t::NIL);
 
-        ASSERT(list.m_count >= 1);
-        if (list.m_count == 1)
+        ASSERT(list.m_size >= 1);
+        if (list.m_size == 1)
         {
             list.m_head = xalist_t::NIL;
         }
-        list.m_count -= 1;
+        list.m_size -= 1;
 
         out_node = pitem;
         out_idx  = iitem;

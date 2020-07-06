@@ -36,8 +36,6 @@ namespace xcore
         entry_t*          m_entry_array;
     };
 
-    static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
-
     xalloc* create_alloc_large(xalloc* main_heap, void* mem_addr, u64 mem_size, u32 max_num_allocs)
     {
         xalloc_large* instance   = main_heap->construct<xalloc_large>();
@@ -52,8 +50,9 @@ namespace xcore
         instance->m_entry_max   = block_cnt;
         instance->m_entry_nodes = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * block_cnt, sizeof(void*));
         instance->m_entry_array = (xalloc_large::entry_t*)main_heap->allocate(sizeof(xalloc_large::entry_t) * block_cnt, sizeof(void*));
-        instance->m_alloc_list  = xalist_t();
-        instance->m_free_list.initialize(instance->m_entry_nodes, block_cnt);
+        instance->m_alloc_list  = xalist_t(0, block_cnt);
+        instance->m_free_list.initialize(instance->m_entry_nodes, block_cnt, block_cnt);
+
         for (u32 i = 0; i < block_cnt; ++i)
         {
             instance->m_entry_array[i].m_size  = (u32)block_size;
@@ -66,7 +65,7 @@ namespace xcore
     {
         m_main_heap->deallocate(m_entry_nodes);
         m_main_heap->deallocate(m_entry_array);
-        m_main_heap->deallocate(this);
+        m_main_heap->destruct(this);
     }
 
     void* xalloc_large::v_allocate(u32 size, u32 alignment)
@@ -78,7 +77,7 @@ namespace xcore
             xalloc_large::entry_t* entry = &m_entry_array[idx];
             entry->m_size                = size;
             ASSERT(entry->m_index == idx);
-            return advance_ptr(m_mem_base, entry->m_index * m_block_size);
+            return x_advance_ptr(m_mem_base, entry->m_index * m_block_size);
         }
         return nullptr;
     }
