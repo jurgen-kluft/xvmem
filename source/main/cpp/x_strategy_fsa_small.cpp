@@ -44,7 +44,7 @@ namespace xcore
             {
                 free_all_pages(m_fsa_pages, m_fvsa_pages_list[i]);
             }
-			destroy(m_fsa_pages);
+            destroy(m_fsa_pages);
 
             m_main_heap->deallocate(m_fvsa_size_to_index);
             m_main_heap->deallocate(m_fvsa_index_to_size);
@@ -101,9 +101,9 @@ namespace xcore
 
         fsa->m_fvsa_size_to_index = (u8*)main_heap->allocate(sizeof(u8) * num_sizes);
         for (u32 c = 0; c < num_sizes; ++c)
-		{
-			fsa->m_fvsa_size_to_index[c] = 0xff;
-		}
+        {
+            fsa->m_fvsa_size_to_index[c] = 0xff;
+        }
 
         u32 num_allocators = 0;
         for (u32 c = 0; c < size_range_count; ++c)
@@ -112,45 +112,49 @@ namespace xcore
             num_allocators += (r.m_size_max - r.m_size_min) / r.m_size_step;
         }
 
-		ASSERT(num_allocators < 255);	// 0xff means empty
+        ASSERT(num_allocators < 255); // 0xff means empty
 
         fsa->m_fvsa_index_to_size = (u16*)main_heap->allocate(sizeof(u16) * num_allocators);
         for (u32 c = 0; c < num_allocators; ++c)
-		{
-			fsa->m_fvsa_index_to_size[c] = 0xffff;
-		}
+        {
+            fsa->m_fvsa_index_to_size[c] = 0xffff;
+        }
 
-        u8  allocator_index = 0;
+        u8 allocator_index = 0;
         for (u32 c = 0; c < size_range_count; ++c)
         {
             size_range_t& range = size_ranges[c];
-            for (u32 size = range.m_size_min + range.m_size_step; size <= range.m_size_max; )
+            for (u32 size = range.m_size_min + range.m_size_step; size <= range.m_size_max;)
             {
-				s32 const array_index = (size - min_size) / min_step;
-				s32 const count       = range.m_size_step / min_step;
-				fsa->m_fvsa_size_to_index[array_index] = allocator_index;
-				fsa->m_fvsa_index_to_size[allocator_index] = size;
+                s32 const array_index                      = (size - min_size) / min_step;
+                s32 const count                            = range.m_size_step / min_step;
+                fsa->m_fvsa_size_to_index[array_index]     = allocator_index;
+                fsa->m_fvsa_index_to_size[allocator_index] = size;
                 ASSERT(allocator_index < num_allocators);
                 allocator_index += 1;
-				size += count * min_step;
+                size += count * min_step;
             }
         }
         ASSERT(allocator_index == num_allocators);
 
-		// TODO: Fixup the 'size_to_index' array
-		struct { s32 c; u8 a; } i = {(s32)num_sizes-1,0xff};
-		for ( ; i.c >=0; i.c--)
-		{
-			if (fsa->m_fvsa_size_to_index[i.c] == 0xff)
-			{
-				ASSERT(i.a != 0xff);
-				fsa->m_fvsa_size_to_index[i.c] = i.a;
-			}
-			else 
-			{
-				i.a = fsa->m_fvsa_size_to_index[i.c];
-			}
-		}
+        // TODO: Fixup the 'size_to_index' array
+        struct
+        {
+            s32 c;
+            u8  a;
+        } i = {(s32)num_sizes - 1, 0xff};
+        for (; i.c >= 0; i.c--)
+        {
+            if (fsa->m_fvsa_size_to_index[i.c] == 0xff)
+            {
+                ASSERT(i.a != 0xff);
+                fsa->m_fvsa_size_to_index[i.c] = i.a;
+            }
+            else
+            {
+                i.a = fsa->m_fvsa_size_to_index[i.c];
+            }
+        }
 
         fsa->m_fvsa_mem_range    = (u64)512 * 1024 * 1024;
         fsa->m_fvsa_mem_base     = nullptr;
@@ -166,11 +170,11 @@ namespace xcore
         fsa->m_fvsa_pages_list_size = num_allocators;
         fsa->m_fvsa_pages_list      = (xalist_t*)fsa->m_main_heap->allocate(sizeof(xalist_t) * fsa->m_fvsa_pages_list_size, sizeof(void*));
 
-		xalist_t const default_list = init_list(fsa->m_fsa_pages);
+        xalist_t const default_list = init_list(fsa->m_fsa_pages);
         for (u32 c = 0; c < fsa->m_fvsa_pages_list_size; ++c)
-		{
-			fsa->m_fvsa_pages_list[c] = default_list;
-		}
+        {
+            fsa->m_fvsa_pages_list[c] = default_list;
+        }
 
         return fsa;
     }
