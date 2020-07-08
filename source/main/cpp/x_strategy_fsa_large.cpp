@@ -337,17 +337,9 @@ namespace xcore
     u32 allocsize_to_bwidth(u32 allocsize, u32 pagesize)
     {
         u32 const p = xceilpo2((allocsize + pagesize - 1) / pagesize);
-        u32       w;
-        if (p & 0xff00)
-            w = 16;
-        else if (p & 0x00f0)
-            w = 8;
-        else if (p & 0x000c)
-            w = 4;
-        else if (p & 0x0002)
-            w = 2;
-        else if (p & 0x0001)
-            w = 1;
+		u64 const i = 0xffffffff77773310;
+		u32 const b = 15 - xcountLeadingZeros(p);
+		u32 const w = (((i >> (4*b)) & 0xF) + 1);
         return w;
     }
 
@@ -364,7 +356,7 @@ namespace xcore
     {
         switch (w)
         {
-            case 1: return (slot & 0xffffffff) != 0xffffffff;
+            case 1: return (slot != 0xffffffff);
             case 2: return (slot & 0xaaaaaaaa) != 0xaaaaaaaa;
             case 4: return (slot & 0x88888888) != 0x88888888;
             case 8: return (slot & 0x80808080) != 0x80808080;
