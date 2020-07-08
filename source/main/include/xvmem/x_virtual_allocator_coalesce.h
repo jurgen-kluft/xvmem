@@ -5,11 +5,12 @@
 #pragma once 
 #endif
 
-#include "xbase/x_allocator.h"
-#include "xvmem/x_virtual_memory.h"
-
 namespace xcore
 {
+	class xalloc;
+	class xfsadexed;
+	class xvmem;
+
 	// This is a virtual memory based allocator that is based on the coalesce strategy.
 	// It can manage multiple 'regions' with a size that is provided by the user.
 	extern xalloc*	gCreateVMemCoalesceBasedAllocator(xalloc* main_heap, xfsadexed* node_heap, xvmem* vmem, u64 region_mem_size, u32 size_min, u32 size_max, u32 size_step);
