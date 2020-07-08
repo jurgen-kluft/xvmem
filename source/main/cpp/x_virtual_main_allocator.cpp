@@ -85,6 +85,14 @@ namespace xcore
 			}
 		}
 
+		// Segregated
+        if (size <= m_seg_max_size)
+        {
+            if (size < m_seg_min_size)
+                size = m_seg_min_size;
+			return m_seg_allocator_vcd->allocate(size, align);
+		}
+
         return m_large_allocator_vcd->allocate(size, align);
     }
 

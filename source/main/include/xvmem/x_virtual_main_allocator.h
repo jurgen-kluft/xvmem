@@ -39,11 +39,11 @@ namespace xcore
             m_med_addr_node_cnt[1] = 512;      // MedLarge-Size-Allocator; Number of address nodes to split the memory range
             m_med_region_size[1]   = MB(8);    // MedLarge-Size-Allocator; Size of commit/decommit regions
             m_med_region_cached[1] = 8;        // Keep 8 medium-2-large regions cached
-            m_seg_min_size         = KB(512);  //
-            m_seg_max_size         = MB(32);   //
-            m_seg_mem_range        = GBx(128); //
-            m_large_min_size       = MB(32);   //
-            m_large_mem_range      = GBx(128); //
+            m_seg_min_size         = KB(512);  // Segregated; size-alignment is page-size
+            m_seg_max_size         = MB(32);   // 512 KB % 64 KB % 32 MB
+            m_seg_mem_range        = GBx(128); // 128 GB reserved address range
+            m_large_min_size       = MB(32);   // Any size larger than 32 MB is handled by the large-allocator
+            m_large_mem_range      = GBx(128); // 128 GB reserved address range
             m_large_max_allocs     = 64;       // Maximum number of large allocations
         }
 
