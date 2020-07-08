@@ -17,7 +17,7 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
         static xfsadexed* sNodeHeap = nullptr;
 
         static const u64 sMemoryRange = (u64)128 * 1024 * 1024 * 1024;
-        static const u64 sMinumSize   = (u64)256 * 1024;
+        static const u64 sMinumSize   = (u64)512 * 1024;
         static const u64 sMaximumSize = (u64)32 * 1024 * 1024;
         static const u32 sPageSize    = (u64)64 * 1024;
 
@@ -42,16 +42,34 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
             a->release();
         }
 
-        UNITTEST_TEST(alloc_dealloc)
+        UNITTEST_TEST(alloc_dealloc_1)
         {
             void*   mem_base = (void*)0x00ff000000000000ULL;
             xalloc* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
 
-            void* p1 = a->allocate(sMinumSize, 1024);
+            void* p1 = a->allocate(sMinumSize, sPageSize);
             a->deallocate(p1);
 
             a->release();
         }
+
+        UNITTEST_TEST(alloc_dealloc_many)
+        {
+            void*   mem_base = (void*)0x00ff000000000000ULL;
+            xalloc* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
+
+			u32 size = sMinumSize;
+			for (s32 i=0; i<6; ++i)
+			{
+				void* p1 = a->allocate(size, sPageSize);
+				a->deallocate(p1);
+
+				size = size * 2;
+			}
+
+            a->release();
+        }
+
     }
 }
 UNITTEST_SUITE_END
