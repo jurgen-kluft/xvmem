@@ -31,6 +31,163 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_large)
             gTestAllocator->destruct(sNodeHeap);
         }
 
+        static inline u32 KB(u32 value) { return value * (u32)1024; }
+        static inline u32 MB(u32 value) { return value * (u32)1024 * (u32)1024; }
+        static inline u64 MBx(u64 value) { return value * (u64)1024 * (u64)1024; }
+        static inline u64 GBx(u64 value) { return value * (u64)1024 * (u64)1024 * (u64)1024; }
+
+		UNITTEST_TEST(xfsa_large_utils_get_slot_mask)
+		{
+			u32 m, bw;
+
+			bw = 5;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_mask(0xffffffff, bw, i);
+				CHECK_EQUAL(0x00000001 << i, m);
+			}
+			
+			bw = 4;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_mask(0xffffffff, bw, i);
+				CHECK_EQUAL(0x00010001 << i, m);
+			}
+
+			bw = 3;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_mask(0xffffffff, bw, i);
+				CHECK_EQUAL((0x7 << 8) << (i*((32>>bw)-1)) | (0x01 << i), m);
+			}
+
+			bw = 2;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_mask(0xffffffff, bw, i);
+				CHECK_EQUAL((0x7f << 4) << (i*((32>>bw)-1)) | (0x01 << i), m);
+			}
+
+			bw = 1;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_mask(0xffffffff, bw, i);
+				CHECK_EQUAL((0x7fff << 2) << (i*((32>>bw)-1)) | (0x01 << i), m);
+			}
+		}
+
+		UNITTEST_TEST(xfsa_large_utils_get_slot_value)
+		{
+			u32 m, bw;
+
+			bw = 5;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_value(1 << i, bw, i);
+				CHECK_EQUAL(1, m);
+			}
+			
+			bw = 4;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_value(0x00000001 << (i*((32>>bw)-1)), bw, i);
+				CHECK_EQUAL(1, m);
+				m = xfsa_large_utils::get_slot_value(0x00010001 << (i*((32>>bw)-1)), bw, i);
+				CHECK_EQUAL(2, m);
+			}
+
+			bw = 3;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_value(0x00000500 << (i*((32>>bw)-1)), bw, i);
+				CHECK_EQUAL(6, m);
+				m = xfsa_large_utils::get_slot_value(0x00000700 << (i*((32>>bw)-1)), bw, i);
+				CHECK_EQUAL(0x8, m);
+				m = xfsa_large_utils::get_slot_value(0xffffff00, bw, i);
+				CHECK_EQUAL(0x8, m);
+			}
+
+			bw = 2;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_value(0xfffffff0, bw, i);
+				CHECK_EQUAL(0x80, m);
+			}
+
+			bw = 1;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				m = xfsa_large_utils::get_slot_value(0xffffffff, bw, i);
+				CHECK_EQUAL(0x8000, m);
+			}
+		}
+
+		UNITTEST_TEST(xfsa_large_utils_allocsize_to_bwidth)
+		{
+			u32 bw;
+			
+			bw = xfsa_large_utils::allocsize_to_bwidth(KB(64), KB(64));
+			CHECK_EQUAL(5, bw);
+			bw = xfsa_large_utils::allocsize_to_bwidth(KB(2*64), KB(64));
+			CHECK_EQUAL(4, bw);
+
+			for (s32 s = 3; s <= 8; s++)
+			{
+				bw = xfsa_large_utils::allocsize_to_bwidth(KB(s*64), KB(64));
+				CHECK_EQUAL(3, bw);
+			}
+			for (s32 s = 9; s <= 128; s++)
+			{
+				bw = xfsa_large_utils::allocsize_to_bwidth(KB(s*64), KB(64));
+				CHECK_EQUAL(2, bw);
+			}
+			for (s32 s = 129; s <= 32768; s++)
+			{
+				bw = xfsa_large_utils::allocsize_to_bwidth(KB(s*64), KB(64));
+				CHECK_EQUAL(1, bw);
+			}
+		}
+
+		UNITTEST_TEST(xfsa_large_utils_allocsize_to_bits_1)
+		{
+			u32 slot, bw;
+			bw = 5;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				slot = xfsa_large_utils::allocsize_to_bits(KB(64), KB(64), bw, i);
+				CHECK_EQUAL(0, slot);
+			}
+		}
+
+		UNITTEST_TEST(xfsa_large_utils_allocsize_to_bits_2)
+		{
+			u32 slot, bw;
+
+			bw = 4;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				slot = xfsa_large_utils::allocsize_to_bits(KB(2*64), KB(64), bw, i);
+				CHECK_EQUAL(1, slot);
+			}
+		}
+
+		UNITTEST_TEST(xfsa_large_utils_allocsize_to_bits_3)
+		{
+			u32 slot, bw;
+
+			bw = 3;
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				slot = xfsa_large_utils::allocsize_to_bits(KB(3*64), KB(64), bw, i);
+				CHECK_EQUAL(2, slot);
+			}
+			for (u32 i=0; i<(u32)(1<<bw); ++i)
+			{
+				slot = xfsa_large_utils::allocsize_to_bits(KB(4*64), KB(64), bw, i);
+				CHECK_EQUAL(3, slot);
+			}
+		}
+
         UNITTEST_TEST(create_then_release)
         {
             void*     mem_base  = (void*)0x10000000;

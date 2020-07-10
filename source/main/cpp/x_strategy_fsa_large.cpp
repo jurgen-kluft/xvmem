@@ -11,13 +11,6 @@
 
 namespace xcore
 {
-    static u32 allocsize_to_bits(u32 allocsize, u32 pagesize);
-    static u32 bits_to_allocsize(u32 b, u32 w, u32 pagesize);
-    static u32 allocsize_to_bwidth(u32 allocsize, u32 pagesize);
-    static u64 allocsize_to_blockrange(u32 allocsize, u32 pagesize);
-
-    static u32 allocsize_to_bits2(u32 allocsize, u32 pagesize, u32 w, u32 wi);
-
     struct xblock_info_t
     {
         void reset()
@@ -37,11 +30,22 @@ namespace xcore
         u32 m_words[8];
     };
 
+    static u32  s_allocsize_to_bits(u32 allocsize, u32 pagesize, u32 bw, u32 ws);
+    static u32  s_bits_to_allocsize(u32 b, u32 w, u32 pagesize);
+    static u32  s_allocsize_to_bwidth(u32 allocsize, u32 pagesize);
+    static u64  s_allocsize_to_blockrange(u32 allocsize, u32 pagesize);
+    static bool s_has_empty_slot(u32 slot, u32 ws);
+    static u32  s_get_empty_slot(u32 slot, u32 ws);
+    static u32  s_set_slot_empty(u32 slot, u32 ws);
+    static u32  s_set_slot_occupied(u32 slot, u32 ws);
+    static u32  s_get_slot_value(u32 slot, u32 bw, u32 ws);
+    static u32  s_clr_slot_value(u32 slot, u32 bw, u32 ws);
+    static u32  s_set_slot_value(u32 slot, u32 bw, u32 ws, u32 ab);
+    static u32  s_get_slot_mask(u32 slot, u32 bw, u32 ws);
+
     static inline bool is_block_full(xblock_info_t* block) { return block->m_set == 0xff; }
     static inline bool is_block_empty(xblock_info_t* block) { return block->m_clr == 0xff; }
-    static inline u32  get_word_index(u8 words_set) { return xfindFirstBit(~(words_set | 0xffffff00)); }
-    static bool        has_empty_slot(u32 slot, u32 w);
-    static u32         get_empty_slot(u32 slot, u32 w);
+    static inline u32  get_word_index(u8 words_set) { return (u32)xfindFirstBit((u16) ~((u16)words_set | (u16)0xff00)); }
 
     class xalloc_fsa_large : public xalloc
     {
@@ -71,7 +75,7 @@ namespace xcore
     {
         ASSERT(sizeof(xblock_t) == node_heap->size());
 
-        u64 const         block_range = allocsize_to_blockrange(allocsize, pagesize);
+        u64 const         block_range = s_allocsize_to_blockrange(allocsize, pagesize);
         u32 const         block_count = (u32)(mem_range / block_range);
         xblock_t**        block_array = (xblock_t**)main_heap->allocate(sizeof(xblock_t*) * block_count);
         xblock_info_t*    binfo_array = (xblock_info_t*)main_heap->allocate(sizeof(xblock_info_t) * block_count);
@@ -156,24 +160,25 @@ namespace xcore
     {
         xblock_t*      block = instance->m_block_array[bi];
         xblock_info_t* binfo = &instance->m_binfo_array[bi];
+        ASSERT(!is_block_full(binfo));
 
-        u32 const bw  = allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize);
-        u32 const wi  = get_word_index(binfo->m_set);                                         // index of word that is not full
-        u32 const wd  = block->m_words[wi];                                                   // word data
-        u32 const ws  = get_empty_slot(wd, bw);                                               // get index of empty slot in word data
-        u32 const ew  = 32 / bw;                                                              // number of elements per word
-        u32 const ab  = allocsize_to_bits(allocsize, instance->m_pagesize);                   // get the actual bits of the requested alloc-size
-        u64 const bs  = allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize); // memory size of one block
-        void*     ptr = x_advance_ptr(instance->m_address_base, (u64)bi * bs);                // memory base of this block
-        ptr           = x_advance_ptr(ptr, ((wi * ew) + ws) * instance->m_allocsize);         // the word-index and slot index determine the offset
-
-        block->m_words[wi] = block->m_words[wi] | (ab << (ws * bw)); // write the bits into the element slot
-        if (!has_empty_slot(block->m_words[wi], bw))
+        u32 const bw  = s_allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize);
+        u32 const wi  = get_word_index(binfo->m_set);                                           // index of word that is not full
+        u32       wd  = block->m_words[wi];                                                     // word data
+        u32 const ws  = s_get_empty_slot(wd, bw);                                               // get index of empty slot in word data
+        u32 const ew  = 1 << bw;                                                                // number of elements per word
+        u32 const ab  = s_allocsize_to_bits(allocsize, instance->m_pagesize, bw, ws);           // get the actual bits of the requested alloc-size
+        u64 const bs  = s_allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize); // memory size of one block
+        void*     ptr = x_advance_ptr(instance->m_address_base, (u64)bi * bs);                  // memory base of this block
+        ptr           = x_advance_ptr(ptr, ((wi * ew) + ws) * instance->m_allocsize);           // the word-index and slot index determine the offset
+        wd            = s_set_slot_value(wd, bw, ws, ab);                                       // write the bits into the element slot
+        wd            = s_set_slot_occupied(wd, ws);                                            // mark this slot as occupied
+        if (!s_has_empty_slot(wd, bw))
         {
             binfo->m_set = binfo->m_set | (1 << wi); // Mark this word as full
         }
-        binfo->m_clr = binfo->m_clr & ~(1 << wi); // Mark this word as not clear
-
+        binfo->m_clr       = binfo->m_clr & ~(1 << wi); // Mark this word as not clear
+		block->m_words[wi] = wd;
         return ptr;
     }
 
@@ -182,21 +187,21 @@ namespace xcore
         xblock_t* const      block = instance->m_block_array[bi];
         xblock_info_t* const binfo = &instance->m_binfo_array[bi];
 
-        void* const block_base = x_advance_ptr(instance->m_address_base, (u64)bi * allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize));
+        void* const block_base = x_advance_ptr(instance->m_address_base, (u64)bi * s_allocsize_to_blockrange(instance->m_allocsize, instance->m_pagesize));
         u32 const   i          = (u32)(((u64)ptr - (u64)block_base) / (u64)instance->m_allocsize);
-        u32 const   w          = allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize); // element width in bits
-        u32 const   ew         = 32 / w;                                                           // number of elements per word
-        u32 const   wi         = i / ew;                                                           // word index
-        u32 const   ei         = i - (wi * ew);                                                    // element index
-        u32 const   em         = ((1 << w) - 1);                                                   // element mask
-        u32 const   np         = (block->m_words[wi] >> (w * ei)) & em;                            // get the content of the element
-        block->m_words[wi]     = block->m_words[wi] & ~(em << (w * ei));                           // mask out the element
-        binfo->m_set           = binfo->m_set & ~(1 << wi);                                        // make it known that this word is not full
+        u32 const   bw         = s_allocsize_to_bwidth(instance->m_allocsize, instance->m_pagesize); // element width in bits
+        u32 const   ew         = 1 << bw;                                                            // number of elements per word
+        u32 const   wi         = i >> bw;                                                            // word index
+        u32 const   ws         = i & (ew - 1);                                                       // word slot index
+        u32 const   np         = s_get_slot_value(block->m_words[wi], bw, ws);                       // get the content of the element
+        block->m_words[wi]     = s_clr_slot_value(block->m_words[wi], bw, ws);                       // mask out the element
+        block->m_words[wi]     = s_set_slot_empty(block->m_words[wi], ws);                           // mark this slot as empty
+        binfo->m_set           = binfo->m_set & ~(1 << wi);                                          // make it known that this word is not full
         if (block->m_words[wi] == 0)
         {
             binfo->m_clr = binfo->m_clr | (1 << wi); // make it known that this word is clear
         }
-        return bits_to_allocsize(np, w, instance->m_pagesize);
+        return (np * instance->m_pagesize);
     }
 
     void* xalloc_fsa_large::v_allocate(u32 size, u32 alignment)
@@ -238,7 +243,7 @@ namespace xcore
         // If block is now empty -> free block
         // Else add block to 'used' list
         u32       size        = 0;
-        u64 const block_range = allocsize_to_blockrange(m_allocsize, m_pagesize);
+        u64 const block_range = s_allocsize_to_blockrange(m_allocsize, m_pagesize);
         u32 const block_index = (u32)(((u64)ptr - (u64)m_address_base) / block_range);
         ASSERT(block_index < m_block_count);
         xblock_info_t* binfo = get_binfo_at(this, block_index);
@@ -261,201 +266,127 @@ namespace xcore
         return size;
     }
 
-    u32 bits_to_allocsize(u32 b, u32 w, u32 pagesize)
+    u32 s_bits_to_allocsize(u32 b, u32 bw, u32 pagesize)
+	{
+
+		return (b + 1) * pagesize; 
+	}
+
+    u32 s_allocsize_to_bits(u32 allocsize, u32 pagesize, u32 bw, u32 ws)
     {
-        ASSERT(w == 1 || w == 2 || w == 4 || w == 8 || w == 16); // 'w' should be 1,2,4,8 or 16
-        u32 const r = (1 << (w - 1));
-        u32 const n = (b & (r - 1)) + (((b & (r - 1)) == 0) ? r : 0);
-        return n * pagesize;
+        ASSERT(bw >= 1 && bw <= 5);
+        u32 const n = ((allocsize + pagesize - 1) / pagesize);
+        return n - 1;
     }
 
-    u32 allocsize_to_bits(u32 allocsize, u32 pagesize)
+    //                      bits     slot -> final number of bits / number of slots / 1<<shift
+    // <=   64KB   -   0 =   0    +   1   ->   1  / 32 / 5
+    // <=  128KB   -   1 =   1    +   1   ->   2  / 16 / 4
+    // <=  256KB   -   3 =   2    +   1   ->   4  /  8 / 3
+    // <=  512KB   -   7 =   3    +   1   ->   4  /  8 / 3
+    // <=    1MB   -  15 =   4    +   1   ->   8  /  4 / 2
+    // <=    2MB   -  31 =   5    +   1   ->   8  /  4 / 2
+    // <=    4MB   -  63 =   6    +   1   ->   8  /  4 / 2
+    // <=    8MB   - 127 =   7    +   1   ->   8  /  4 / 2
+    // <=   16MB   - 255 =   8    +   1   ->   16 /  2 / 1
+    // <=   32MB   - 511 =   9    +   1   ->   16 /  2 / 1
+
+    u32 s_allocsize_to_bwidth(u32 allocsize, u32 pagesize)
     {
         u32 const n = ((allocsize + pagesize - 1) / pagesize);
-        u32 const p = xceilpo2(n);
-        if (p & 0xFF00)
-        {
-            return 0x8000 | n;
-        }
-        else if (p & 0x00F0)
-        {
-            return 0x80 | n;
-        }
-        else if (p & 0x000C)
-        {
-            return 0x8 | n;
-        }
-        else if (p & 0x0002)
-        {
-            return 0x2 | n;
-        }
-        else if (p & 0x0001)
-        {
-            return 0x1;
-        }
-        else
-        {
-            ASSERT(false); // p should fall into the above conditions
-            return 0x0;
-        }
-    }
-
-    u32 allocsize_to_bits2(u32 allocsize, u32 pagesize, u32 w, u32 ws)
-    {
-        u32 const n = ((allocsize + pagesize - 1) / pagesize);
-        u32 const p = xceilpo2(n);
-        if (p & 0xFF00)
-        {
-            return ((n << (w * 15)) << 2) | (1 << w);
-        }
-        else if (p & 0x00F0)
-        {
-            return ((n << (w * 7)) << 4) | (1 << w);
-        }
-        else if (p & 0x000C)
-        {
-            return ((n << (w * 3)) << 8) | (1 << w);
-        }
-        else if (p & 0x0002)
-        {
-            return ((n << (w * 1)) << 16) | (1 << w);
-        }
-        else if (p & 0x0001)
-        {
-            return (1 << w);
-        }
-        else
-        {
-            ASSERT(false); // p should fall into the above conditions
-            return 0x0;
-        }
-    }
-
-    u32 allocsize_to_bwidth(u32 allocsize, u32 pagesize)
-    {
-        u32 const p = xceilpo2((allocsize + pagesize - 1) / pagesize);
-		u64 const i = 0xffffffff77773310;
-		u32 const b = 15 - xcountLeadingZeros(p);
-		u32 const w = (((i >> (4*b)) & 0xF) + 1);
+        u16 const p = (u16)xceilpo2(n) - 1;
+        u64 const i = 0x1111111122223345;
+        u32 const b = 16 - xcountLeadingZeros(p);
+        u32 const w = (((i >> (4 * b)) & 0xF));
         return w;
     }
 
-    u64 allocsize_to_blockrange(u32 allocsize, u32 pagesize)
+    u64 s_allocsize_to_blockrange(u32 allocsize, u32 pagesize)
     {
         // Compute the memory range of a xblock_t
-        u16 const w = allocsize_to_bwidth(allocsize, pagesize);
-        u16 const n = (8 * sizeof(u32) * 8) / w;
-        u64 const s = (u64)n * (u64)allocsize;
+        u16 const bw = s_allocsize_to_bwidth(allocsize, pagesize);
+        u16 const n  = (8 * sizeof(u32) * 8) / (32 >> bw);
+        u64 const s  = (u64)n * (u64)allocsize;
         return s;
     }
 
-    bool has_empty_slot(u32 slot, u32 w)
+    bool s_has_empty_slot(u32 slot, u32 bw)
     {
-        switch (w)
-        {
-            case 1: return (slot != 0xffffffff);
-            case 2: return (slot & 0xaaaaaaaa) != 0xaaaaaaaa;
-            case 4: return (slot & 0x88888888) != 0x88888888;
-            case 8: return (slot & 0x80808080) != 0x80808080;
-            case 16: return (slot & 0x80008000) != 0x80008000;
-        }
-        return false;
+        // Slot 'occupied' bits are the lowest part of the 'slot' integer
+        u32 const mask = ((u64)1 << (1 << bw)) - 1;
+        return (slot & mask) != mask;
     }
 
-    u32 get_empty_slot(u32 slot, u32 w)
+    u32 s_get_empty_slot(u32 slot, u32 bw)
     {
-        u32 b = 0;
-        if (w == 1)
-        {
-            if ((slot & 0x0000ffff) == 0xffff)
-            {
-                slot = slot >> 16;
-                b += 16;
-            }
-            if ((slot & 0x000000ff) == 0xff)
-            {
-                slot = slot >> 8;
-                b += 8;
-            }
-            if ((slot & 0x0000000f) == 0xf)
-            {
-                slot = slot >> 4;
-                b += 4;
-            }
-            if ((slot & 0x00000003) == 0x3)
-            {
-                slot = slot >> 2;
-                b += 2;
-            }
-            if ((slot & 0x00000001) == 0x1)
-            {
-                slot = slot >> 1;
-                b += 1;
-            }
-        }
-        else if (w == 2)
-        {
-            if ((slot & 0x0000aaaa) == 0xaaaa)
-            {
-                slot = slot >> 16;
-                b += 8;
-            }
-            if ((slot & 0x000000aa) == 0xaa)
-            {
-                slot = slot >> 8;
-                b += 4;
-            }
-            if ((slot & 0x0000000a) == 0xa)
-            {
-                slot = slot >> 4;
-                b += 2;
-            }
-            if ((slot & 0x00000002) == 0x2)
-            {
-                slot = slot >> 2;
-                b += 1;
-            }
-        }
-        else if (w == 4)
-        {
-            if ((slot & 0x00008888) == 0x8888)
-            {
-                slot = slot >> 16;
-                b += 4;
-            }
-            if ((slot & 0x00000088) == 0x88)
-            {
-                slot = slot >> 8;
-                b += 2;
-            }
-            if ((slot & 0x00000008) == 0x8)
-            {
-                slot = slot >> 4;
-                b += 1;
-            }
-        }
-        else if (w == 8)
-        {
-            if ((slot & 0x00008080) == 0x8080)
-            {
-                slot = slot >> 16;
-                b += 2;
-            }
-            if ((slot & 0x00000080) == 0x80)
-            {
-                slot = slot >> 8;
-                b += 1;
-            }
-        }
-        else if (w == 16)
-        {
-            if ((slot & 0x00008000) == 0x8000)
-            {
-                slot = slot >> 16;
-                b += 1;
-            }
-        }
-        return b;
+        u32 const mask = ((u64)1 << (1 << bw)) - 1;
+        slot           = ~((slot & mask) | ~mask);
+
+        // e.g. slot = 0x000000EF, w = 8 => mask = 0x000000FF
+
+        // so the bits indicating occupied slots are in the lower 8 bits
+        // mask those bits and or with the inversed-mask, 0x000000EF | 0xFFFFFF00
+        // inverse it to get: 0x00000010
+
+        // find the first bit set
+        s32 const esi = xcountTrailingZeros(slot);
+        return esi;
     }
+
+    u32 s_set_slot_empty(u32 slot, u32 ws) { return slot & ~(1 << ws); }
+    u32 s_set_slot_occupied(u32 slot, u32 ws) { return slot | (1 << ws); }
+
+    u32 s_get_slot_value(u32 slot, u32 bw, u32 ws)
+    {
+        ASSERT(bw >= 1 && bw <= 5);
+        u32 const w = 32 >> bw;
+        u64 const n = (1 << (w - 1)) - 1;
+        u32 const s = 1 << bw;
+        u32 const v = (((u64)slot >> s) >> (ws * (w - 1))) & n;
+        return v + 1;
+    }
+
+    u32 s_clr_slot_value(u32 slot, u32 bw, u32 ws)
+    {
+        ASSERT(bw >= 1 && bw <= 5);
+        u32 const w    = 32 >> bw;
+        u64 const n    = (1 << (w - 1)) - 1;
+        u32 const s    = 1 << bw;
+        u32 const mask = (u32)(((n << (ws * (w - 1))) << s));
+        return slot & ~mask;
+    }
+
+    u32 s_set_slot_value(u32 slot, u32 bw, u32 ws, u32 ab)
+    {
+        ASSERT(bw >= 1 && bw <= 5);
+        u32 const w = 32 >> bw;
+        u64 const n = ab;
+        u32 const s = 1 << bw;
+        u32 const v = (u32)(((n << (ws * (w - 1))) << s));
+        return slot | v;
+    }
+
+    u32 s_get_slot_mask(u32 slot, u32 bw, u32 ws)
+    {
+        ASSERT(bw >= 1 && bw <= 5);
+        u32 const w    = 32 >> bw;
+        u64 const n    = (1 << (w - 1)) - 1;
+        u32 const s    = 1 << bw;
+        u32 const mask = (u32)(((n << (ws * (w - 1))) << s) | ((u64)1 << ws));
+        return mask;
+    }
+
+    u32  xfsa_large_utils::allocsize_to_bits(u32 allocsize, u32 pagesize, u32 bw, u32 ws) { return s_allocsize_to_bits(allocsize, pagesize, bw, ws); }
+    u32  xfsa_large_utils::bits_to_allocsize(u32 b, u32 w, u32 pagesize) { return s_bits_to_allocsize(b, w, pagesize); }
+    u32  xfsa_large_utils::allocsize_to_bwidth(u32 allocsize, u32 pagesize) { return s_allocsize_to_bwidth(allocsize, pagesize); }
+    u64  xfsa_large_utils::allocsize_to_blockrange(u32 allocsize, u32 pagesize) { return s_allocsize_to_blockrange(allocsize, pagesize); }
+    bool xfsa_large_utils::has_empty_slot(u32 slot, u32 bw) { return s_has_empty_slot(slot, bw); }
+    u32  xfsa_large_utils::get_empty_slot(u32 slot, u32 bw) { return s_get_empty_slot(slot, bw); }
+    u32  xfsa_large_utils::set_slot_empty(u32 slot, u32 ws) { return s_set_slot_empty(slot, ws); }
+    u32  xfsa_large_utils::set_slot_occupied(u32 slot, u32 ws) { return s_set_slot_occupied(slot, ws); }
+    u32  xfsa_large_utils::get_slot_value(u32 slot, u32 bw, u32 ws) { return s_get_slot_value(slot, bw, ws); }
+    u32  xfsa_large_utils::clr_slot_value(u32 slot, u32 bw, u32 ws) { return s_clr_slot_value(slot, bw, ws); }
+    u32  xfsa_large_utils::set_slot_value(u32 slot, u32 bw, u32 ws, u32 ab) { return s_set_slot_value(slot, bw, ws, ab); }
+    u32  xfsa_large_utils::get_slot_mask(u32 slot, u32 bw, u32 ws) { return s_get_slot_mask(slot, bw, ws); }
 
 } // namespace xcore
