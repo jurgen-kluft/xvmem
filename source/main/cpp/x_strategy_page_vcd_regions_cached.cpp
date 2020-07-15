@@ -233,6 +233,14 @@ namespace xcore
 
     void xalloc_page_vcd_regions_cached::v_release()
     {
+		while (m_regions_cache.is_empty() == false)
+		{
+            xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
+            u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
+            void*             reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
+            m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
+		}
+
         m_main_heap->deallocate(m_regions_list);
         m_main_heap->deallocate(m_regions);
         m_main_heap->destruct(this);
@@ -242,23 +250,22 @@ namespace xcore
     {
         xalloc_page_vcd_regions_cached* proxy = main_heap->construct<xalloc_page_vcd_regions_cached>();
 
-        proxy->m_main_heap     = main_heap;
-        proxy->m_allocator     = allocator;
-        proxy->m_vmem          = vmem;
-        proxy->m_page_size     = page_size;
-        proxy->m_mem_base      = address_base;
-        proxy->m_mem_range     = address_range;
-        proxy->m_reg_range     = region_size;
-        proxy->m_num_regions   = (u32)(address_range / region_size);
-        proxy->m_regions       = (xalloc_page_vcd_regions_cached::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
-        proxy->m_regions_cache = xalist_t(0, proxy->m_num_regions);
-        proxy->m_regions_list  = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * proxy->m_num_regions);
+        proxy->m_main_heap          = main_heap;
+        proxy->m_allocator          = allocator;
+        proxy->m_vmem               = vmem;
+        proxy->m_page_size          = page_size;
+        proxy->m_mem_base           = address_base;
+        proxy->m_mem_range          = address_range;
+        proxy->m_reg_range          = region_size;
+        proxy->m_num_regions        = (u32)(address_range / region_size);
+        proxy->m_max_regions_cached = num_regions_to_cache;
+        proxy->m_regions            = (xalloc_page_vcd_regions_cached::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
+        proxy->m_regions_cache      = xalist_t(0, proxy->m_num_regions);
+        proxy->m_regions_list       = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * proxy->m_num_regions);
 
         x_memclr(proxy->m_regions, sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
-        for (u32 i = 0; i < proxy->m_num_regions; ++i)
-        {
-            proxy->m_regions_list[i].unlink();
-        }
+		x_memset(proxy->m_regions_list, 0xFFFFFFFF, sizeof(xalist_t::node_t) * proxy->m_num_regions);
+
         return proxy;
     }
 

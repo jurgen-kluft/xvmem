@@ -19,6 +19,7 @@ UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_large);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_large);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_page_vcd_direct);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_page_vcd_regions);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_page_vcd_regions_cached);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_segregated);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, main_allocator);
 
