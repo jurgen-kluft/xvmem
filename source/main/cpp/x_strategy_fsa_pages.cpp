@@ -6,91 +6,12 @@
 
 #include "xvmem/private/x_strategy_fsa_small.h"
 #include "xvmem/private/x_strategy_fsa_pages.h"
+#include "xvmem/private/x_strategy_fsa_page.h"
 #include "xvmem/private/x_doubly_linked_list.h"
 #include "xvmem/x_virtual_memory.h"
 
 namespace xcore
 {
-    struct xpage_t
-    {
-        // Constraints:
-        // - maximum number of elements is (65535-1, 0xFFFF is considered NIL)
-        // - minimum size of an element is 4 bytes
-        // - maximum page-size is (65535-1) * sizeof-element
-
-        u16 m_free_list;
-        u16 m_free_index;
-        u16 m_elem_used;
-        u16 m_elem_total;
-        u16 m_elem_size;
-
-        void init(u32 pool_size, u32 elem_size)
-        {
-            m_free_list  = xalist_t::NIL;
-            m_free_index = 0;
-            m_elem_used  = 0;
-            m_elem_total = pool_size / elem_size;
-            m_elem_size  = elem_size;
-        }
-
-        void init() { init(0, 8); }
-
-        bool is_full() const { return m_elem_used == m_elem_total; }
-        bool is_empty() const { return m_elem_used == 0; }
-
-        void* allocate(void* const block_base_address);
-        void  deallocate(void* const block_base_address, void* const p);
-
-        XCORE_CLASS_PLACEMENT_NEW_DELETE
-    };
-
-    static inline u32 index_of_elem(xpage_t const* const page, void* const page_base_address, void* const elem)
-    {
-        u32 const index = (u32)(((u64)elem - (u64)page_base_address) / page->m_elem_size);
-        return index;
-    }
-
-    static inline u32* pointer_to_elem(xpage_t const* const page, void* const page_base_address, u32 const index)
-    {
-        u32* elem = (u32*)((xbyte*)page_base_address + ((u64)index * (u64)page->m_elem_size));
-        return elem;
-    }
-
-    void* xpage_t::allocate(void* const block_base_address)
-    {
-        // if page == nullptr then first allocate a new page for this size
-        // else use the page to allocate a new element.
-        // Note: page should NOT be full when calling this function!
-        if (m_free_list != xalist_t::NIL)
-        {
-            u32 const  ielem = m_free_list;
-            u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
-            m_free_list      = pelem[0];
-            m_elem_used++;
-            return (void*)pelem;
-        }
-        else if (m_free_index < m_elem_total)
-        {
-            m_elem_used++;
-            u32 const  ielem = m_free_index++;
-            u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
-            return (void*)pelem;
-        }
-        else
-        {
-            return nullptr;
-        }
-    }
-
-    void xpage_t::deallocate(void* const block_base_address, void* const ptr)
-    {
-        u32 const  ielem = index_of_elem(this, block_base_address, ptr);
-        u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
-        pelem[0]         = m_free_list;
-        m_free_list      = ielem;
-        m_elem_used -= 1;
-    }
-
     struct xpages_t
     {
         xpages_t(xalloc* main_allocator, void* base_address, u32 page_size, u16 const page_cnt, xalist_t::node_t* list_data, xpage_t* const page_array)
@@ -195,6 +116,18 @@ namespace xcore
     {
         u64 const ipage = indexof_page(page);
         return x_advance_ptr(m_base_address, ipage * m_page_size);
+    }
+
+    static inline u32 index_of_elem(xpage_t const* const page, void* const page_base_address, void* const elem)
+    {
+        u32 const index = (u32)(((u64)elem - (u64)page_base_address) / page->m_elem_size);
+        return index;
+    }
+
+    static inline u32* pointer_to_elem(xpage_t const* const page, void* const page_base_address, u32 const index)
+    {
+        u32* elem = (u32*)((xbyte*)page_base_address + ((u64)index * (u64)page->m_elem_size));
+        return elem;
     }
 
     void* xpages_t::idx2ptr(u32 const index) const
@@ -433,6 +366,41 @@ namespace xcore
         {
             page_list.insert(pages->m_page_list, ipage);
         }
+    }
+
+    void* xpage_t::allocate(void* const block_base_address)
+    {
+        // if page == nullptr then first allocate a new page for this size
+        // else use the page to allocate a new element.
+        // Note: page should NOT be full when calling this function!
+        if (m_free_list != xalist_t::NIL)
+        {
+            u32 const  ielem = m_free_list;
+            u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
+            m_free_list      = pelem[0];
+            m_elem_used++;
+            return (void*)pelem;
+        }
+        else if (m_free_index < m_elem_total)
+        {
+            m_elem_used++;
+            u32 const  ielem = m_free_index++;
+            u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
+            return (void*)pelem;
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+
+    void xpage_t::deallocate(void* const block_base_address, void* const ptr)
+    {
+        u32 const  ielem = index_of_elem(this, block_base_address, ptr);
+        u32* const pelem = pointer_to_elem(this, block_base_address, ielem);
+        pelem[0]         = m_free_list;
+        m_free_list      = ielem;
+        m_elem_used -= 1;
     }
 
 }; // namespace xcore

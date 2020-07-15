@@ -64,39 +64,19 @@ namespace xcore
             // Check to see if we can add it to the cache
             // If the cache is holding too many regions then decommit the oldest
             // Add this region to the cache
-            if (num_regions == 1)
+            for (u32 i = 0; i < num_regions; ++i)
             {
-                m_regions_cache.insert_tail(m_regions_list, region_index);
-
-                // Is cache is maxed out?  ->  decommit the oldest
-                if (m_regions_cache.size() == m_max_regions_cached)
-                {
-                    xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
-                    u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
-                    void*             reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
-                    m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
-                }
+				u32 const region = region_index + i;
+                m_regions_cache.insert_tail(m_regions_list, region);
             }
-            else
+
+            // Is cache too large?  ->  decommit the oldest
+            while (m_regions_cache.size() > m_max_regions_cached)
             {
-                ASSERT(num_regions == 2);
-
-                // Possible optimization: remove head twice and see if those regions are connected and
-                // decommit 2 * reg_range.
-
-                for (u32 i = 0; i < num_regions; ++i)
-                {
-                    m_regions_cache.insert_tail(m_regions_list, region_index + i);
-
-                    // Is cache is maxed out?  ->  decommit the oldest
-                    if (m_regions_cache.size() == m_max_regions_cached)
-                    {
-                        xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
-                        u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
-                        void*             reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
-                        m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
-                    }
-                }
+                xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
+                u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
+                void*             reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
+                m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
             }
         }
 

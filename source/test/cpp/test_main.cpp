@@ -16,6 +16,7 @@ UNITTEST_SUITE_DECLARE(xVMemUnitTest, binarysearch_tree);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_coalesce_direct);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_small);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_large);
+UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_fsa_page);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_large);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_page_vcd_direct);
 UNITTEST_SUITE_DECLARE(xVMemUnitTest, strategy_page_vcd_regions);
