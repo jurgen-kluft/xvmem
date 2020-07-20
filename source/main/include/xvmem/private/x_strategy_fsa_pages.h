@@ -8,7 +8,7 @@
 namespace xcore
 {
     // Usage:
-    //   Create an instance of ``xpages_t`` by calling ``create()``
+    //   Create an instance of ``xpages_t`` by calling ``create_fsa_pages()``
     //   When you are done and want to release the instance, call ``destroy()``
     //
     // ``alloc_elem()``:
@@ -34,7 +34,7 @@ namespace xcore
     void*     alloc_page(xpages_t* pages, xalist_t& page_list, u32 const elem_size);
     void*     free_one_page(xpages_t* pages, xalist_t& page_list);
     void      free_all_pages(xpages_t* pages, xalist_t& page_list);
-    void*     alloc_elem(xpages_t* pages, xalist_t& page_list, u32 const elem_size);
+    void*     alloc_elem(xpages_t* pages, xalist_t& page_list, xalist_t& pages_empty_list, u32 const elem_size);
     u32       sizeof_elem(xpages_t* pages, void* const ptr);
     u32       idx_of_elem(xpages_t* pages, void* const ptr);
     void*     ptr_of_elem(xpages_t* pages, u32 const index);

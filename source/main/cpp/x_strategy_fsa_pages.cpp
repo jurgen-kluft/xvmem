@@ -69,25 +69,24 @@ namespace xcore
         xpage_t* ppage = nullptr;
         if (!m_free_page_list.is_empty())
         {
-            // Get the page pointer and remove it from the list of virtual pages
-            ppage = indexto_page(m_free_page_list.m_head);
-            m_free_page_list.remove_head(m_page_list);
+            // Get an empty page by removing it from the list
+            u16 const ipage = m_free_page_list.remove_headi(m_page_list);
+            ppage = indexto_page(ipage);
 
-            // TODO: Decommit the physical memory
         }
         else if (m_free_page_index < m_page_cnt)
         {
             ppage = indexto_page(m_free_page_index);
             ppage->init(m_page_size, elem_size);
             m_free_page_index += 1;
-
-            // TODO: Commit the virtual memory to physical memory
         }
         else
         {
             // All pages are used
             return nullptr;
         }
+
+		// TODO: Commit page
 
         // Initialize page with 'size' (alloc size)
         ppage->init(m_page_size, elem_size);
@@ -96,6 +95,8 @@ namespace xcore
 
     void xpages_t::free_page(xpage_t* const ppage)
     {
+		// TODO: Decommit page
+
         u16 const ipage = indexof_page(ppage);
         m_free_page_list.insert(m_page_list, ipage);
     }
@@ -303,7 +304,7 @@ namespace xcore
         }
     }
 
-    void* alloc_elem(xpages_t* pages, xalist_t& page_list, u32 const elem_size)
+    void* alloc_elem(xpages_t* pages, xalist_t& page_list, xalist_t& pages_empty_list, u32 const elem_size)
     {
         // If list is empty, request a new page and add it to the page_list
         // Using the page allocate a new element
@@ -311,11 +312,20 @@ namespace xcore
         // If page is full remove it from the list
         u16      ipage = xalist_t::NIL;
         xpage_t* ppage = nullptr;
-        if (page_list.m_head == xalist_t::NIL)
+        if (page_list.is_empty())
         {
-            ppage = pages->alloc_page(elem_size);
-            ipage = pages->indexof_page(ppage);
-            page_list.insert(pages->m_page_list, ipage);
+			if (pages_empty_list.is_empty())
+			{
+				ppage = pages->alloc_page(elem_size);
+				ipage = pages->indexof_page(ppage);
+			}
+			else
+			{
+				ipage = pages_empty_list.remove_headi(pages->m_page_list);
+				ppage = pages->indexto_page(ipage);
+				ppage->init(pages->m_page_size, elem_size);
+			}
+			page_list.insert(pages->m_page_list, ipage);
         }
         else
         {

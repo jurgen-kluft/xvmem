@@ -23,7 +23,8 @@ namespace xcore
             u32 const alloc_index = m_fvsa_size_to_index[size_index];
             u32 const alloc_size  = m_fvsa_index_to_size[alloc_index];
 
-            return alloc_elem(m_fsa_pages, m_fvsa_pages_list[alloc_index], alloc_size);
+            void* ptr = alloc_elem(m_fsa_pages, m_fvsa_pages_list[alloc_index], m_fsa_freepages_list, alloc_size);
+			return ptr;
         }
 
         virtual u32 v_deallocate(void* ptr) X_FINAL
@@ -35,11 +36,14 @@ namespace xcore
             xalist_t& page_list = m_fvsa_pages_list[alloc_index];
             free_elem(m_fsa_pages, page_list, ptr, m_fsa_freepages_list);
 
+			// Check the size of the 'freepages list' to see if we need to free any pages
+
             return alloc_size;
         }
 
         virtual void v_release()
         {
+			free_all_pages(m_fsa_pages, m_fsa_freepages_list);
             for (u32 i = 0; i < m_fvsa_pages_list_size; i++)
             {
                 free_all_pages(m_fsa_pages, m_fvsa_pages_list[i]);

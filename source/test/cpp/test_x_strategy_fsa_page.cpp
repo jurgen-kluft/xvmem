@@ -102,7 +102,9 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_page)
 
 				for (u32 i=0; i<alloccount; i++)
 				{
-					p.allocate(page_data);
+					void* p1 = p.allocate(page_data);
+					void* p2 = x_advance_ptr(page_data, i * allocsize);
+					CHECK_EQUAL(p2, p1);
 				}
 				CHECK_EQUAL(true, p.is_full());
 				for (u32 i=0; i<alloccount; i++)
