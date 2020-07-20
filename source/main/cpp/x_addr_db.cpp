@@ -12,15 +12,13 @@
 
 namespace xcore
 {
-
-    static void rescan_for_size_index(xaddr_db* db, u32 const addr_index, u8 const size_index, u32 const node_flag, xsize_db* size_db, xdexer* dexer)
+    static inline void rescan_for_size_index(xaddr_db* db, u32 const addr_index, u8 const size_index, u32 const node_flag, xsize_db* size_db, xdexer* dexer)
     {
         if (db->has_size_index(addr_index, dexer, size_index, node_flag))
         {
             size_db->insert_size(size_index, addr_index);
         }
     }
-
 
 	void xaddr_db::initialize(xalloc* main_heap, u64 memory_range, u32 addr_count)
 	{
@@ -52,7 +50,7 @@ namespace xcore
         u32       node_sidx = pnode->get_size_index();
         u32 const node_aidx = pnode->get_addr_index(m_addr_range);
 
-        // If node 'node_aidx' still has nodes with the same size-index 'node-aidx' then we do not need to
+        // If node 'node_aidx' still has nodes with the same size-index then we do not need to
         // remove this from the size-db.
         if (!has_size_index(node_aidx, node_alloc, node_sidx, node_t::FLAG_FREE))
         {
@@ -124,11 +122,8 @@ namespace xcore
 
             remove_node(inode, pnode, node_heap); // we can safely remove 'node' from the address db
             node_heap->deallocate(pnode);
-
-			if (has_size_index(node_addr_index, node_heap, node_size_index, node_t::FLAG_FREE))
-			{
-				size_db->insert_size(node_size_index, node_addr_index);
-			}
+            
+            rescan_for_size_index(this, node_addr_index, node_size_index, node_t::FLAG_FREE, size_db, node_heap);
         }
         else
         {
@@ -264,26 +259,6 @@ namespace xcore
             } while (pnode->get_addr_index(m_addr_range) == i);
         }
         return false;
-    }
-
-    u32 xaddr_db::count_size_index(u32 const i, xdexer* dexer, u32 size_index) const
-    {
-        u32 count = 0;
-        u32 inode = m_nodes[i];
-        if (inode != node_t::NIL)
-        {
-            node_t* pnode = (node_t*)dexer->idx2ptr(inode);
-            do
-            {
-                if (pnode->is_used() == false && pnode->get_size_index() == size_index)
-                {
-                    count += 1;
-                }
-                inode = pnode->m_next_addr;
-                pnode = (node_t*)dexer->idx2ptr(inode);
-            } while (pnode->get_addr_index(m_addr_range) == i);
-        }
-        return count;
     }
 
 } // namespace xcore

@@ -59,9 +59,9 @@ namespace xcore
 			static u32 const FLAG_MASK = 0xC0000000;
 			static u32 const ADDR_MASK = 0x3FFFFFFF;
 
-			u32 m_addr;      // (m_addr * size step) + base addr
-			u32 m_size;      // [Free, Locked] + Size
-			u32 m_prev_addr; // for linking the nodes by address
+			u32 m_addr;      // [Free, Locked](2) | [(m_addr * size step) + base addr](30)
+			u32 m_size;      // [Size-Index](8) | [Size](24)
+			u32 m_prev_addr; // linking the nodes by address
 			u32 m_next_addr; //
 
 			void init()
@@ -100,7 +100,6 @@ namespace xcore
 
         void remove_node(u32 inode, node_t* pnode, xdexer* dexer);
         bool has_size_index(u32 const i, xdexer* dexer, u32 size_index, u32 node_flag) const;
-        u32  count_size_index(u32 const i, xdexer* dexer, u32 size_index) const;
 
         u32  m_addr_range; // The memory range of one addr node
         u32  m_addr_count; // The number of address nodes
