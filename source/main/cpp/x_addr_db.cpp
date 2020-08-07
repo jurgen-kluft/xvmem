@@ -12,9 +12,9 @@
 
 namespace xcore
 {
-    static inline void rescan_for_size_index(xaddr_db* db, u32 const addr_index, u8 const size_index, u32 const node_flag, xsize_db* size_db, xdexer* dexer)
+    static inline void rescan_for_size_index(xaddr_db* addr_db, u32 const addr_index, u8 const size_index, u32 const node_flag, xsize_db* size_db, xdexer* dexer)
     {
-        if (db->has_size_index(addr_index, dexer, size_index, node_flag))
+        if (addr_db->has_size_index(addr_index, dexer, size_index, node_flag))
         {
             size_db->insert_size(size_index, addr_index);
         }
@@ -46,7 +46,9 @@ namespace xcore
     void xaddr_db::alloc(u32 inode, node_t* pnode, xfsadexed* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg)
     {
         // Mark this node as 'used' and thus remove it from the size-db
+		ASSERT(!pnode->is_used());
         pnode->set_used();
+
         u32       node_sidx = pnode->get_size_index();
         u32 const node_aidx = pnode->get_addr_index(m_addr_range);
 
@@ -77,6 +79,7 @@ namespace xcore
         u32 const node_addr = pnode->get_addr();
         u32 const new_addr  = node_addr + size;
         u32 const new_size  = pnode->get_size() - size;
+		ASSERT(!pnode->is_used());
         pnode->set_used();
         pnode->set_size(size, size_cfg.size_to_index(size));
         pnew->set_size(new_size, size_cfg.size_to_index(new_size));

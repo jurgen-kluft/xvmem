@@ -68,9 +68,9 @@ namespace xcore
         u32 const ssi    = size_index;
         u32 const sdbi   = (ssi * m_size_db1_cnt) + awi;
         u64 const osbi   = (m_size_db1[sdbi] & ((u64)1 << abi));
-        m_size_db1[sdbi] = m_size_db1[sdbi] | ((u64)1 << abi);
         if (osbi == 0)
         {
+	        m_size_db1[sdbi] = m_size_db1[sdbi] | ((u64)1 << abi);
             u64 const osb0  = m_size_db0[ssi];
             m_size_db0[ssi] = m_size_db0[ssi] | ((u64)1 << awi);
             if (osb0 == 0)
