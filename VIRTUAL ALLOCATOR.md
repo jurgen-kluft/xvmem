@@ -25,7 +25,8 @@ This is an intrusive fixed size allocator targetted at small size allocations.
 
 ### Multi Threading
 
-Not too hard to make multi-thread safe using atomics where the only hard multi-threading problem is page commit/decommit.
+Not too hard to make multi-thread safe using atomics where the only hard multi-threading
+problem is page commit/decommit.
 
 ### FSA
 
@@ -73,7 +74,7 @@ Not too hard to make multi-thread safe using atomics where the only hard multi-t
 - Segregated:
   - Upon allocation the necessary pages are committed
   - Upon deallocation the pages are decommitted
-  - The allocation is Size but will only commit used pages
+  - The allocation is 'size' but will only commit used pages
 - A reserved memory range (16GB) of virtual pages
 - Can use more than one instance
 - Sizes to use are multiple of 64KB (page-size)
@@ -98,7 +99,7 @@ Pros and Cons:
 - Relatively simple implementation (~200 lines of code) [+]
 - Will have no fragmentation [+]
 - Size rounded up to page size [-]
-- Mapping and unmapping kernel calls relatively slow [-]
+- Kernel calls relatively slow [-]
 
 ## Proxy allocators for 'commit/decommit' of virtual memory
 
@@ -196,9 +197,11 @@ Size-db is 128 * 32 B = 4 KB
 The only downside of using array's and lists is that the size-db is NOT sorted by default.
 We can solve this for every size entry by also introducing an address-db and bitset.
 
-For the size entry that stores the larger than Max-Alloc-Size it at least will have an address bias. However there will still be many different sizes.
+For the size entry that stores the larger than Max-Alloc-Size it at least will have an
+address bias. However there will still be many different sizes.
 
-Problem: If you do not align the size by Min-Alloc-Size then you can get size fragments that are smaller than Min-Alloc-Size.
+Problem: If you do not align the size by Min-Alloc-Size then you can get size fragments
+         that are smaller than Min-Alloc-Size.
 
 ### Notes 1
 
@@ -222,12 +225,14 @@ PS4 = 994 GB address space
 
 ### Notes 3
 
-For allocations that are under but close to sizes like 4K, 8/12/16/20 we could allocate them in a separate allocator.
-These sizes are very efficient and could benefit from a fast allocator.
+For allocations that are under but close to sizes like 4K, 8/12/16/20 we could allocate them
+in a separate allocator. These sizes are very efficient and could benefit from a fast allocator.
 
 ### Notes 4
 
-For GPU resources it is best to analyze the resource constraints, for example; On Nintendo Switch shaders should be allocated with an alignment of 256 bytes and the size should also be a multiple of 256.
+For GPU resources it is best to analyze the resource constraints, for example; On Nintendo
+Switch shaders should be allocated with an alignment of 256 bytes and the size should also
+be a multiple of 256.
 
 ### Notes 5
 
@@ -238,4 +243,4 @@ Memory Debugging:
 - Memory Tracking
 
 Writing allocators to be able to debug allocations. We can do this by writing allocators that
-are proxy classes that do some extra work.
+are proxy classes that do some extra work/tracking.
