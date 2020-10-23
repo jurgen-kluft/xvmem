@@ -29,7 +29,7 @@ namespace xcore
 
         virtual u32 v_size() const X_FINAL { return m_alloc_size; }
 
-        virtual void* v_allocate() X_FINAL { return alloc_elem(m_pages, m_pages_notfull_list, m_alloc_size); }
+        virtual void* v_allocate() X_FINAL { return alloc_elem(m_pages, m_pages_notfull_list, m_pages_empty_list, m_alloc_size); }
         virtual u32   v_deallocate(void* ptr) X_FINAL
         {
             free_elem(m_pages, m_pages_notfull_list, ptr, m_pages_empty_list);

@@ -132,11 +132,11 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
                 xalist_t notfull_pages = init_list(pages);
                 xalist_t empty_pages = init_list(pages);
                 {
-                    elements[0] = alloc_elem(pages, notfull_pages, size);
+                    elements[0] = alloc_elem(pages, notfull_pages, empty_pages, size);
                     for (u32 j = 1; j < cnt; ++j)
                     {
                         CHECK_EQUAL(1, notfull_pages.size());
-                        elements[j] = alloc_elem(pages, notfull_pages, size);
+                        elements[j] = alloc_elem(pages, notfull_pages, empty_pages, size);
                     }
                     CHECK_EQUAL(0, notfull_pages.size());
 
@@ -180,7 +180,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
 
                 for (s32 j = 0; j < cnt; ++j)
                 {
-                    element[j] = alloc_elem(pages, used_pages, size);
+                    element[j] = alloc_elem(pages, used_pages, empty_pages, size);
                     CHECK_NOT_NULL(element[j]);
                 }
                 for (s32 j = 0; j < cnt; ++j)
@@ -218,7 +218,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
 
                 for (s32 j = 0; j < cnt; ++j)
                 {
-                    element[j] = alloc_elem(pages, used_pages, size);
+                    element[j] = alloc_elem(pages, used_pages, empty_pages, size);
                     CHECK_NOT_NULL(element[j]);
                 }
 
