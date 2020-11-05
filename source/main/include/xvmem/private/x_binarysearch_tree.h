@@ -16,21 +16,18 @@ namespace xcore
             COLOR_BLACK = 0,
             COLOR_RED   = 1
         };
+        enum ENodeChild
+        {
+            LEFT  = 0,
+            RIGHT = 1
+        };
+
         namespace pointer_based
         {
-            struct tree_t;
-
             struct node_t
             {
-                enum EChild
-                {
-                    LEFT  = 0,
-                    RIGHT = 1
-                };
-
                 node_t* parent;
                 node_t* children[2];
-                // color (1 bit) is stored by the user
 
                 void clear()
                 {
@@ -38,37 +35,6 @@ namespace xcore
                     children[0] = nullptr;
                     children[1] = nullptr;
                 }
-
-                node_t* get_parent() { return parent; }
-                bool    has_parent() { return parent != nullptr; }
-                void    set_parent(node_t* p) { parent = p; }
-
-                void set_left(node_t* child) { children[0] = child; }
-                void set_right(node_t* child) { children[1] = child; }
-                void set_child(s32 c, node_t* child) { children[c] = child; }
-
-                bool has_left() { return children[0] != nullptr; }
-                bool has_right() { return children[1] != nullptr; }
-                bool has_child(s32 c) const
-                {
-                    ASSERT(c == LEFT || c == RIGHT);
-                    return children[c] != nullptr;
-                }
-
-                node_t* get_left() { return children[0]; }
-                node_t* get_right() { return children[1]; }
-                node_t* get_child(s32 c) const
-                {
-                    ASSERT(c == LEFT || c == RIGHT);
-                    return children[c];
-                }
-
-                void set_color(tree_t* t, s32 color);
-                s32  get_color(tree_t* t) const;
-                void set_color_black(tree_t* t);
-                void set_color_red(tree_t* t);
-                bool is_color_black(tree_t* t) const;
-                bool is_color_red(tree_t* t) const;
             };
 
             // Pointer to a function to compare two nodes, and returns as follows:
@@ -103,19 +69,10 @@ namespace xcore
         namespace index_based
         {
             struct tree_t;
+            enum { NIL = 0xffffffff };
 
             struct node_t
             {
-                enum EChild
-                {
-                    LEFT  = 0,
-                    RIGHT = 1
-                };
-                enum
-                {
-                    NIL = 0xffffffff
-                };
-
                 u32 parent;
                 u32 children[2];
                 // color (1 bit) is stored by the user
@@ -126,43 +83,21 @@ namespace xcore
                     children[0] = NIL;
                     children[1] = NIL;
                 }
-
-                u32  get_parent() const { return parent; }
-                bool has_parent() const { return parent != NIL; }
-                void set_parent(u32 p) { parent = p; }
-
-                void set_left(u32 child) { children[0] = child; }
-                void set_right(u32 child) { children[1] = child; }
-                void set_child(s32 c, u32 child) { children[c] = child; }
-
-                bool has_left() { return children[0] != NIL; }
-                bool has_right() { return children[1] != NIL; }
-                bool has_child(s32 c) const
-                {
-                    ASSERT(c == LEFT || c == RIGHT);
-                    return children[c] != NIL;
-                }
-
-                u32 get_left() { return children[0]; }
-                u32 get_right() { return children[1]; }
-                u32 get_child(s32 c) const
-                {
-                    ASSERT(c == LEFT || c == RIGHT);
-                    return children[c];
-                }
-
-                void set_color(tree_t* t, s32 color);
-                s32  get_color(tree_t* t) const;
-                void set_color_black(tree_t* t);
-                void set_color_red(tree_t* t);
-                bool is_color_black(tree_t* t) const;
-                bool is_color_red(tree_t* t) const;
             };
 
             // Pointer to a function to compare two nodes, and returns as follows:
             // - (0, +inf] if lhs > rhs
             // - 0 if lhs == rhs
             // - [-inf, 0) if lhs < rhs
+            class xtree_t
+            {
+            public:
+                virtual u64 get_key(const node_t* lhs) const = 0;
+                virtual s32 compare(const u64 key, const node_t* node) = 0;
+                virtual s32 get_color(const node_t* lhs)const = 0;
+                virtual void set_color(node_t* lhs, s32 color) = 0;
+            };
+
             struct tree_t;
             typedef u64 (*get_key_f)(const node_t* lhs);
             typedef s32 (*compare_f)(const u64 key, const node_t* node);

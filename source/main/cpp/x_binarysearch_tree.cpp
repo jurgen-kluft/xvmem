@@ -11,6 +11,37 @@ namespace xcore
     {
         namespace pointer_based
         {
+            inline node_t* get_parent(node_t* n) { return n->parent; }
+            inline bool    has_parent(node_t* n) { return n->parent != nullptr; }
+            inline void    set_parent(node_t* n, node_t* p) { n->parent = p; }
+
+            inline void set_left(node_t* n, node_t* child) { n->children[0] = child; }
+            inline void set_right(node_t* n, node_t* child) { n->children[1] = child; }
+            inline void set_child(node_t* n, s32 c, node_t* child) { n->children[c] = child; }
+
+            inline bool has_left(node_t* n) { return n->children[0] != nullptr; }
+            inline bool has_right(node_t* n) { return n->children[1] != nullptr; }
+            inline bool has_child(node_t* n, s32 c) 
+            {
+                ASSERT(c == LEFT || c == RIGHT);
+                return n->children[c] != nullptr;
+            }
+
+            inline node_t* get_left(node_t* n) { return n->children[0]; }
+            inline node_t* get_right(node_t* n) { return n->children[1]; }
+            inline node_t* get_child(node_t* n, s32 c) 
+            {
+                ASSERT(c == LEFT || c == RIGHT);
+                return n->children[c];
+            }
+
+            inline void set_color(node_t* n, tree_t* t, s32 color);
+            inline s32  get_color(node_t* n, tree_t* t) ;
+            inline void set_color_black(node_t* n, tree_t* t);
+            inline void set_color_red(node_t* n, tree_t* t);
+            inline bool is_color_black(node_t* n, tree_t* t) ;
+            inline bool is_color_red(node_t* n, tree_t* t) ;
+
             bool clear(node_t*& iterator, tree_t* tree, node_t*& n)
             {
                 // Rotate away the left links so that we can treat this like the destruction of a linked list
@@ -18,18 +49,18 @@ namespace xcore
                 iterator   = nullptr;
                 while (it != nullptr)
                 {
-                    if (!it->has_left())
+                    if (!has_left(it))
                     { // No left links, just kill the node and move on
-                        iterator = it->get_right();
+                        iterator = get_right(it);
                         it->clear();
                         n = it;
                         return true;
                     }
                     else
                     { // Rotate away the left link and check again
-                        iterator = it->get_left();
-                        it->set_left(iterator->get_right());
-                        iterator->set_right(it);
+                        iterator = get_left(it);
+                        set_left(it, get_right(iterator));
+                        set_right(iterator, it);
                     }
                     it       = iterator;
                     iterator = nullptr;
@@ -57,7 +88,7 @@ namespace xcore
                     ASSERT(c == 0 || c == -1 || c == 1);
                     if (c == 0)
                         break;
-                    node = node->get_child((c + 1) >> 1);
+                    node = get_child(node, (c + 1) >> 1);
                 }
 
                 if (node == nullptr)
@@ -95,7 +126,7 @@ namespace xcore
                     if (c == 0)
                         break;
 
-                    child = node->get_child((c + 1) >> 1);
+                    child = get_child(node, (c + 1) >> 1);
                     if (child == nullptr)
                         break;
                     node = child;
@@ -109,19 +140,19 @@ namespace xcore
 
             static inline node_t* helper_get_sibling(node_t* node)
             {
-                node_t* parent = node->get_parent();
+                node_t* parent = get_parent(node);
                 if (parent == nullptr)
                     return nullptr;
-                s32 const c = (node == parent->get_left()) ? 1 : 0;
-                return parent->get_child(c);
+                s32 const c = (node == get_left(parent)) ? 1 : 0;
+                return get_child(parent, c);
             }
 
             static inline node_t* helper_get_grandparent(node_t* node)
             {
-                node_t* parent_node = node->get_parent();
+                node_t* parent_node = get_parent(node);
                 if (parent_node == nullptr)
                     return nullptr;
-                return parent_node->get_parent();
+                return get_parent(parent_node);
             }
 
             static inline node_t* helper_get_uncle(node_t* node)
@@ -129,126 +160,126 @@ namespace xcore
                 node_t* grandparent = helper_get_grandparent(node);
                 if (grandparent == nullptr)
                     return nullptr;
-                const s32 c = (node->get_parent() == grandparent->get_left()) ? 1 : 0;
-                return grandparent->get_child(c);
+                const s32 c = (get_parent(node) == get_left(grandparent)) ? 1 : 0;
+                return get_child(grandparent, c);
             }
 
             static inline void helper_rotate_left(node_t*& root, node_t* node)
             {
                 node_t* x = node;
-                node_t* y = x->get_right();
-                x->set_right(y->get_left());
-                if (y->has_left())
+                node_t* y = get_right(x);
+                set_right(x, get_left(y));
+                if (has_left(y))
                 {
-                    node_t* yleft = y->get_left();
-                    yleft->set_parent(x);
+                    node_t* yleft = get_left(y);
+                    set_parent(yleft, x);
                 }
 
-                y->set_parent(x->get_parent());
-                if (!x->has_parent())
+                set_parent(y, get_parent(x));
+                if (!has_parent(x))
                 {
                     root = y;
                 }
                 else
                 {
-                    node_t*   xp = x->get_parent();
-                    s32 const c  = (x == xp->get_left()) ? 0 : 1;
-                    xp->set_child(c, y);
+                    node_t*   xp = get_parent(x);
+                    s32 const c  = (x == get_left(xp)) ? 0 : 1;
+                    set_child(xp, c, y);
                 }
-                y->set_left(x);
-                x->set_parent(y);
+                set_left(y, x);
+                set_parent(x, y);
             }
 
             static inline void helper_rotate_right(node_t*& root, node_t* node)
             {
                 node_t* x = node;
-                node_t* y = x->get_left();
-                x->set_left(y->get_right());
+                node_t* y = get_left(x);
+                set_left(x, get_right(y));
 
-                if (y->has_right())
+                if (has_right(y))
                 {
-                    node_t* yright = y->get_right();
-                    yright->set_parent(x);
+                    node_t* yright = get_right(y);
+                    set_parent(yright, x);
                 }
 
-                y->set_parent(x->get_parent());
-                if (!x->has_parent())
+                set_parent(y, get_parent(x));
+                if (!has_parent(x))
                 {
                     root = y;
                 }
                 else
                 {
-                    node_t*   xp = x->get_parent();
-                    s32 const c  = (x == xp->get_left()) ? 0 : 1;
-                    xp->set_child(c, y);
+                    node_t*   xp = get_parent(x);
+                    s32 const c  = (x == get_left(xp)) ? 0 : 1;
+                    set_child(xp, c, y);
                 }
 
-                y->set_right(x);
-                x->set_parent(y);
+                set_right(y, x);
+                set_parent(x, y);
             }
 
             static void helper_insert_rebalance(tree_t* tree, node_t*& root, node_t* node)
             {
-                node_t* new_node_parent = node->get_parent();
+                node_t* new_node_parent = get_parent(node);
 
-                if (new_node_parent != nullptr && new_node_parent->is_color_black(tree) == false)
+                if (new_node_parent != nullptr && is_color_black(new_node_parent, tree) == false)
                 {
                     node_t* iter = node;
 
                     // Iterate until we're at the root (which we just color black) or
                     // until we the parent node is no longer red.
-                    while ((root != iter) && iter->has_parent() && (iter->get_parent()->is_color_red(tree)))
+                    while ((root != iter) && has_parent(iter) && (is_color_red(get_parent(iter), tree)))
                     {
-                        node_t* parent      = iter->get_parent();
+                        node_t* parent      = get_parent(iter);
                         node_t* grandparent = helper_get_grandparent(iter);
                         node_t* uncle       = nullptr;
 
-                        ASSERT(iter->is_color_red(tree));
+                        ASSERT(is_color_red(iter, tree));
 
                         bool uncle_is_left;
-                        if (parent == grandparent->get_left())
+                        if (parent == get_left(grandparent))
                         {
                             uncle_is_left = false;
-                            uncle         = grandparent->get_right();
+                            uncle         = get_right(grandparent);
                         }
                         else
                         {
                             uncle_is_left = true;
-                            uncle         = grandparent->get_left();
+                            uncle         = get_left(grandparent);
                         }
 
                         // Case 1: Uncle is not black
-                        if (uncle && uncle->is_color_red(tree))
+                        if (uncle && is_color_red(uncle, tree))
                         {
                             // Color parent and uncle black
-                            parent->set_color_black(tree);
-                            uncle->set_color_black(tree);
+                            set_color_black(parent, tree);
+                            set_color_black(uncle, tree);
 
                             // Color Grandparent as Red
-                            grandparent->set_color_red(tree);
+                            set_color_red(grandparent, tree);
                             iter = grandparent;
                             // Continue iteration, processing grandparent
                         }
                         else
                         {
                             // Case 2 - node's parent is red, but uncle is black
-                            if (!uncle_is_left && parent->get_right() == iter)
+                            if (!uncle_is_left && get_right(parent) == iter)
                             {
-                                iter = iter->get_parent();
+                                iter = get_parent(iter);
                                 helper_rotate_left(root, iter);
                             }
-                            else if (uncle_is_left && parent->get_left() == iter)
+                            else if (uncle_is_left && get_left(parent) == iter)
                             {
-                                iter = iter->get_parent();
+                                iter = get_parent(iter);
                                 helper_rotate_right(root, iter);
                             }
 
                             // Case 3 - Recolor and rotate
-                            parent = iter->get_parent();
-                            parent->set_color_black(tree);
+                            parent = get_parent(iter);
+                            set_color_black(parent, tree);
 
                             grandparent = helper_get_grandparent(iter);
-                            grandparent->set_color_red(tree);
+                            set_color_red(grandparent, tree);
                             if (uncle_is_left)
                             {
                                 helper_rotate_left(root, grandparent);
@@ -261,7 +292,7 @@ namespace xcore
                     }
 
                     // Make sure the tree root is black (Case 1: Continued)
-                    root->set_color_black(tree);
+                    set_color_black(root, tree);
                 }
             }
 
@@ -279,13 +310,13 @@ namespace xcore
                 {
                     ret  = true;
                     root = node;
-                    node->set_color_black(tree);
+                    set_color_black(node, tree);
                     return ret;
                 }
 
                 // Otherwise, insert the node as you would typically in a BST
                 node_t* nd = root;
-                node->set_color_red(tree);
+                set_color_red(node, tree);
 
                 // Insert a node into the tree as you normally would
                 while (nd != nullptr)
@@ -299,31 +330,31 @@ namespace xcore
 
                     if (c < 0)
                     {
-                        if (!nd->has_left())
+                        if (!has_left(nd))
                         {
-                            nd->set_left(node);
+                            set_left(nd, node);
                             break;
                         }
                         else
                         {
-                            nd = nd->get_left();
+                            nd = get_left(nd);
                         }
                     }
                     else
                     {
-                        if (!nd->has_right())
+                        if (!has_right(nd))
                         {
-                            nd->set_right(node);
+                            set_right(nd, node);
                             break;
                         }
                         else
                         {
-                            nd = nd->get_right();
+                            nd = get_right(nd);
                         }
                     }
                 }
 
-                node->set_parent(nd);
+                set_parent(node, nd);
 
                 // Rebalance the tree about the node we just added
                 helper_insert_rebalance(tree, root, node);
@@ -335,9 +366,9 @@ namespace xcore
             static node_t* helper_find_minimum(node_t* node)
             {
                 node_t* x = node;
-                while (x->has_left())
+                while (has_left(x))
                 {
-                    x = x->get_left();
+                    x = get_left(x);
                 }
                 return x;
             }
@@ -345,9 +376,9 @@ namespace xcore
             static node_t* helper_find_maximum(node_t* node)
             {
                 node_t* x = node;
-                while (x->has_right())
+                while (has_right(x))
                 {
-                    x = x->get_right();
+                    x = get_right(x);
                 }
                 return x;
             }
@@ -355,16 +386,16 @@ namespace xcore
             static node_t* helper_find_successor(node_t* node)
             {
                 node_t* x = node;
-                if (x->has_right())
+                if (has_right(x))
                 {
-                    return helper_find_minimum(x->get_right());
+                    return helper_find_minimum(get_right(x));
                 }
 
-                node_t* y = x->get_parent();
-                while (y != nullptr && x == y->get_right())
+                node_t* y = get_parent(x);
+                while (y != nullptr && x == get_right(y))
                 {
                     x = y;
-                    y = y->get_parent();
+                    y = get_parent(y);
                 }
                 return y;
             }
@@ -372,16 +403,16 @@ namespace xcore
             static node_t* helper_find_predecessor(node_t* node)
             {
                 node_t* x = node;
-                if (x->has_left())
+                if (has_left(x))
                 {
-                    return helper_find_maximum(x->get_left());
+                    return helper_find_maximum(get_left(x));
                 }
 
-                node_t* y = x->get_parent();
-                while (y != nullptr && x == y->get_left())
+                node_t* y = get_parent(x);
+                while (y != nullptr && x == get_left(y))
                 {
                     x = y;
-                    y = y->get_parent();
+                    y = get_parent(y);
                 }
                 return y;
             }
@@ -389,20 +420,20 @@ namespace xcore
             // Replace x with y, inserting y where x previously was
             static void helper_swap_node(tree_t* tree, node_t*& root, node_t* x, node_t* y)
             {
-                node_t* left   = x->get_left();
-                node_t* right  = x->get_right();
-                node_t* parent = x->get_parent();
+                node_t* left   = get_left(x);
+                node_t* right  = get_right(x);
+                node_t* parent = get_parent(x);
 
-                y->set_parent(parent);
+                set_parent(y, parent);
                 if (parent != nullptr)
                 {
-                    if (parent->get_left() == x)
+                    if (get_left(parent) == x)
                     {
-                        parent->set_left(y);
+                        set_left(parent, y);
                     }
                     else
                     {
-                        parent->set_right(y);
+                        set_right(parent, y);
                     }
                 }
                 else
@@ -413,21 +444,21 @@ namespace xcore
                     }
                 }
 
-                y->set_right(right);
+                set_right(y, right);
                 if (right != nullptr)
                 {
-                    right->set_parent(y);
+                    set_parent(right, y);
                 }
-                x->set_right(nullptr);
-                y->set_left(left);
+                set_right(x, nullptr);
+                set_left(y, left);
                 if (left != nullptr)
                 {
-                    left->set_parent(y);
+                    set_parent(left, y);
                 }
-                x->set_left(nullptr);
+                set_left(x, nullptr);
 
-                y->set_color(tree, x->get_color(tree));
-                x->set_parent(nullptr);
+                set_color(y, tree, get_color(x, tree));
+                set_parent(x, nullptr);
             }
 
             static void helper_delete_rebalance(tree_t* tree, node_t*& root, node_t* node, node_t* parent, s32 node_is_left)
@@ -436,14 +467,14 @@ namespace xcore
                 node_t* xp      = parent;
                 s32     is_left = node_is_left;
 
-                while (x != root && (x == nullptr || x->is_color_black(tree)))
+                while (x != root && (x == nullptr || is_color_black(x, tree)))
                 {
-                    node_t* w = is_left ? xp->get_right() : xp->get_left(); /* Sibling */
-                    if (w != nullptr && w->is_color_red(tree))
+                    node_t* w = is_left ? get_right(xp) : get_left(xp); /* Sibling */
+                    if (w != nullptr && is_color_red(w, tree))
                     {
                         // Case 1
-                        w->set_color_black(tree);
-                        xp->set_color_red(tree);
+                        set_color_black(w, tree);
+                        set_color_red(xp, tree);
                         if (is_left)
                         {
                             helper_rotate_left(root, xp);
@@ -452,62 +483,62 @@ namespace xcore
                         {
                             helper_rotate_right(root, xp);
                         }
-                        w = is_left ? xp->get_right() : xp->get_left();
+                        w = is_left ? get_right(xp) : get_left(xp);
                     }
 
-                    node_t* wleft  = w != nullptr ? w->get_left() : nullptr;
-                    node_t* wright = w != nullptr ? w->get_right() : nullptr;
-                    if ((wleft == nullptr || wleft->is_color_black(tree)) && (wright == nullptr || wright->is_color_black(tree)))
+                    node_t* wleft  = w != nullptr ? get_left(w) : nullptr;
+                    node_t* wright = w != nullptr ? get_right(w) : nullptr;
+                    if ((wleft == nullptr || is_color_black(wleft, tree)) && (wright == nullptr || is_color_black(wright, tree)))
                     {
                         // Case 2
                         if (w != nullptr)
                         {
-                            w->set_color_red(tree);
+                            set_color_red(w, tree);
                         }
                         x       = xp;
-                        xp      = x->get_parent();
-                        is_left = xp && (x == xp->get_left());
+                        xp      = get_parent(x);
+                        is_left = xp && (x == get_left(xp));
                     }
                     else
                     {
-                        if (is_left && (wright == nullptr || wright->is_color_black(tree)))
+                        if (is_left && (wright == nullptr || is_color_black(wright, tree)))
                         {
                             // Case 3a
-                            w->set_color_red(tree);
+                            set_color_red(w, tree);
                             if (wleft)
                             {
-                                wleft->set_color_black(tree);
+                                set_color_black(wleft, tree);
                             }
                             helper_rotate_right(root, w);
-                            w = xp->get_right();
+                            w = get_right(xp);
                         }
-                        else if (!is_left && (wleft == nullptr || wleft->is_color_black(tree)))
+                        else if (!is_left && (wleft == nullptr || is_color_black(wleft, tree)))
                         {
                             // Case 3b
-                            w->set_color_red(tree);
+                            set_color_red(w, tree);
                             if (wright)
                             {
-                                wright->set_color_black(tree);
+                                set_color_black(wright, tree);
                             }
                             helper_rotate_left(root, w);
-                            w = xp->get_left();
+                            w = get_left(xp);
                         }
 
                         // Case 4
-                        wleft  = w->get_left();
-                        wright = w->get_right();
+                        wleft  = get_left(w);
+                        wright = get_right(w);
 
-                        w->set_color(tree, xp->get_color(tree));
-                        xp->set_color_black(tree);
+                        set_color(w, tree, get_color(xp, tree));
+                        set_color_black(xp, tree);
 
                         if (is_left && wright != nullptr)
                         {
-                            wright->set_color_black(tree);
+                            set_color_black(wright, tree);
                             helper_rotate_left(root, xp);
                         }
                         else if (!is_left && wleft != nullptr)
                         {
-                            wleft->set_color_black(tree);
+                            set_color_black(wleft, tree);
                             helper_rotate_right(root, xp);
                         }
                         x = root;
@@ -516,7 +547,7 @@ namespace xcore
 
                 if (x != nullptr)
                 {
-                    x->set_color_black(tree);
+                    set_color_black(x, tree);
                 }
             }
 
@@ -528,7 +559,7 @@ namespace xcore
                 ASSERT(node != nullptr);
 
                 node_t* y;
-                if (!node->has_left() || !node->has_right())
+                if (!has_left(node) || !has_right(node))
                 {
                     y = node;
                 }
@@ -538,48 +569,48 @@ namespace xcore
                 }
 
                 node_t* x;
-                if (y->has_left())
+                if (has_left(y))
                 {
-                    x = y->get_left();
+                    x = get_left(y);
                 }
                 else
                 {
-                    x = y->get_right();
+                    x = get_right(y);
                 }
 
                 node_t* xp;
                 if (x != nullptr)
                 {
-                    xp = y->get_parent();
-                    x->set_parent(xp);
+                    xp = get_parent(y);
+                    set_parent(x, xp);
                 }
                 else
                 {
-                    xp = y->get_parent();
+                    xp = get_parent(y);
                 }
 
                 s32 is_left = 0;
-                if (!y->has_parent())
+                if (!has_parent(y))
                 {
                     root = x;
                     xp   = nullptr;
                 }
                 else
                 {
-                    node_t* yp = y->get_parent();
-                    if (y == yp->get_left())
+                    node_t* yp = get_parent(y);
+                    if (y == get_left(yp))
                     {
-                        yp->set_left(x);
+                        set_left(yp, x);
                         is_left = 1;
                     }
                     else
                     {
-                        yp->set_right(x);
+                        set_right(yp, x);
                         is_left = 0;
                     }
                 }
 
-                s32 const y_color = y->get_color(tree);
+                s32 const y_color = get_color(y, tree);
 
                 // Swap in the node
                 if (y != node)
@@ -601,17 +632,12 @@ namespace xcore
                 return ret;
             }
 
-            void node_t::set_color(tree_t* t, s32 color) { t->m_set_color_f(this, color); }
-
-            s32 node_t::get_color(tree_t* t) const { return t->m_get_color_f(this); }
-
-            void node_t::set_color_black(tree_t* t) { t->m_set_color_f(this, COLOR_BLACK); }
-
-            void node_t::set_color_red(tree_t* t) { t->m_set_color_f(this, COLOR_RED); }
-
-            bool node_t::is_color_black(tree_t* t) const { return t->m_get_color_f(this) == COLOR_BLACK; }
-
-            bool node_t::is_color_red(tree_t* t) const { return t->m_get_color_f(this) == COLOR_RED; }
+            void set_color(node_t* n, tree_t* t, s32 color) { t->m_set_color_f(n, color); }
+            s32  get_color(node_t* n, tree_t* t) { return t->m_get_color_f(n); }
+            void set_color_black(node_t* n, tree_t* t) { t->m_set_color_f(n, COLOR_BLACK); }
+            void set_color_red(node_t* n, tree_t* t) { t->m_set_color_f(n, COLOR_RED); }
+            bool is_color_black(node_t* n, tree_t* t) { return t->m_get_color_f(n) == COLOR_BLACK; }
+            bool is_color_red(node_t* n, tree_t* t) { return t->m_get_color_f(n) == COLOR_RED; }
 
             s32 validate(node_t* root, tree_t* tree, const char*& result)
             {
@@ -622,13 +648,13 @@ namespace xcore
                 }
                 else
                 {
-                    node_t* ln = root->get_left();
-                    node_t* rn = root->get_right();
+                    node_t* ln = get_left(root);
+                    node_t* rn = get_right(root);
 
                     // Consecutive red links
-                    if (root->is_color_red(tree))
+                    if (is_color_red(root, tree))
                     {
-                        if ((ln != nullptr && ln->is_color_red(tree)) || (rn != nullptr && rn->is_color_red(tree)))
+                        if ((ln != nullptr && is_color_red(ln, tree)) || (rn != nullptr && is_color_red(rn, tree)))
                         {
                             result = "Red violation";
                             return 0;
@@ -657,7 +683,7 @@ namespace xcore
                     // Only count black links
                     if (lh != 0 && rh != 0)
                     {
-                        return root->is_color_red(tree) ? lh : lh + 1;
+                        return is_color_red(root, tree) ? lh : lh + 1;
                     }
                     return 0;
                 }
@@ -670,7 +696,7 @@ namespace xcore
                 while (pnode != nullptr)
                 {
                     found = pnode;
-                    pnode = pnode->get_left();
+                    pnode = get_left(pnode);
                 }
                 return found != nullptr;
             }
@@ -690,7 +716,7 @@ namespace xcore
         {
             node_t* idx2ptr(xdexer* dexer, u32 idx)
             {
-                if (idx == node_t::NIL)
+                if (idx == NIL)
                     return nullptr;
                 return (node_t*)dexer->idx2ptr(idx);
             }
@@ -698,9 +724,40 @@ namespace xcore
             u32 ptr2idx(xdexer* dexer, node_t* p)
             {
                 if (p == nullptr)
-                    return node_t::NIL;
+                    return NIL;
                 return dexer->ptr2idx(p);
             }
+
+            u32  get_parent(node_t* n) { return n->parent; }
+            bool has_parent(node_t* n) { return n->parent != NIL; }
+            void set_parent(node_t* n, u32 p) { n->parent = p; }
+
+            void set_left(node_t* n, u32 child) { n->children[0] = child; }
+            void set_right(node_t* n, u32 child) { n->children[1] = child; }
+            void set_child(node_t* n, s32 c, u32 child) { n->children[c] = child; }
+
+            bool has_left(node_t* n) { return n->children[0] != NIL; }
+            bool has_right(node_t* n) { return n->children[1] != NIL; }
+            bool has_child(node_t* n, s32 c)
+            {
+                ASSERT(c == LEFT || c == RIGHT);
+                return n->children[c] != NIL;
+            }
+
+            u32 get_left(node_t* n) { return n->children[0]; }
+            u32 get_right(node_t* n) { return n->children[1]; }
+            u32 get_child(node_t* n, s32 c)
+            {
+                ASSERT(c == LEFT || c == RIGHT);
+                return n->children[c];
+            }
+
+            void set_color(node_t* n, tree_t* t, s32 color);
+            s32  get_color(node_t* n, tree_t* t) ;
+            void set_color_black(node_t* n, tree_t* t);
+            void set_color_red(node_t* n, tree_t* t);
+            bool is_color_black(node_t* n, tree_t* t) ;
+            bool is_color_red(node_t* n, tree_t* t) ;
 
             bool clear(u32& iiterator, tree_t* tree, xdexer* dexer, u32& n)
             {
@@ -708,28 +765,28 @@ namespace xcore
                 node_t* iterator = idx2ptr(dexer, iiterator);
                 u32     iit      = iiterator;
                 node_t* it       = iterator;
-                iiterator        = node_t::NIL;
+                iiterator        = NIL;
                 iterator         = nullptr;
                 while (it != nullptr)
                 {
-                    if (!it->has_left())
+                    if (!has_left(it))
                     { // No left links, just kill the node and move on
-                        iiterator = it->get_right();
+                        iiterator = get_right(it);
                         it->clear();
                         n = iit;
                         return true;
                     }
                     else
                     { // Rotate away the left link and check again
-                        iiterator = it->get_left();
+                        iiterator = get_left(it);
                         iterator  = idx2ptr(dexer, iiterator);
-                        it->set_left(iterator->get_right());
-                        iterator->set_right(iit);
+                        set_left(it, get_right(iterator));
+                        set_right(iterator, iit);
                     }
                     it        = iterator;
                     iit       = iiterator;
                     iterator  = nullptr;
-                    iiterator = node_t::NIL;
+                    iiterator = NIL;
                 }
                 return false;
             }
@@ -740,8 +797,8 @@ namespace xcore
 
                 ASSERT(tree != nullptr);
 
-                found = node_t::NIL;
-                if (root == node_t::NIL)
+                found = NIL;
+                if (root == NIL)
                 {
                     ret = false;
                     return ret;
@@ -755,7 +812,7 @@ namespace xcore
                     if (c == 0)
                         break;
 
-                    u32 const ni = node->get_child((c + 1) >> 1);
+                    u32 const ni = get_child(node, (c + 1) >> 1);
                     node         = idx2ptr(dexer, ni);
                 }
 
@@ -780,8 +837,8 @@ namespace xcore
 
                 ASSERT(tree != nullptr);
 
-                found = node_t::NIL;
-                if (root == node_t::NIL)
+                found = NIL;
+                if (root == NIL)
                 {
                     ret = false;
                     return ret;
@@ -795,8 +852,8 @@ namespace xcore
                     if (c == 0)
                         break;
 
-                    u32 const ni = node->get_child((c + 1) >> 1);
-                    if (ni == node_t::NIL)
+                    u32 const ni = get_child(node, (c + 1) >> 1);
+                    if (ni == NIL)
                         break;
                     node = idx2ptr(dexer, ni);
                 }
@@ -810,145 +867,145 @@ namespace xcore
 
             static inline u32 helper_get_sibling(node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
             {
-                u32 iparent = node->get_parent();
-                if (iparent == node_t::NIL)
-                    return node_t::NIL;
+                u32 iparent = get_parent(node);
+                if (iparent == NIL)
+                    return NIL;
                 node_t*   pparent = idx2ptr(dexer, iparent);
-                s32 const c       = (inode == pparent->get_left()) ? 1 : 0;
-                return pparent->get_child(c);
+                s32 const c       = (inode == get_left(pparent)) ? 1 : 0;
+                return get_child(pparent, c);
             }
 
             static inline u32 helper_get_grandparent(node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
             {
-                u32 iparent = node->get_parent();
-                if (iparent == node_t::NIL)
-                    return node_t::NIL;
+                u32 iparent = get_parent(node);
+                if (iparent == NIL)
+                    return NIL;
                 node_t* parent = idx2ptr(dexer, iparent);
-                return parent->get_parent();
+                return get_parent(parent);
             }
 
             static inline u32 helper_get_uncle(node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
             {
                 u32 igrandparent = helper_get_grandparent(node, inode, tree, dexer);
-                if (igrandparent == node_t::NIL)
-                    return node_t::NIL;
+                if (igrandparent == NIL)
+                    return NIL;
                 node_t*   grandparent = idx2ptr(dexer, igrandparent);
-                const s32 c           = (node->get_parent() == grandparent->get_left()) ? 1 : 0;
-                return grandparent->get_child(c);
+                const s32 c           = (get_parent(node) == get_left(grandparent)) ? 1 : 0;
+                return get_child(grandparent, c);
             }
 
             static inline void helper_rotate_left(node_t*& root, u32& iroot, node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
             {
                 u32     ix = inode;
                 node_t* x  = node;
-                u32     iy = x->get_right();
+                u32     iy = get_right(x);
                 node_t* y  = idx2ptr(dexer, iy);
-                x->set_right(y->get_left());
-                if (y->has_left())
+                set_right(x, get_left(y));
+                if (has_left(y))
                 {
-                    u32     iyleft = y->get_left();
+                    u32     iyleft = get_left(y);
                     node_t* yleft  = idx2ptr(dexer, iyleft);
-                    yleft->set_parent(ix);
+                    set_parent(yleft, ix);
                 }
 
-                y->set_parent(x->get_parent());
-                if (!x->has_parent())
+                set_parent(y, get_parent(x));
+                if (!has_parent(x))
                 {
                     root  = y;
                     iroot = iy;
                 }
                 else
                 {
-                    u32       ixp = x->get_parent();
+                    u32       ixp = get_parent(x);
                     node_t*   xp  = idx2ptr(dexer, ixp);
-                    s32 const c   = (ix == xp->get_left()) ? 0 : 1;
-                    xp->set_child(c, iy);
+                    s32 const c   = (ix == get_left(xp)) ? 0 : 1;
+                    set_child(xp, c, iy);
                 }
-                y->set_left(ix);
-                x->set_parent(iy);
+                set_left(y, ix);
+                set_parent(x, iy);
             }
 
             static inline void helper_rotate_right(node_t*& root, u32& iroot, node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
             {
                 u32     ix = inode;
                 node_t* x  = node;
-                u32     iy = x->get_left();
+                u32     iy = get_left(x);
                 node_t* y  = idx2ptr(dexer, iy);
-                x->set_left(y->get_right());
-                if (y->has_right())
+                set_left(x, get_right(y));
+                if (has_right(y))
                 {
-                    u32     iyright = y->get_right();
+                    u32     iyright = get_right(y);
                     node_t* yright  = idx2ptr(dexer, iyright);
-                    yright->set_parent(ix);
+                    set_parent(yright, ix);
                 }
 
-                y->set_parent(x->get_parent());
-                if (!x->has_parent())
+                set_parent(y, get_parent(x));
+                if (!has_parent(x))
                 {
                     root  = y;
                     iroot = iy;
                 }
                 else
                 {
-                    u32       ixp = x->get_parent();
+                    u32       ixp = get_parent(x);
                     node_t*   xp  = idx2ptr(dexer, ixp);
-                    s32 const c   = (ix == xp->get_left()) ? 0 : 1;
-                    xp->set_child(c, iy);
+                    s32 const c   = (ix == get_left(xp)) ? 0 : 1;
+                    set_child(xp, c, iy);
                 }
 
-                y->set_right(ix);
-                x->set_parent(iy);
+                set_right(y, ix);
+                set_parent(x, iy);
             }
 
             static void helper_insert_rebalance(tree_t* tree, xdexer* dexer, node_t*& root, u32& iroot, node_t* node, u32 inode)
             {
-                u32     inew_node_parent = node->get_parent();
+                u32     inew_node_parent = get_parent(node);
                 node_t* new_node_parent  = idx2ptr(dexer, inew_node_parent);
 
-                if (new_node_parent != nullptr && new_node_parent->is_color_black(tree) == false)
+                if (new_node_parent != nullptr && is_color_black(new_node_parent, tree) == false)
                 {
                     u32     iiter = inode;
                     node_t* iter  = node;
 
                     // Iterate until we're at the root (which we just color black) or
                     // until we the parent node is no longer red.
-                    while ((root != iter) && iter->has_parent())
+                    while ((root != iter) && has_parent(iter))
                     {
-                        u32     iparent = iter->get_parent();
+                        u32     iparent = get_parent(iter);
                         node_t* parent  = idx2ptr(dexer, iparent);
-                        if (!parent->is_color_red(tree))
+                        if (!is_color_red(parent, tree))
                             break;
 
                         u32     igrandparent = helper_get_grandparent(iter, iiter, tree, dexer);
                         node_t* grandparent  = idx2ptr(dexer, igrandparent);
 
-                        u32     iuncle = node_t::NIL;
+                        u32     iuncle = NIL;
                         node_t* uncle  = nullptr;
 
-                        ASSERT(iter->is_color_red(tree));
+                        ASSERT(is_color_red(iter, tree));
 
                         bool uncle_is_left;
-                        if (iparent == grandparent->get_left())
+                        if (iparent == get_left(grandparent))
                         {
                             uncle_is_left = false;
-                            iuncle        = grandparent->get_right();
+                            iuncle        = get_right(grandparent);
                         }
                         else
                         {
                             uncle_is_left = true;
-                            iuncle        = grandparent->get_left();
+                            iuncle        = get_left(grandparent);
                         }
                         uncle = idx2ptr(dexer, iuncle);
 
                         // Case 1: Uncle is not black
-                        if (uncle && uncle->is_color_red(tree))
+                        if (uncle && is_color_red(uncle, tree))
                         {
                             // Color parent and uncle black
-                            parent->set_color_black(tree);
-                            uncle->set_color_black(tree);
+                            set_color_black(parent, tree);
+                            set_color_black(uncle, tree);
 
                             // Color Grandparent as Red
-                            grandparent->set_color_red(tree);
+                            set_color_red(grandparent, tree);
                             iiter = igrandparent;
                             iter  = grandparent;
                             // Continue iteration, processing grandparent
@@ -956,27 +1013,27 @@ namespace xcore
                         else
                         {
                             // Case 2 - node's parent is red, but uncle is black
-                            if (!uncle_is_left && parent->get_right() == iiter)
+                            if (!uncle_is_left && get_right(parent) == iiter)
                             {
-                                iiter = iter->get_parent();
+                                iiter = get_parent(iter);
                                 iter  = idx2ptr(dexer, iiter);
                                 helper_rotate_left(root, iroot, iter, iiter, tree, dexer);
                             }
-                            else if (uncle_is_left && parent->get_left() == iiter)
+                            else if (uncle_is_left && get_left(parent) == iiter)
                             {
-                                iiter = iter->get_parent();
+                                iiter = get_parent(iter);
                                 iter  = idx2ptr(dexer, iiter);
                                 helper_rotate_right(root, iroot, iter, iiter, tree, dexer);
                             }
 
                             // Case 3 - Recolor and rotate
-                            iparent = iter->get_parent();
+                            iparent = get_parent(iter);
                             parent  = idx2ptr(dexer, iparent);
-                            parent->set_color_black(tree);
+                            set_color_black(parent, tree);
 
                             igrandparent = helper_get_grandparent(iter, iiter, tree, dexer);
                             grandparent  = idx2ptr(dexer, igrandparent);
-                            grandparent->set_color_red(tree);
+                            set_color_red(grandparent, tree);
                             if (uncle_is_left)
                             {
                                 helper_rotate_left(root, iroot, grandparent, igrandparent, tree, dexer);
@@ -989,7 +1046,7 @@ namespace xcore
                     }
 
                     // Make sure the tree root is black (Case 1: Continued)
-                    root->set_color_black(tree);
+                    set_color_black(root, tree);
                 }
             }
 
@@ -1003,18 +1060,18 @@ namespace xcore
                 node->clear();
 
                 // Case 1: Simplest case -- tree is empty
-                if (iroot == node_t::NIL)
+                if (iroot == NIL)
                 {
                     ret   = true;
                     iroot = inode;
-                    node->set_color_black(tree);
+                    set_color_black(node, tree);
                     return ret;
                 }
 
                 // Otherwise, insert the node as you would typically in a BST
                 u32     ind = iroot;
                 node_t* nd  = idx2ptr(dexer, iroot);
-                node->set_color_red(tree);
+                set_color_red(node, tree);
 
                 // Insert a node into the tree as you normally would
                 while (nd != nullptr)
@@ -1028,33 +1085,33 @@ namespace xcore
 
                     if (c < 0)
                     {
-                        if (!nd->has_left())
+                        if (!has_left(nd))
                         {
-                            nd->set_left(inode);
+                            set_left(nd, inode);
                             break;
                         }
                         else
                         {
-                            ind = nd->get_left();
+                            ind = get_left(nd);
                             nd  = idx2ptr(dexer, ind);
                         }
                     }
                     else
                     {
-                        if (!nd->has_right())
+                        if (!has_right(nd))
                         {
-                            nd->set_right(inode);
+                            set_right(nd, inode);
                             break;
                         }
                         else
                         {
-                            ind = nd->get_right();
+                            ind = get_right(nd);
                             nd  = idx2ptr(dexer, ind);
                         }
                     }
                 }
 
-                node->set_parent(ind);
+                set_parent(node, ind);
 
                 // Rebalance the tree about the node we just added
                 node_t* root = idx2ptr(dexer, iroot);
@@ -1067,9 +1124,9 @@ namespace xcore
             static node_t* helper_find_minimum(node_t* node, tree_t* tree, xdexer* dexer)
             {
                 node_t* x = node;
-                while (x->has_left())
+                while (has_left(x))
                 {
-                    u32 const ix = x->get_left();
+                    u32 const ix = get_left(x);
                     x            = idx2ptr(dexer, ix);
                 }
                 return x;
@@ -1078,9 +1135,9 @@ namespace xcore
             static node_t* helper_find_maximum(node_t* node, tree_t* tree, xdexer* dexer)
             {
                 node_t* x = node;
-                while (x->has_right())
+                while (has_right(x))
                 {
-                    u32 const ix = x->get_right();
+                    u32 const ix = get_right(x);
                     x            = idx2ptr(dexer, ix);
                 }
                 return x;
@@ -1090,20 +1147,20 @@ namespace xcore
             {
                 node_t* x  = node;
                 u32     ix = inode;
-                if (x->has_right())
+                if (has_right(x))
                 {
-                    u32 const ir = x->get_right();
+                    u32 const ir = get_right(x);
                     node_t*   r  = idx2ptr(dexer, ir);
                     return helper_find_minimum(r, tree, dexer);
                 }
 
-                u32     iy = x->get_parent();
+                u32     iy = get_parent(x);
                 node_t* y  = idx2ptr(dexer, iy);
-                while (y != nullptr && ix == y->get_right())
+                while (y != nullptr && ix == get_right(y))
                 {
                     x  = y;
                     ix = iy;
-                    iy = y->get_parent();
+                    iy = get_parent(y);
                     y  = idx2ptr(dexer, iy);
                 }
                 return y;
@@ -1113,20 +1170,20 @@ namespace xcore
             {
                 u32     ix = inode;
                 node_t* x  = node;
-                if (x->has_left())
+                if (has_left(x))
                 {
-                    u32 const il = x->get_right();
+                    u32 const il = get_right(x);
                     node_t*   l  = idx2ptr(dexer, il);
                     return helper_find_maximum(l, tree, dexer);
                 }
 
-                u32     iy = x->get_parent();
+                u32     iy = get_parent(x);
                 node_t* y  = idx2ptr(dexer, iy);
-                while (y != nullptr && ix == y->get_left())
+                while (y != nullptr && ix == get_left(y))
                 {
                     x  = y;
                     iy = iy;
-                    iy = y->get_parent();
+                    iy = get_parent(y);
                     y  = idx2ptr(dexer, iy);
                 }
                 return y;
@@ -1135,23 +1192,23 @@ namespace xcore
             // Replace x with y, inserting y where x previously was
             static void helper_swap_node(node_t*& root, u32& iroot, node_t* x, u32 ix, node_t* y, u32 iy, tree_t* tree, xdexer* dexer)
             {
-                u32     ileft   = x->get_left();
-                u32     iright  = x->get_right();
-                u32     iparent = x->get_parent();
+                u32     ileft   = get_left(x);
+                u32     iright  = get_right(x);
+                u32     iparent = get_parent(x);
                 node_t* left    = idx2ptr(dexer, ileft);
                 node_t* right   = idx2ptr(dexer, iright);
                 node_t* parent  = idx2ptr(dexer, iparent);
 
-                y->set_parent(iparent);
+                set_parent(y, iparent);
                 if (parent != nullptr)
                 {
-                    if (parent->get_left() == ix)
+                    if (get_left(parent) == ix)
                     {
-                        parent->set_left(iy);
+                        set_left(parent, iy);
                     }
                     else
                     {
-                        parent->set_right(iy);
+                        set_right(parent, iy);
                     }
                 }
                 else
@@ -1163,21 +1220,21 @@ namespace xcore
                     }
                 }
 
-                y->set_right(iright);
+                set_right(y, iright);
                 if (right != nullptr)
                 {
-                    right->set_parent(iy);
+                    set_parent(right, iy);
                 }
-                x->set_right(node_t::NIL);
-                y->set_left(ileft);
+                set_right(x, NIL);
+                set_left(y, ileft);
                 if (left != nullptr)
                 {
-                    left->set_parent(iy);
+                    set_parent(left, iy);
                 }
-                x->set_left(node_t::NIL);
+                set_left(x, NIL);
 
-                y->set_color(tree, x->get_color(tree));
-                x->set_parent(node_t::NIL);
+                set_color(y, tree, get_color(x, tree));
+                set_parent(x, NIL);
             }
 
             static void helper_delete_rebalance(node_t*& root, u32 iroot, node_t* node, u32 inode, node_t* parent, u32 iparent, s32 node_is_left, tree_t* tree, xdexer* dexer)
@@ -1188,15 +1245,15 @@ namespace xcore
                 node_t* xp      = parent;
                 s32     is_left = node_is_left;
 
-                while (x != root && (x == nullptr || x->is_color_black(tree)))
+                while (x != root && (x == nullptr || is_color_black(x, tree)))
                 {
-                    u32     iw = is_left ? xp->get_right() : xp->get_left(); // Sibling
+                    u32     iw = is_left ? get_right(xp) : get_left(xp); // Sibling
                     node_t* w  = idx2ptr(dexer, iw);
-                    if (w != nullptr && w->is_color_red(tree))
+                    if (w != nullptr && is_color_red(w, tree))
                     {
                         // Case 1
-                        w->set_color_black(tree);
-                        xp->set_color_red(tree);
+                        set_color_black(w, tree);
+                        set_color_red(xp, tree);
                         if (is_left)
                         {
                             helper_rotate_left(root, iroot, xp, ixp, tree, dexer);
@@ -1205,72 +1262,72 @@ namespace xcore
                         {
                             helper_rotate_right(root, iroot, xp, ixp, tree, dexer);
                         }
-                        iw = is_left ? xp->get_right() : xp->get_left();
+                        iw = is_left ? get_right(xp) : get_left(xp);
                         w  = idx2ptr(dexer, iw);
                     }
 
-                    u32     iwleft  = (w != nullptr) ? w->get_left() : node_t::NIL;
-                    u32     iwright = (w != nullptr) ? w->get_right() : node_t::NIL;
+                    u32     iwleft  = (w != nullptr) ? get_left(w) : NIL;
+                    u32     iwright = (w != nullptr) ? get_right(w) : NIL;
                     node_t* wleft   = idx2ptr(dexer, iwleft);
                     node_t* wright  = idx2ptr(dexer, iwright);
 
-                    if ((wleft == nullptr || wleft->is_color_black(tree)) && (wright == nullptr || wright->is_color_black(tree)))
+                    if ((wleft == nullptr || is_color_black(wleft, tree)) && (wright == nullptr || is_color_black(wright, tree)))
                     {
                         // Case 2
                         if (w != nullptr)
                         {
-                            w->set_color_red(tree);
+                            set_color_red(w, tree);
                         }
                         x       = xp;
                         ix      = ixp;
-                        ixp     = x->get_parent();
+                        ixp     = get_parent(x);
                         xp      = idx2ptr(dexer, ixp);
-                        is_left = xp && (ix == xp->get_left());
+                        is_left = xp && (ix == get_left(xp));
                     }
                     else
                     {
-                        if (is_left && (wright == nullptr || wright->is_color_black(tree)))
+                        if (is_left && (wright == nullptr || is_color_black(wright, tree)))
                         {
                             // Case 3a
-                            w->set_color_red(tree);
+                            set_color_red(w, tree);
                             if (wleft)
                             {
-                                wleft->set_color_black(tree);
+                                set_color_black(wleft, tree);
                             }
                             helper_rotate_right(root, iroot, w, iw, tree, dexer);
-                            iw = xp->get_right();
+                            iw = get_right(xp);
                             w  = idx2ptr(dexer, iw);
                         }
-                        else if (!is_left && (wleft == nullptr || wleft->is_color_black(tree)))
+                        else if (!is_left && (wleft == nullptr || is_color_black(wleft, tree)))
                         {
                             // Case 3b
-                            w->set_color_red(tree);
+                            set_color_red(w, tree);
                             if (wright)
                             {
-                                wright->set_color_black(tree);
+                                set_color_black(wright, tree);
                             }
                             helper_rotate_left(root, iroot, w, iw, tree, dexer);
-                            iw = xp->get_left();
+                            iw = get_left(xp);
                             w  = idx2ptr(dexer, iw);
                         }
 
                         // Case 4
-                        iwleft  = w->get_left();
-                        iwright = w->get_right();
+                        iwleft  = get_left(w);
+                        iwright = get_right(w);
                         wleft   = idx2ptr(dexer, iwleft);
                         wright  = idx2ptr(dexer, iwright);
 
-                        w->set_color(tree, xp->get_color(tree));
-                        xp->set_color_black(tree);
+                        set_color(w, tree, get_color(xp, tree));
+                        set_color_black(xp, tree);
 
                         if (is_left && wright != nullptr)
                         {
-                            wright->set_color_black(tree);
+                            set_color_black(wright, tree);
                             helper_rotate_left(root, iroot, xp, ixp, tree, dexer);
                         }
                         else if (!is_left && wleft != nullptr)
                         {
-                            wleft->set_color_black(tree);
+                            set_color_black(wleft, tree);
                             helper_rotate_right(root, iroot, xp, ixp, tree, dexer);
                         }
                         x  = root;
@@ -1280,7 +1337,7 @@ namespace xcore
 
                 if (x != nullptr)
                 {
-                    x->set_color_black(tree);
+                    set_color_black(x, tree);
                 }
             }
 
@@ -1295,7 +1352,7 @@ namespace xcore
 
                 u32     iy;
                 node_t* y;
-                if (!node->has_left() || !node->has_right())
+                if (!has_left(node) || !has_right(node))
                 {
                     y  = node;
                     iy = inode;
@@ -1308,54 +1365,54 @@ namespace xcore
 
                 u32     ix;
                 node_t* x;
-                if (y->has_left())
+                if (has_left(y))
                 {
-                    ix = y->get_left();
+                    ix = get_left(y);
                     x  = idx2ptr(dexer, ix);
                 }
                 else
                 {
-                    ix = y->get_right();
+                    ix = get_right(y);
                     x  = idx2ptr(dexer, ix);
                 }
 
                 u32 ixp;
                 if (x != nullptr)
                 {
-                    ixp = y->get_parent();
-                    x->set_parent(ixp);
+                    ixp = get_parent(y);
+                    set_parent(x, ixp);
                 }
                 else
                 {
-                    ixp = y->get_parent();
+                    ixp = get_parent(y);
                 }
                 node_t* xp = idx2ptr(dexer, ixp);
 
                 s32 is_left = 0;
-                if (!y->has_parent())
+                if (!has_parent(y))
                 {
                     root  = x;
                     iroot = ix;
-                    ixp   = node_t::NIL;
+                    ixp   = NIL;
                     xp    = nullptr;
                 }
                 else
                 {
-                    u32     iyp = y->get_parent();
+                    u32     iyp = get_parent(y);
                     node_t* yp  = idx2ptr(dexer, iyp);
-                    if (iy == yp->get_left())
+                    if (iy == get_left(yp))
                     {
-                        yp->set_left(ix);
+                        set_left(yp, ix);
                         is_left = 1;
                     }
                     else
                     {
-                        yp->set_right(ix);
+                        set_right(yp, ix);
                         is_left = 0;
                     }
                 }
 
-                s32 const y_color = y->get_color(tree);
+                s32 const y_color = get_color(y, tree);
 
                 // Swap in the node
                 if (y != node)
@@ -1377,12 +1434,12 @@ namespace xcore
                 return ret;
             }
 
-            void node_t::set_color(tree_t* t, s32 color) { t->m_set_color_f(this, color); }
-            s32  node_t::get_color(tree_t* t) const { return t->m_get_color_f(this); }
-            void node_t::set_color_black(tree_t* t) { t->m_set_color_f(this, COLOR_BLACK); }
-            void node_t::set_color_red(tree_t* t) { t->m_set_color_f(this, COLOR_RED); }
-            bool node_t::is_color_black(tree_t* t) const { return t->m_get_color_f(this) == COLOR_BLACK; }
-            bool node_t::is_color_red(tree_t* t) const { return t->m_get_color_f(this) == COLOR_RED; }
+            void set_color(node_t* n, tree_t* t, s32 color) { t->m_set_color_f(n, color); }
+            s32  get_color(node_t* n, tree_t* t)  { return t->m_get_color_f(n); }
+            void set_color_black(node_t* n, tree_t* t) { t->m_set_color_f(n, COLOR_BLACK); }
+            void set_color_red(node_t* n, tree_t* t) { t->m_set_color_f(n, COLOR_RED); }
+            bool is_color_black(node_t* n, tree_t* t)  { return t->m_get_color_f(n) == COLOR_BLACK; }
+            bool is_color_red(node_t* n, tree_t* t)  { return t->m_get_color_f(n) == COLOR_RED; }
 
             s32 validate(node_t* root, u32 iroot, tree_t* tree, xdexer* dexer, const char*& result)
             {
@@ -1393,15 +1450,15 @@ namespace xcore
                 }
                 else
                 {
-                    u32     iln = root->get_left();
-                    u32     irn = root->get_right();
+                    u32     iln = get_left(root);
+                    u32     irn = get_right(root);
                     node_t* ln  = idx2ptr(dexer, iln);
                     node_t* rn  = idx2ptr(dexer, irn);
 
                     // Consecutive red links
-                    if (root->is_color_red(tree))
+                    if (is_color_red(root, tree))
                     {
-                        if ((ln != nullptr && ln->is_color_red(tree)) || (rn != nullptr && rn->is_color_red(tree)))
+                        if ((ln != nullptr && is_color_red(ln, tree)) || (rn != nullptr && is_color_red(rn, tree)))
                         {
                             result = "Red violation";
                             return 0;
@@ -1430,7 +1487,7 @@ namespace xcore
                     // Only count black links
                     if (lh != 0 && rh != 0)
                     {
-                        return root->is_color_red(tree) ? lh : lh + 1;
+                        return is_color_red(root, tree) ? lh : lh + 1;
                     }
                     return 0;
                 }
@@ -1444,7 +1501,7 @@ namespace xcore
                 while (pnode != nullptr)
                 {
                     found = inode;
-                    inode = pnode->get_left();
+                    inode = get_left(pnode);
                     pnode = idx2ptr(dexer, inode);
                 }
                 return found != 0xffffffff;
