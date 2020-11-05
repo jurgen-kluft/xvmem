@@ -29,6 +29,7 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
         xalloc*    m_main_heap;            // Internal heap
+        xvmem*     m_vmem;                 // VMem interface
         xfsadexed* m_node16_heap;          // 16 B node heap
         xfsadexed* m_node32_heap;          // 16 B node heap
         void*      m_fsa_mem_base;         //
@@ -149,10 +150,16 @@ namespace xcore
         m_med_allocator[0]->release();
         m_fsa_allocator->release();
 
-        // TODO: release all reserved virtual memory
-
         m_node16_heap->release();
         m_node32_heap->release();
+
+        // Release all reserved virtual memory
+		for (s32 i=0; i<m_med_count; ++i)
+		{
+			m_vmem->release(m_med_mem_base[i], m_med_mem_range[i]);
+        }
+        m_vmem->release(m_seg_mem_base, m_seg_mem_range);
+        m_vmem->release(m_large_mem_base, m_large_mem_range);
 
 		m_main_heap->destruct(this);
     }
@@ -160,13 +167,14 @@ namespace xcore
     void xvmem_allocator::init(xalloc* main_heap, xvmem* vmem, xvmem_config const* const cfg)
     {
         m_main_heap = main_heap;
+        m_vmem = vmem;
 
         m_fsa_mem_range = cfg->m_fsa_mem_range;
-        m_fsa_allocator = create_alloc_fsa(main_heap, vmem, m_fsa_mem_range, m_fsa_mem_base);
+        m_fsa_allocator = create_alloc_fsa(main_heap, m_vmem, m_fsa_mem_range, m_fsa_mem_base);
 
         // We prefer to create a separate virtual memory based FSA allocator.
-        m_node16_heap = gCreateVMemBasedDexedFsa(main_heap, vmem, cfg->m_node16_heap_size, 16);
-        m_node32_heap = gCreateVMemBasedDexedFsa(main_heap, vmem, cfg->m_node32_heap_size, 32);
+        m_node16_heap = gCreateVMemBasedDexedFsa(main_heap, m_vmem, cfg->m_node16_heap_size, 16);
+        m_node32_heap = gCreateVMemBasedDexedFsa(main_heap, m_vmem, cfg->m_node32_heap_size, 32);
 
 		m_med_count = cfg->m_med_count;
 		for (s32 i=0; i<m_med_count; ++i)
@@ -183,9 +191,9 @@ namespace xcore
 		{
 			u32       med_page_size = 0;
 			u32 const med_mem_attrs = 0; // Page/Memory attributes
-			vmem->reserve(m_med_mem_range[i], med_page_size, med_mem_attrs, m_med_mem_base[i]);
+			m_vmem->reserve(m_med_mem_range[i], med_page_size, med_mem_attrs, m_med_mem_base[i]);
 			m_med_allocator[i]     = create_alloc_coalesce_direct(main_heap, m_node16_heap, m_med_mem_base[i], m_med_mem_range[i], m_med_min_size[i], m_med_max_size[i], m_med_step_size[i], cfg->m_med_addr_node_cnt[i]);
-			m_med_allocator_vcd[i] = create_page_vcd_regions_cached(main_heap, m_med_allocator[i], vmem, m_med_mem_base[i], m_med_mem_range[i], med_page_size, cfg->m_med_region_size[i], cfg->m_med_region_cached[i]);
+			m_med_allocator_vcd[i] = create_page_vcd_regions_cached(main_heap, m_med_allocator[i], m_vmem, m_med_mem_base[i], m_med_mem_range[i], med_page_size, cfg->m_med_region_size[i], cfg->m_med_region_cached[i]);
 		}
 
         // Segregated allocator
@@ -197,9 +205,9 @@ namespace xcore
         // Reserve virtual memory for the segregated allocator
         u32       seg_page_size = 0;
         u32 const seg_mem_attrs = 0; // Page/Memory attributes
-        vmem->reserve(m_seg_mem_range, seg_page_size, seg_mem_attrs, m_seg_mem_base);
+        m_vmem->reserve(m_seg_mem_range, seg_page_size, seg_mem_attrs, m_seg_mem_base);
         m_seg_allocator     = create_alloc_segregated(main_heap, m_node32_heap, m_seg_mem_base, m_seg_mem_range, m_seg_min_size, m_seg_max_size, seg_page_size);
-        m_seg_allocator_vcd = create_page_vcd_direct(main_heap, m_seg_allocator, vmem, seg_page_size);
+        m_seg_allocator_vcd = create_page_vcd_direct(main_heap, m_seg_allocator, m_vmem, seg_page_size);
 
         // Large allocator
         m_large_min_size          = cfg->m_large_min_size;
@@ -207,10 +215,10 @@ namespace xcore
         m_large_mem_range         = cfg->m_large_mem_range;
         u32       large_page_size = 0;
         u32 const large_mem_attrs = 0; // Page/Memory attributes
-        vmem->reserve(m_large_mem_range, large_page_size, large_mem_attrs, m_large_mem_base);
+        m_vmem->reserve(m_large_mem_range, large_page_size, large_mem_attrs, m_large_mem_base);
 
         m_large_allocator     = create_alloc_large(main_heap, m_large_mem_base, m_large_mem_range, cfg->m_large_max_allocs);
-        m_large_allocator_vcd = create_page_vcd_direct(main_heap, m_large_allocator, vmem, large_page_size);
+        m_large_allocator_vcd = create_page_vcd_direct(main_heap, m_large_allocator, m_vmem, large_page_size);
     }
 
     xalloc* gCreateVmAllocator(xalloc* internal_allocator, xvmem* vmem, xvmem_config const* cfg)
