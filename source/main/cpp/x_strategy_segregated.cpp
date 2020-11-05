@@ -26,7 +26,7 @@ namespace xcore
         u32      m_alloc_size_min;
         u32      m_alloc_size_max;
         u32      m_alloc_size_align;
-        u32      m_alloc_count;
+        u32      m_allocators_count;
         xalloc** m_allocators;
     };
 
@@ -48,13 +48,13 @@ namespace xcore
         self->m_alloc_size_max   = allocsize_max;
         self->m_alloc_size_align = allocsize_align;
 
-        self->m_alloc_count = xilog2(allocsize_max) - xilog2(allocsize_min);
-        self->m_allocators  = (xalloc**)main_heap->allocate(sizeof(xalloc*) * self->m_alloc_count);
+        self->m_allocators_count = xilog2(allocsize_max) - xilog2(allocsize_min);
+        self->m_allocators  = (xalloc**)main_heap->allocate(sizeof(xalloc*) * self->m_allocators_count);
 
         void*     fsa_mem_base  = mem_address;
-        u64 const fsa_mem_range = mem_range / self->m_alloc_count;
+        u64 const fsa_mem_range = mem_range / self->m_allocators_count;
         u32       fsa_size      = allocsize_min << 1;
-        for (u32 i = 0; i < self->m_alloc_count; ++i)
+        for (u32 i = 0; i < self->m_allocators_count; ++i)
         {
             self->m_allocators[i] = create_alloc_fsa_large(main_heap, node_heap, fsa_mem_base, fsa_mem_range, allocsize_align, fsa_size);
             fsa_mem_base          = advance_ptr(fsa_mem_base, fsa_mem_range);
@@ -66,7 +66,7 @@ namespace xcore
 
     void xalloc_segregated::v_release()
     {
-        for (u32 i = 0; i < m_alloc_count; ++i)
+        for (u32 i = 0; i < m_allocators_count; ++i)
         {
             m_allocators[i]->release();
             m_allocators[i] = nullptr;
@@ -89,7 +89,7 @@ namespace xcore
 
     u32 xalloc_segregated::v_deallocate(void* ptr)
     {
-        const u32 index = (u32)(((u64)ptr - (u64)m_mem_base) / (m_mem_range / m_alloc_count));
+        const u32 index = (u32)(((u64)ptr - (u64)m_mem_base) / (m_mem_range / m_allocators_count));
         const u32 size  = m_allocators[index]->deallocate(ptr);
 
         return size;
