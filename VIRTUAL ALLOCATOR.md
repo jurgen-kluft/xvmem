@@ -220,8 +220,12 @@ Coalesce Heap Step-Size = 2 KB
 
 ### Notes 2
 
-PS4 = 994 GB address space
 <http://twvideo01.ubm-us.net/o1/vault/gdc2016/Presentations/MacDougall_Aaron_Building_A_Low.pdf>
+<http://supertech.csail.mit.edu/papers/Kuszmaul15.pdf>
+
+### Notes Address Space
+
+PS4 = 994 GB address space
 
 ### Notes 3
 
@@ -249,7 +253,7 @@ are proxy classes that do some extra work/tracking.
 
 2, 4, 8, 16, 32, 64, 128, 256
 
-{0, 64, 8}
+{0, 64, 8}, 7
 
  8   = 65536 / 8  = (8192 + 31) / 32 = 256, 8, 1
 16   = 65536 / 16 = (4096 + 31) / 32 = 128, 4, 1
@@ -259,7 +263,7 @@ are proxy classes that do some extra work/tracking.
 48   = 65536 / 48 = (1365 + 31) / 32 = 43,  2, 1
 56   = 65536 / 56 = (1170 + 31) / 32 = 37,  2, 1
 
-{64, 512, 16}
+{64, 512, 16}, 19
 
 64   = 65536 / 64  = (1024 + 31) / 32 = 32, 1
 80   = 65536 / 80  = (819  + 31) / 32 = 26, 1
@@ -281,7 +285,7 @@ are proxy classes that do some extra work/tracking.
 480 = 65536 / 480 = 136, 8, 1
 512 = 65536 / 512 = 128, 4, 1
 
-{512, 1024, 64}
+{512, 1024, 64}, 9
 
 512  = 65536 / 512  = 128, 4, 1
 576  = 65536 / 576  = 113, 4, 1
@@ -293,7 +297,7 @@ are proxy classes that do some extra work/tracking.
 960  = 65536 / 960  = 68,  4, 1
 1024 = 65536 / 1024 = 64,  2, 1
 
-{1024, 2048, 128}
+{1024, 2048, 128}, 9
 
 1024 = 2, 1
 1152 = 2, 1
@@ -305,7 +309,7 @@ are proxy classes that do some extra work/tracking.
 1920 = 2, 1
 2048 = 1
 
-{2048, 4096, 256}
+{2048, 4096, 256}, 9
 
 2048 = 1
 2304 = 1
@@ -316,3 +320,15 @@ are proxy classes that do some extra work/tracking.
 3584 = 1
 3840 = 1
 4096 = 1
+
+### Notes 7
+
+GPU Allocator
+
+Actually for GPU (or others) allocations we also would like to easily store associated data like a CPU write pointer, ref count etc..
+So for this it is best if every FSA size gets an address range with an additional address range to store an N byte data block.
+
+e.g FSA Size = 256, |--- FSA element 1 ---|--- FSA element 2 ---|--- FSA element 3 ---|--- FSA element 4 ---|--- FSA element 5 ---| .....
+Data Size    =   8, |-Data 1-|-Data 2-|-Data 3-|-Data 4-|-Data 5-|...
+
+With this setup we can quickly get the associated data belonging to an FSA element.

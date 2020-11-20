@@ -94,7 +94,7 @@ namespace xcore
         xfsa_allocator* fsa = main_heap->construct<xfsa_allocator>();
         fsa->m_main_heap    = main_heap;
 
-        size_range_t size_ranges[] = {
+        size_range_t const size_ranges[] = {
             {0, 64, 8}, {64, 512, 16}, {512, 1024, 64}, {1024, 2048, 128}, {2048, 4096, 256},
         };
         u32 const size_range_count = sizeof(size_ranges) / sizeof(size_range_t);
@@ -112,7 +112,7 @@ namespace xcore
         u32 num_allocators = 0;
         for (u32 c = 0; c < size_range_count; ++c)
         {
-            size_range_t& r = size_ranges[c];
+            size_range_t const& r = size_ranges[c];
             num_allocators += (r.m_size_max - r.m_size_min) / r.m_size_step;
         }
 
@@ -127,7 +127,7 @@ namespace xcore
         u8 allocator_index = 0;
         for (u32 c = 0; c < size_range_count; ++c)
         {
-            size_range_t& range = size_ranges[c];
+            size_range_t const& range = size_ranges[c];
             for (u32 size = range.m_size_min + range.m_size_step; size <= range.m_size_max;)
             {
                 s32 const array_index                      = (size - min_size) / min_step;
@@ -142,25 +142,22 @@ namespace xcore
         ASSERT(allocator_index == num_allocators);
 
         // TODO: Fixup the 'size_to_index' array
-        struct
+        u8 ia = 0xff;
+        s32 ic = (s32)num_sizes - 1;
+        for (; ic >= 0; ic--)
         {
-            s32 c;
-            u8  a;
-        } i = {(s32)num_sizes - 1, 0xff};
-        for (; i.c >= 0; i.c--)
-        {
-            if (fsa->m_fvsa_size_to_index[i.c] == 0xff)
+            if (fsa->m_fvsa_size_to_index[ic] == 0xff)
             {
-                ASSERT(i.a != 0xff);
-                fsa->m_fvsa_size_to_index[i.c] = i.a;
+                ASSERT(ia != 0xff);
+                fsa->m_fvsa_size_to_index[ic] = ia;
             }
             else
             {
-                i.a = fsa->m_fvsa_size_to_index[i.c];
+                ia = fsa->m_fvsa_size_to_index[ic];
             }
         }
 
-        fsa->m_fvsa_mem_range    = (u64)512 * 1024 * 1024;
+        fsa->m_fvsa_mem_range    = mem_range;
         fsa->m_fvsa_mem_base     = nullptr;
         u32       fvsa_page_size = 0;
         u32 const fvsa_mem_attrs = 0;

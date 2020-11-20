@@ -24,14 +24,14 @@ namespace xcore
             m_node32_heap_size     = MB(32);   // Size of node heap for sizeof(node)==32
             m_fsa_mem_range        = MBx(512); // The virtual memory range for the FSA allocator
             m_med_count            = 2;        // For now, 2 direct coalesce allocators
-            m_med_mem_range[0]     = MB(768);  //
+            m_med_mem_range[0]     = MB(1024); //
             m_med_min_size[0]      = KB(4);    // Medium-Size-Allocator; Minimum allocation size
             m_med_step_size[0]     = 256;      // 4 KB % 256 % 64 KB
             m_med_max_size[0]      = KB(64);   // Medium-Size-Allocator; Maximum allocation size
             m_med_addr_node_cnt[0] = 4096;     // Medium-Size-Allocator; Number of address nodes to split the memory range
             m_med_region_size[0]   = MB(1);    // Medium-Size-Allocator; Size of commit/decommit regions
             m_med_region_cached[0] = 50;       // Keep 50 medium size regions cached
-            m_med_mem_range[1]     = MB(512);  // MedLarge-Size-Allocator; The virtual memory range
+            m_med_mem_range[1]     = MB(1024); // MedLarge-Size-Allocator; The virtual memory range
             m_med_min_size[1]      = KB(64);   // MedLarge-Size-Allocator; Minimum allocation size
             m_med_step_size[1]     = KB(2);    // 64 KB % 2 KB % 512 KB
             m_med_max_size[1]      = KB(512);  // MedLarge-Size-Allocator; Maximum allocation size
