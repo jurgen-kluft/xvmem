@@ -332,3 +332,16 @@ e.g FSA Size = 256, |--- FSA element 1 ---|--- FSA element 2 ---|--- FSA element
 Data Size    =   8, |-Data 1-|-Data 2-|-Data 3-|-Data 4-|-Data 5-|...
 
 With this setup we can quickly get the associated data belonging to an FSA element.
+
+### Notes 8
+
+Chunk = 2 MB.
+Arena = 32768 x 2 MB = 64 GB (address range).
+Array = 32768 x 8 B = 256 KB.
+
+struct Chunk
+{
+    u32 m_info;   // index to info block
+    u16 m_next;   // used/free list
+    u16 m_prev;   // ..
+}
