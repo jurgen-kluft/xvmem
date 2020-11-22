@@ -335,13 +335,93 @@ With this setup we can quickly get the associated data belonging to an FSA eleme
 
 ### Notes 8
 
-Chunk = 2 MB.
-Arena = 32768 x 2 MB = 64 GB (address range).
-Array = 32768 x 8 B = 256 KB.
+Chunk  = 2 MB.
+Region = 8192 x 2 MB = 16 GB (address range).
+Array  = 8192 x sizeof(Chunk) = 8192 x 8 B = 64 KB.
+Arena  = Region[32] x 16 GB = 512 GB (address range).
+Array  = 32 x 64 KB = 2 MB.
 
+```c++
 struct Chunk
 {
-    u32 m_info;   // index to info block
+    static const u64 SIZE = 2 * 1024 * 1024;
+
     u16 m_next;   // used/free list
     u16 m_prev;   // ..
-}
+};
+
+// Small Size allocations
+// Can NOT manage GPU memory
+// Book-Keeping per page
+// 8/16/24/32/../../1024/1280/1536
+struct Chunk_Small
+{
+    static const u64 PAGE = 64 * 1024;
+    static const u64 PAGES = Chunk::SIZE / PAGE;
+
+    u16     m_free_list[PAGES];
+    u16     m_free_index[PAGES];
+    u16     m_elem_used[PAGES];
+    u16     m_elem_max[PAGES];
+};
+
+// Medium sized allocations
+// Can manage GPU memory
+// Book-keeping is for chunk
+// At this size an allocation can overlap 2 pages
+// The amount of allocations is less/equal to 1024 (requires a 2-level bitmap)
+// 1792/2048/2560/3072/3584/4096/5120/6144/7168/8192/10240/12288/14336/16384/20480/24576
+struct Chunk_Medium
+{
+    u16     m_max_allocs;
+    u16     m_num_allocs;
+    u32     m_elem_bitmap0;
+    u32     m_elem_bitmap1[32];
+};
+
+// Large sized allocations
+// Book-keeping is for chunk
+// At this size an allocation can overlap 2 pages
+// The amount of allocations is less/equal to 64 (single level bitmap)
+// 28672\32768\36864\40960\49152\57344\65536\81920\98304\114688\131072\163840\196608\229376\262144
+struct Chunk_Large
+{
+    u16     m_max_allocs;
+    u16     m_num_allocs;
+    u64     m_elem_bitmap;
+};
+
+// =======================================================================================
+// Huge size allocations
+// At this size, size alignment is page-size
+// The following size-bins are managed: 512KB/1MB/2MB/4MB/8MB/16MB/32MB
+struct Huge
+{
+    struct Block  // 32 MB
+    {
+        u16 m_next;
+        u16 m_prev;
+        u64 m_elem_bitmap;
+    };
+
+    u32     m_free_list;
+    Block   m_blocks[4096];
+};
+
+struct Region
+{
+    static const u64 CHUNKS = 8192;
+
+    Chunk   m_chunks[CHUNKS];
+    u16     m_free_chunk_list;
+    u16     m_used_chunk_list_per_size[];
+};
+
+struct Arena
+{
+    static const u64 ADDRESS_SPACE = (u64)512 * 1024 * 1024 * 1024;
+    static const u32 REGIONS = ADDRESS_SPACE / (Chunk::SIZE * Region::CHUNKS);
+    u32     m_region_bitmap;
+    Region  m_regions[REGIONS];
+};
+```
