@@ -6,51 +6,102 @@
 #include "xbase/x_integer.h"
 #include "xbase/x_hibitset.h"
 
+#include "xvmem/private/x_doubly_linked_list.h"
 #include "xvmem/x_virtual_memory.h"
 
 namespace xcore
 {
-    struct List
-    {
-        typedef u16 Index;
-        typedef u16 Head;
-
-        struct Node
-        {
-            List::Index m_next; // used/free list
-            List::Index m_prev; // ..
-        };
-    };
-
     // Tiny Size allocations
     // Can NOT manage GPU memory
     // Book-Keeping per page
     // <= 32: 8/16/24/32/../../1024/1280/1536/1792/2048
     struct Tiny
     {
-        static const s32 BIN_MIN       = 1;
+        static const s32 BIN_MIN       = 0;
         static const s32 BIN_MAX       = 28;
         static const u64 ADDRESS_SPACE = (u64)16 * 1024 * 1024 * 1024;
         static const u32 CHUNK_SIZE    = 2 * 1024 * 1024;
         static const u64 CHUNKS        = ADDRESS_SPACE / CHUNK_SIZE; // 8192 (13 bits)
+        static const u32 CHUNKS_CACHE  = 4;
+        static const u32 PAGE_SIZE     = 64 * 1024;
 
         struct Chunk
         {
-            static const u32 PAGE  = 64 * 1024;
-            static const u32 PAGES = CHUNK_SIZE / PAGE;
+            static const u32 PAGES = CHUNK_SIZE / PAGE_SIZE;
             u16              m_elem_free_list[PAGES];
             u16              m_elem_free_index[PAGES];
             u16              m_elem_used[PAGES];
-            u32              m_elem_max;
-            u32              m_free_page_bitmap; // 32 pages
+            u32              m_usable_pages_bitmap; // 32 pages
+            u16              m_elem_max;
+            u16              m_elem_size;
         };
 
-        void*      m_memory_base;
-        Chunk      m_chunks[CHUNKS];
-        List::Node m_chunk_listnodes[CHUNKS];
-        List::Head m_free_chunk_list;
-        List::Head m_used_chunk_list_per_size[28];
+        void*            m_memory_base;
+        Chunk            m_chunks[CHUNKS];
+        xalist_t::node_t m_chunk_listnodes[CHUNKS];
+        xalist_t         m_free_chunk_list;
+        xalist_t         m_free_cached_chunk_list; // Some free chunks are cached
+        xalist_t::index  m_used_chunk_list_per_size[29];
     };
+
+    void Initialize(Tiny::Chunk& chunk)
+    {
+        for (s32 i = 0; i < Tiny::Chunk::PAGES; ++i)
+        {
+            chunk.m_elem_free_list[i]  = xalist_t::NIL;
+            chunk.m_elem_free_index[i] = 0;
+            chunk.m_elem_used[i]       = 0;
+        }
+        chunk.m_elem_max            = 0;
+        chunk.m_elem_size           = 0;
+        chunk.m_usable_pages_bitmap = 0;
+    }
+
+    void Initialize(Tiny& region, xvmem* vmem)
+    {
+        u32 page_size;
+        vmem->reserve(Tiny::ADDRESS_SPACE, page_size, 0, region.m_memory_base);
+        ASSERT(Tiny::PAGE_SIZE == page_size);
+
+        for (s32 i = 0; i < Tiny::CHUNKS; ++i)
+        {
+            Initialize(region.m_chunks[i]);
+        }
+        region.m_free_chunk_list.initialize(&region.m_chunk_listnodes[0], Tiny::CHUNKS, Tiny::CHUNKS);
+        region.m_free_cached_chunk_list = xalist_t(0, Tiny::CHUNKS_CACHE);
+        for (s32 i = Tiny::BIN_MIN; i <= Tiny::BIN_MAX; i++)
+        {
+            region.m_used_chunk_list_per_size[i - Tiny::BIN_MIN] = xalist_t::NIL;
+        }
+    }
+
+    void* Allocate(Tiny& region, u32 size, u32 bin)
+    {
+        ASSERT(bin >= Tiny::BIN_MIN && bin <= Tiny::BIN_MAX);
+
+        // Get the chunk from 'm_used_chunk_list_per_size[bin]'
+        //   If it is NILL then take one from 'm_free_cached_chunk_list'
+        //   If it is NIL then take one from 'm_free_chunk_list'
+        //   Add it to 'm_used_chunk_list_per_size[bin]'
+
+        // From 'usable_pages_bitmap' find the first-bit-set, convert to page index
+        // Pop an element from the page, if page is empty reset bit in 'usable_pages_bitmap'.
+        // If 'usable_pages_bitmap' is '0' set the m_used_chunk_list_per_size[bin] to NIL
+
+        return nullptr;
+    }
+
+    u32 Deallocate(Tiny& region, void* ptr)
+    {
+        // Convert 'ptr' to chunk-index, page-index and elem-index
+        // Convert m_chunks[chunk-index].m_elem_size to bin-index
+        // Copy m_elem_size from chunk to return it from this function
+        // Push element to the page, if page was empty then set bit in 'usable_pages_bitmap'.
+        // If whole chunk is empty push it in the cache list, if the cache list is full
+        //  then decommit the chunk and add it to the free list.
+
+        return 0;
+    }
 
     // Small sized allocations
     // Can manage GPU memory
@@ -78,12 +129,12 @@ namespace xcore
             u32 m_elem_bitmap1[24];
         };
 
-        void*          m_memory_base;
-        List::Node     m_chunk_nodes[CHUNKS];
-        Chunk          m_chunk_stat[CHUNKS];
-        ChunkOccupancy m_chunk_occupancy[CHUNKS];
-        List::Head     m_free_chunk_list;
-        List::Head     m_used_chunk_list_per_size[14];
+        void*            m_memory_base;
+        xalist_t::node_t m_chunk_nodes[CHUNKS];
+        Chunk            m_chunk_stat[CHUNKS];
+        ChunkOccupancy   m_chunk_occupancy[CHUNKS];
+        xalist_t::head   m_free_chunk_list;
+        xalist_t::head   m_used_chunk_list_per_size[14];
     };
 
     // Medium sized allocations
@@ -111,12 +162,12 @@ namespace xcore
             u64 m_elem_bitmap;
         };
 
-        void*          m_memory_base;
-        List::Node     m_chunk_nodes[CHUNKS];
-        Chunk          m_chunk_stat[CHUNKS];
-        ChunkOccupancy m_chunk_occupancy[CHUNKS];
-        List::Head     m_free_chunk_list;
-        List::Head     m_used_chunk_list_per_size[16];
+        void*            m_memory_base;
+        xalist_t::node_t m_chunk_nodes[CHUNKS];
+        Chunk            m_chunk_stat[CHUNKS];
+        ChunkOccupancy   m_chunk_occupancy[CHUNKS];
+        xalist_t::head   m_free_chunk_list;
+        xalist_t::head   m_used_chunk_list_per_size[16];
     };
 
     // =======================================================================================
@@ -131,12 +182,12 @@ namespace xcore
         static const u64 ADDRESS_SPACE = (u64)16 * 1024 * 1024 * 1024;
         static const u64 CHUNKS        = ADDRESS_SPACE / CHUNK_SIZE; // 1024
 
-        void*      m_memory_base;
-        List::Head m_chunk_free_list;               // List of all free chunks
-        List::Head m_chunk_used_list_per_size[8];   // Per-Size list of used chunks
-        List::Node m_chunk_listnodes[CHUNKS];       //  8 KB
-        u32        m_chunk_bitmap[CHUNKS];          //  8 KB
-        u16        m_chunk_alloc_pages[32][CHUNKS]; // 64 KB
+        void*            m_memory_base;
+        xalist_t::head   m_chunk_free_list;               // List of all free chunks
+        xalist_t::head   m_chunk_used_list_per_size[8];   // Per-Size list of used chunks
+        xalist_t::node_t m_chunk_listnodes[CHUNKS];       //  8 KB
+        u32              m_chunk_bitmap[CHUNKS];          //  8 KB
+        u16              m_chunk_alloc_pages[32][CHUNKS]; // 64 KB
     };
 
     // =======================================================================================
@@ -152,12 +203,12 @@ namespace xcore
         static const u64 ADDRESS_SPACE = (u64)256 * 1024 * 1024 * 1024;
         static const u64 CHUNKS        = ADDRESS_SPACE / CHUNK_SIZE; // 1024
 
-        void*      m_memory_base;
-        List::Head m_chunk_free_list;               // List of all free chunks
-        List::Head m_chunk_used_list_per_size[8];   // Per-Size list of used chunks
-        List::Node m_chunk_list[CHUNKS];            //  4 KB
-        u32        m_chunk_bitmap[CHUNKS];          //  4 KB
-        u16        m_chunk_alloc_pages[32][CHUNKS]; // 64 KB
+        void*            m_memory_base;
+        xalist_t::head   m_chunk_free_list;               // List of all free chunks
+        xalist_t::head   m_chunk_used_list_per_size[8];   // Per-Size list of used chunks
+        xalist_t::node_t m_chunk_list[CHUNKS];            //  4 KB
+        u32              m_chunk_bitmap[CHUNKS];          //  4 KB
+        u16              m_chunk_alloc_pages[32][CHUNKS]; // 64 KB
     };
 
     struct Arena

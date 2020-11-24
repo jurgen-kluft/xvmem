@@ -9,6 +9,8 @@ namespace xcore
 {
     struct xalist_t
     {
+        typedef u16      index;
+        typedef u16      head;
         static const u16 NIL;
 
         xalist_t()
@@ -42,13 +44,13 @@ namespace xcore
 
         void initialize(node_t* list, u16 size, u16 max_size);
 
-		inline u32 size() const { return m_size; }
+        inline u32  size() const { return m_size; }
         inline bool is_empty() const { return m_size == 0; }
         inline bool is_full() const { return m_size == m_size_max; }
         inline void reset()
         {
             m_size = 0;
-            m_head  = NIL;
+            m_head = NIL;
         }
         void    insert(node_t* list, u16 item);      // Inserts 'item' at the head
         void    insert_tail(node_t* list, u16 item); // Inserts 'item' at the tail end
