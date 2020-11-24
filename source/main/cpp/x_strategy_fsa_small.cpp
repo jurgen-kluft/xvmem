@@ -19,7 +19,7 @@ namespace xcore
             if (size < m_fvsa_min_size)
                 size = m_fvsa_min_size;
 
-            u32 const size_index  = (size - m_fvsa_max_size) / m_fvsa_step_size;
+            u32 const size_index  = (size - m_fvsa_min_size) / m_fvsa_step_size;
             u32 const alloc_index = m_fvsa_size_to_index[size_index];
             u32 const alloc_size  = m_fvsa_index_to_size[alloc_index];
 
@@ -30,7 +30,7 @@ namespace xcore
         virtual u32 v_deallocate(void* ptr) X_FINAL
         {
             u32 const alloc_size  = sizeof_elem(m_fsa_pages, ptr);
-            u32 const size_index  = (alloc_size - m_fvsa_max_size) / m_fvsa_step_size;
+            u32 const size_index  = (alloc_size - m_fvsa_min_size) / m_fvsa_step_size;
             u32 const alloc_index = m_fvsa_size_to_index[size_index];
 
             xalist_t& page_list = m_fvsa_pages_list[alloc_index];
