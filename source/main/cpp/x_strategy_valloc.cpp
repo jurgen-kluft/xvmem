@@ -26,14 +26,38 @@ namespace xcore
         {
         }
 
-        inline u16* get_l1() const { return (u16*)this + 2; }
-        inline u16* get_l2() const { return (u16*)(this + 2 + m_l1_len); }
+        inline u16* get_l1() const { return (u16*)this + (sizeof(BinMap) / 2); }
+        inline u16* get_l2() const { return (u16*)(this + (sizeof(BinMap) / 2) + m_l1_len); }
 
         void Init();
         void Set(u32 bin);
         void Clr(u32 bin);
         bool Get(u32 bin) const;
         u32  Find() const;
+    };
+
+    // Page(s) Commit/Decommit
+    // There will be different types due to allocation sizes being smaller or being larger than the page-size.
+    // Alloc Size:
+    // <=  256, node_width = u16, granularity = 1
+    //  >  256, node width = u8, granularity = 1
+    //  >= 65536, node width = u8, granularity = AllocSize/65536
+    struct PageManagement
+    {
+        u16   m_page_granularity;
+        u16   m_node_width;
+        u32   m_num_nodes;
+        void* m_nodes; // u8* or u16*
+
+        void Allocate(u32 page_start, u32 pages)
+        {
+            // Increase the user count of that page
+        }
+
+        void Deallocate(u32 page_start, u32 pages)
+        {
+            // Dncrease the user count of that page
+        }
     };
 
     struct Alloc
@@ -102,66 +126,56 @@ namespace xcore
         return 0;
     }
 
-    void BinMap::Init()
+    void ResetArray(u32 count, u32 len, u16* data)
     {
-        u16* const l1 = get_l1();
-        u16* const l2 = get_l2();
-
-        // Set those bits that we never touch to '1' the rest to '0'
-        ASSERT((m_count <= 32) || (m_count <= (m_l2_len * 16)));
-        for (u32 i = 0; i < m_l2_len; i++)
-            l2[i] = 0;
-        for (u32 i = 0; i < m_l1_len; i++)
-            l1[i] = 0;
-        if (m_count > 32)
+        for (u32 i = 0; i < len; i++)
+            data[i] = 0;
+        u32 wi2 = count / 16;
+        u32 wd2 = 0xffff << (count & (16 - 1));
+        for (; wi2 < len; wi2++)
         {
-            {
-                u32 wi2 = m_count / 16;
-                u32 wd2 = 0xffff << (m_count & (16 - 1));
-                for (; wi2 < m_l2_len; wi2++)
-                {
-                    l2[wi2] = wd2;
-                    wd2     = 0xffff;
-                }
-            }
-            {
-                u32 wi1 = m_l2_len / 16;
-                u32 wd1 = 0xffff << (m_l2_len & (16 - 1));
-                for (; wi1 < m_l1_len; wi1++)
-                {
-                    l1[wi1] = wd1;
-                    wd1     = 0xffff;
-                }
-            }
-            m_l0 = 0xffffffff << (m_l1_len & (32 - 1));
-        }
-        else
-        {
-            m_l0 = 0xffffffff << (m_count & (32 - 1));
+            data[wi2] = wd2;
+            wd2       = 0xffff;
         }
     }
+    void BinMap::Init()
+    {
+        // Set those bits that we never touch to '1' the rest to '0'
+        ASSERT((m_count <= 32) || (m_count <= (m_l2_len * 16)));
+        ASSERT((m_count <= 32) || ((m_l1_len * 16) <= m_l2_len));
 
-    void BinMap::Set(u32 bin)
+        u16 l0len = m_count;
+        if (m_count > 32)
+        {
+            u16* const l2 = get_l2();
+            ResetArray(m_count, m_l2_len, l2);
+            u16* const l1 = get_l1();
+            ResetArray(m_l2_len, m_l1_len, l1);
+            l0len = m_l1_len;
+        }
+        m_l0 = 0xffffffff << (l0len & (32 - 1));
+    }
+
+    void BinMap::Set(u32 k)
     {
         if (m_count <= 32)
         {
-            u32 const bi0 = 1 << (bin & (32 - 1));
+            u32 const bi0 = 1 << (k & (32 - 1));
             u32 const wd0 = m_l0 | bi0;
             m_l0          = wd0;
         }
         else
         {
             u16* const l2  = get_l2();
-            u32 const  wi2 = bin / 16;
-            u16 const  bi2 = (u16)1 << (bin & (16 - 1));
+            u32 const  wi2 = k / 16;
+            u16 const  bi2 = (u16)1 << (k & (16 - 1));
             u16 const  wd2 = l2[wi2] | bi2;
             if (wd2 == 0xffff)
             {
-                u16* const l1 = get_l1();
-
-                u32 const wi1 = wi2 / 16;
-                u16 const bi1 = 1 << (wi1 & (16 - 1));
-                u16 const wd1 = l1[wi1] | bi1;
+                u16* const l1  = get_l1();
+                u32 const  wi1 = wi2 / 16;
+                u16 const  bi1 = 1 << (wi1 & (16 - 1));
+                u16 const  wd1 = l1[wi1] | bi1;
                 if (wd1 == 0xffff)
                 {
                     u32 const bi0 = 1 << (wi1 & (32 - 1));
@@ -174,19 +188,19 @@ namespace xcore
         }
     }
 
-    void BinMap::Clr(u32 bin)
+    void BinMap::Clr(u32 k)
     {
         if (m_count <= 32)
         {
-            u32 const bi0 = 1 << (bin & (32 - 1));
+            u32 const bi0 = 1 << (k & (32 - 1));
             u32 const wd0 = m_l0 & ~bi0;
             m_l0          = wd0;
         }
         else
         {
             u16* const l2  = get_l2();
-            u32 const  wi2 = bin / 16;
-            u16 const  bi2 = (u16)1 << (bin & (16 - 1));
+            u32 const  wi2 = k / 16;
+            u16 const  bi2 = (u16)1 << (k & (16 - 1));
             u16 const  wd2 = l2[wi2];
             if (wd2 == 0xffff)
             {
@@ -207,18 +221,18 @@ namespace xcore
         }
     }
 
-    bool BinMap::Get(u32 bin) const
+    bool BinMap::Get(u32 k) const
     {
         if (m_count <= 32)
         {
-            u32 const bi0 = 1 << (bin & (32 - 1));
+            u32 const bi0 = 1 << (k & (32 - 1));
             return (m_l0 & bi0) != 0;
         }
         else
         {
             u16* const l2  = get_l2();
-            u32 const  wi2 = bin / 16;
-            u16 const  bi2 = (u16)1 << (bin & (16 - 1));
+            u32 const  wi2 = k / 16;
+            u16 const  bi2 = (u16)1 << (k & (16 - 1));
             u16 const  wd2 = l2[wi2];
             return (wd2 & bi2) != 0;
         }
@@ -226,14 +240,13 @@ namespace xcore
 
     u32 BinMap::Find() const
     {
+        u32 const bi0 = (u32)xfindFirstBit(~m_l0);
         if (m_count <= 32)
         {
-            u32 const bi0 = (u32)xfindFirstBit(~m_l0);
             return bi0;
         }
         else
         {
-            u32 const  bi0 = (u32)xfindFirstBit(~m_l0);
             u32 const  wi1 = bi0 * 16;
             u16* const l1  = get_l1();
             u32 const  bi1 = (u32)xfindFirstBit((u16)~l1[wi1]);

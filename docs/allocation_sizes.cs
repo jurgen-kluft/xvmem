@@ -44,7 +44,7 @@ namespace SuperAlloc
 			return addressrange;
 		}
 
-		public static BinMap CalcBinMap(UInt64 s)
+		public static BinMap CalcChunkSize(UInt64 s)
 		{
 			UInt64 size = s;
 			UInt64 chunksize;
@@ -54,6 +54,12 @@ namespace SuperAlloc
 			else if (size < 512 * 1024) chunksize = 32 * 1024 * 1024;
 			else if (size < 16 * 1024 * 1024) chunksize = 64 * 1024 * 1024;
 			else chunksize = (UInt64)1 * 1024 * 1024 * 1024;
+			return chunksize;
+		}
+
+		public static BinMap CalcBinMap(UInt64 size)
+		{
+			UInt64 chunksize = CalcChunkSize(size);
 
 			UInt64 l2_len = ((chunksize / size / (UInt64)16) + (UInt64)3) & ~((UInt64)3);
 			if ((chunksize / size / 16) > 16)
