@@ -13,50 +13,110 @@ namespace xcore
 {
     struct BinMap
     {
-        u8  m_l1_len;
-        u8  m_l2_len;
-        u16 m_count;
-        u32 m_l0;
+        struct Config
+        {
+            Config(u8 l1_len, u8 l2_len, u32 count)
+                : m_l1_len(l1_len)
+                , m_l2_len(l2_len)
+                , m_count(count)
+            {
+                ASSERT((m_count <= 32) || (m_count <= (m_l2_len * 16)));
+                ASSERT((m_count <= 32) || ((m_l1_len * 16) <= m_l2_len));
+            }
+
+            u8  const m_l1_len;
+            u8  const m_l2_len;
+            u16 const m_count;
+        };
 
         BinMap(u32 count)
-            : m_l1_len(0)
-            , m_l2_len(0)
-            , m_count(count)
-            , m_l0(0)
+            : m_l0(0)
+            , m_free_index(0)
         {
         }
 
         inline u16* get_l1() const { return (u16*)this + (sizeof(BinMap) / 2); }
-        inline u16* get_l2() const { return (u16*)(this + (sizeof(BinMap) / 2) + m_l1_len); }
+        inline u16* get_l2(Config const& cfg) const { return (u16*)(this + (sizeof(BinMap) / 2) + cfg.m_l1_len); }
 
-        void Init();
-        void Set(u32 bin);
-        void Clr(u32 bin);
-        bool Get(u32 bin) const;
-        u32  Find() const;
+        void Init(Config const& cfg);
+        void Set(Config const& cfg, u32 bin);
+        void Clr(Config const& cfg, u32 bin);
+        bool Get(Config const& cfg, u32 bin) const;
+        u32  Find(Config const& cfg) const;
+ 
+        u32 m_l0;
+        u16 m_free_index;
     };
 
     // Page(s) Commit/Decommit
     // There will be different types due to allocation sizes being smaller or being larger than the page-size.
     // Alloc Size:
-    // <=  256, node_width = u16, granularity = 1
-    //  >  256, node width = u8, granularity = 1
-    //  >= 65536, node width = u8, granularity = AllocSize/65536
+    // <=    256, node_width = u16 (ref), granularity = 1
+    //  >    256, node width =  u8 (ref), granularity = 1
+    //  >=  64KB, node width =  u8 (ref), granularity = AllocSize/65536
+    //  >= 512KB, node width = u16 (cnt), granularity = AllocSize/65536
+
     struct PageManagement
     {
+        enum {
+            COUNT_MASK = 0x0001,
+            COUNT_REFS = 0x0000,
+            COUNT_PAGES = 0x0001,
+            NODE_BITS_MASK = 0x00F0,
+            NODE_BITS_U8 = 0x0010,
+            NODE_BITS_U16 = 0x0020,
+        };
+
         u16   m_page_granularity;
-        u16   m_node_width;
+        u16   m_flags;
         u32   m_num_nodes;
         void* m_nodes; // u8* or u16*
 
-        void Allocate(u32 page_start, u32 pages)
+        void Allocate(u32 pageStart, u16 pages)
         {
-            // Increase the user count of that page
+            if ((m_flags&COUNT_MASK)==COUNT_PAGES)
+            {
+                // Set the page-count on the node
+                u32 nodeIndex = pageStart / m_page_granularity;
+                if ((m_flags & NODE_BITS_MASK) == NODE_BITS_U16)
+                {
+                    u16* nodes = (u16*)m_nodes;
+                    nodes[nodeIndex] = pages;
+                }
+                else
+                {
+                    u8* nodes = (u8*)m_nodes;
+                    ASSERT(pages < 256);
+                    nodes[nodeIndex] = (u8)pages;
+                }
+            }
+            else if ((m_flags&COUNT_MASK)==COUNT_REFS)
+            {
+                // Increase the ref count of that page
+                u32 nodeHeadIndex = pageStart / m_page_granularity;
+                u32 nodeTailIndex = (pageStart + pages) / m_page_granularity;
+                if ((m_flags & NODE_BITS_MASK) == NODE_BITS_U16)
+                {
+                    u16* nodes = (u16*)m_nodes;
+                    nodes[nodeHeadIndex] += 1;
+                    nodes[nodeTailIndex] += 1;
+                }
+                else
+                {
+                    u8* nodes = (u8*)m_nodes;
+                    nodes[nodeHeadIndex] += 1;
+                    nodes[nodeTailIndex] += 1;
+                }
+            }
+            else
+            {
+                ASSERT(false);
+            }
         }
 
         void Deallocate(u32 page_start, u32 pages)
         {
-            // Dncrease the user count of that page
+            // Decrease the ref count of that page
         }
     };
 
@@ -138,27 +198,24 @@ namespace xcore
             wd2       = 0xffff;
         }
     }
-    void BinMap::Init()
+    void BinMap::Init(Config const& cfg)
     {
         // Set those bits that we never touch to '1' the rest to '0'
-        ASSERT((m_count <= 32) || (m_count <= (m_l2_len * 16)));
-        ASSERT((m_count <= 32) || ((m_l1_len * 16) <= m_l2_len));
-
-        u16 l0len = m_count;
-        if (m_count > 32)
+        u16 l0len = cfg.m_count;
+        if (cfg.m_count > 32)
         {
-            u16* const l2 = get_l2();
-            ResetArray(m_count, m_l2_len, l2);
+            u16* const l2 = get_l2(cfg);
+            ResetArray(cfg.m_count, cfg.m_l2_len, l2);
             u16* const l1 = get_l1();
-            ResetArray(m_l2_len, m_l1_len, l1);
-            l0len = m_l1_len;
+            ResetArray(cfg.m_l2_len, cfg.m_l1_len, l1);
+            l0len = cfg.m_l1_len;
         }
         m_l0 = 0xffffffff << (l0len & (32 - 1));
     }
 
-    void BinMap::Set(u32 k)
+    void BinMap::Set(Config const& cfg, u32 k)
     {
-        if (m_count <= 32)
+        if (cfg.m_count <= 32)
         {
             u32 const bi0 = 1 << (k & (32 - 1));
             u32 const wd0 = m_l0 | bi0;
@@ -166,7 +223,7 @@ namespace xcore
         }
         else
         {
-            u16* const l2  = get_l2();
+            u16* const l2  = get_l2(cfg);
             u32 const  wi2 = k / 16;
             u16 const  bi2 = (u16)1 << (k & (16 - 1));
             u16 const  wd2 = l2[wi2] | bi2;
@@ -188,9 +245,9 @@ namespace xcore
         }
     }
 
-    void BinMap::Clr(u32 k)
+    void BinMap::Clr(Config const& cfg, u32 k)
     {
-        if (m_count <= 32)
+        if (cfg.m_count <= 32)
         {
             u32 const bi0 = 1 << (k & (32 - 1));
             u32 const wd0 = m_l0 & ~bi0;
@@ -198,7 +255,7 @@ namespace xcore
         }
         else
         {
-            u16* const l2  = get_l2();
+            u16* const l2  = get_l2(cfg);
             u32 const  wi2 = k / 16;
             u16 const  bi2 = (u16)1 << (k & (16 - 1));
             u16 const  wd2 = l2[wi2];
@@ -221,16 +278,16 @@ namespace xcore
         }
     }
 
-    bool BinMap::Get(u32 k) const
+    bool BinMap::Get(Config const& cfg, u32 k) const
     {
-        if (m_count <= 32)
+        if (cfg.m_count <= 32)
         {
             u32 const bi0 = 1 << (k & (32 - 1));
             return (m_l0 & bi0) != 0;
         }
         else
         {
-            u16* const l2  = get_l2();
+            u16* const l2  = get_l2(cfg);
             u32 const  wi2 = k / 16;
             u16 const  bi2 = (u16)1 << (k & (16 - 1));
             u16 const  wd2 = l2[wi2];
@@ -238,10 +295,10 @@ namespace xcore
         }
     }
 
-    u32 BinMap::Find() const
+    u32 BinMap::Find(Config const& cfg) const
     {
         u32 const bi0 = (u32)xfindFirstBit(~m_l0);
-        if (m_count <= 32)
+        if (cfg.m_count <= 32)
         {
             return bi0;
         }
@@ -251,7 +308,7 @@ namespace xcore
             u16* const l1  = get_l1();
             u32 const  bi1 = (u32)xfindFirstBit((u16)~l1[wi1]);
             u32 const  wi2 = bi1 * 16;
-            u16* const l2  = get_l2();
+            u16* const l2  = get_l2(cfg);
             u32 const  bi2 = (u32)xfindFirstBit((u16)~l2[wi2]);
             return bi2 + wi2 * 16;
         }

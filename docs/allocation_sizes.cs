@@ -32,6 +32,81 @@ namespace SuperAlloc
 			public uint L2Len { get; set; }
 		}
 
+		public class Allocator
+		{
+			public int AllocatorIndex { get; set; } = 0;
+			public List<UInt64> AllocSizes { get; set; } = new List<UInt64>();
+			public UInt64 AddressRange { get; set; } = 0;
+			public UInt64 ChunkSize { get; set; } = 0;
+
+			public int PageTrackingGranularity { get; set; } = 0;
+			public int PageTrackingNodeBits { get; set; } = 0;
+			public string PageTrackingMode { get; set; } = "Ref";
+
+			public UInt64 MemoryFootPrint { get; set; } = 0;
+		}
+
+		public static List<Allocator> ConstructAllocators()
+		{
+			List<Allocator> allocators = new List<Allocator>();
+			Allocator alloc0 = new Allocator();
+			Allocator alloc1 = new Allocator();
+			Allocator alloc2 = new Allocator();
+			Allocator alloc3 = new Allocator();
+			Allocator alloc4 = new Allocator();
+			Allocator alloc5 = new Allocator();
+			allocators.Add(alloc0);
+			allocators.Add(alloc1);
+			allocators.Add(alloc2);
+			allocators.Add(alloc3);
+			allocators.Add(alloc4);
+			allocators.Add(alloc5);
+
+			foreach (UInt64 size in Sizes)
+			{
+				if (size <= 256)
+				{
+					alloc0.AddressRange = 256 * 1024 * 1024;
+					alloc0.ChunkSize = 64 * 1024;
+					alloc0.AllocSizes.Add(size);
+					alloc0.PageTrackingGranularity = 1;
+				}
+				else if (size <= 2048)
+				{
+					alloc1.AddressRange = 256 * 1024 * 1024;
+					alloc1.ChunkSize = 512 * 1024;
+					alloc1.AllocSizes.Add(size);
+					alloc0.PageTrackingGranularity = 1;
+				}
+				else if (size <= 24576)
+				{
+					alloc2.AddressRange = 1 * 1024 * 1024 * 1024;
+					alloc2.ChunkSize = 4 * 1024 * 1024;
+					alloc2.AllocSizes.Add(size);
+					alloc0.PageTrackingGranularity = 1;
+				}
+				else if (size < 512 * 1024)
+				{
+					alloc3.AddressRange = (UInt64)8 * 1024 * 1024 * 1024;
+					alloc3.ChunkSize = 32 * 1024 * 1024;
+					alloc3.AllocSizes.Add(size);
+				}
+				else if (size < 16 * 1024 * 1024)
+				{
+					alloc4.AddressRange = (UInt64)16 * 1024 * 1024 * 1024;
+					alloc4.ChunkSize = 64 * 1024 * 1024;
+					alloc4.AllocSizes.Add(size);
+				}
+				else 
+				{
+					alloc5.AddressRange = (UInt64)16 * 1024 * 1024 * 1024;
+					alloc5.ChunkSize = (UInt64)1 * 1024 * 1024 * 1024;
+					alloc5.AllocSizes.Add(size);
+				}
+			}
+			return allocators;
+		}
+
 		public static UInt64 CalcAddressRange(UInt64 size)
 		{
 			UInt64 addressrange;
@@ -44,7 +119,7 @@ namespace SuperAlloc
 			return addressrange;
 		}
 
-		public static BinMap CalcChunkSize(UInt64 s)
+		public static UInt64 CalcChunkSize(UInt64 s)
 		{
 			UInt64 size = s;
 			UInt64 chunksize;
@@ -57,9 +132,40 @@ namespace SuperAlloc
 			return chunksize;
 		}
 
-		public static BinMap CalcBinMap(UInt64 size)
+		public static int CalcPageTrackingGranularity(UInt64 s)
 		{
-			UInt64 chunksize = CalcChunkSize(size);
+			if (s < (2*65536)) return 1;
+			else return (int)(s / 65536);
+		}
+
+		public static int CalcPageTrackingNodeBits(UInt64 s)
+		{
+			if (s <= 256) return 16;
+			else if (s < 65536) return 8;
+			else if (s < (512*1024)) return 8;
+			return 16;
+		}
+
+		public static string CalcPageTrackingMode(UInt64 s)
+		{
+			if (s <= 256) return "Ref";
+			else if (s < 65536) return "Ref";
+			else if (s < (512 * 1024)) return "Ref";
+			return "Count";
+		}
+
+		public static UInt64 CalcMemoryFootPrint()
+		{
+			// Need: how many allocations of each size
+
+
+			return 0;
+		}
+
+		public static BinMap CalcBinMap(UInt64 s)
+		{
+			UInt64 size = s;
+			UInt64 chunksize = CalcChunkSize(s);
 
 			UInt64 l2_len = ((chunksize / size / (UInt64)16) + (UInt64)3) & ~((UInt64)3);
 			if ((chunksize / size / 16) > 16)
@@ -112,7 +218,7 @@ namespace SuperAlloc
 					pages = 1;
 				}
 
-				Console.WriteLine("{0}: Size:{1}, Pages:{2}, ChunkSize:{3}, Count:{4}, u32:u16[{5}]:u16[{6}], BinMapSize:{7}", AllocSizeToBin(size), size, pages, bm.ChunkSize.ToByteSize(), c, bm.L1Len, bm.L2Len, 4 + 2 * (bm.L1Len + bm.L2Len));
+				Console.WriteLine("{0}: Alloc(Size:{1}, Count:{4}), Pages:{2}, Chunk:{3}, BinMapSize(4,{5},{6}):{7}, Tracking(M:{8},P:{9},W:{10})", AllocSizeToBin(size), size, pages, bm.ChunkSize.ToByteSize(), c, bm.L1Len, bm.L2Len, 4 + 2 * (bm.L1Len + bm.L2Len), CalcPageTrackingMode(size), CalcPageTrackingGranularity(size), CalcPageTrackingNodeBits(size));
 			}
 		}
 
@@ -235,6 +341,8 @@ namespace SuperAlloc
 		}
 
 		static UInt64[] Sizes = new UInt64[] {
+
+			// The page-tracking needs to track the ref-count of a page
 			8,16,24,32,40,48,56,64,
 			80,96,112,128,
 			160,192,224,256,
@@ -258,40 +366,47 @@ namespace SuperAlloc
 			40960,
 			49152,
 			57344,
-			65536,
 
-			(UInt64)( 80*1024),
-			(UInt64)( 96*1024),
-			(UInt64)(112*1024),
-			(UInt64)(128*1024),
-			(UInt64)(160*1024),
-			(UInt64)(192*1024),
-			(UInt64)(224*1024),
-			(UInt64)(256*1024),
-			(UInt64)(320*1024),
-			(UInt64)(384*1024),
-			(UInt64)(448*1024),
+			// From this allocation size onward, on one page you can only have a head and tail (ref-count == 2)
+			// So 4-bits should be enough, but probably not worth the extra code.
+			(UInt64)((64 + 0*16)*1024),
+			(UInt64)((64 + 1*16)*1024),			// The page-tracking (still) needs to track the ref-count of a page
+			(UInt64)((64 + 2*16)*1024),
+			(UInt64)((64 + 3*16)*1024),
 
-			(UInt64)(512 + 0*128)*1024,
-			(UInt64)(512 + 1*128)*1024,
-			(UInt64)(512 + 2*128)*1024,
-			(UInt64)(512 + 3*128)*1024,
-			(UInt64)(1*1024 +    0*256)*1024,
-			(UInt64)(1*1024 +    1*256)*1024,
-			(UInt64)(1*1024 +    2*256)*1024,
-			(UInt64)(1*1024 +    3*256)*1024,
-			(UInt64)(2*1024 +    0*512)*1024,
-			(UInt64)(2*1024 +    1*512)*1024,
-			(UInt64)(2*1024 +    2*512)*1024,
-			(UInt64)(2*1024 +    3*512)*1024,
-			(UInt64)(4*1024 + 0*1*1024)*1024,
-			(UInt64)(4*1024 + 1*1*1024)*1024,
-			(UInt64)(4*1024 + 2*1*1024)*1024,
-			(UInt64)(4*1024 + 3*1*1024)*1024,
-			(UInt64)(8*1024 + 0*2*1024)*1024,
-			(UInt64)(8*1024 + 1*2*1024)*1024,
-			(UInt64)(8*1024 + 2*2*1024)*1024,
-			(UInt64)(8*1024 + 3*2*1024)*1024,
+			(UInt64)((128+0*32)*1024),
+			(UInt64)((128+1*32)*1024),
+			(UInt64)((128+2*32)*1024),
+			(UInt64)((128+3*32)*1024),
+
+			// From here we are page-aligned
+			(UInt64)((256 + 0*64)*1024),
+			(UInt64)((256 + 1*64)*1024),
+			(UInt64)((256 + 2*64)*1024),
+			(UInt64)((256 + 3*64)*1024),
+
+			// From here the page-tracking needs to store the actual pages committed (and not the ref-count)
+			// However the granularity for tracking is different
+			(UInt64)(     512 +     0*128)*1024,
+			(UInt64)(     512 +     1*128)*1024,
+			(UInt64)(     512 +     2*128)*1024,
+			(UInt64)(     512 +     3*128)*1024,
+			(UInt64)(  1*1024 +     0*256)*1024,
+			(UInt64)(  1*1024 +     1*256)*1024,
+			(UInt64)(  1*1024 +     2*256)*1024,
+			(UInt64)(  1*1024 +     3*256)*1024,
+			(UInt64)(  2*1024 +     0*512)*1024,
+			(UInt64)(  2*1024 +     1*512)*1024,
+			(UInt64)(  2*1024 +     2*512)*1024,
+			(UInt64)(  2*1024 +     3*512)*1024,
+			(UInt64)(  4*1024 +  0*1*1024)*1024,
+			(UInt64)(  4*1024 +  1*1*1024)*1024,
+			(UInt64)(  4*1024 +  2*1*1024)*1024,
+			(UInt64)(  4*1024 +  3*1*1024)*1024,
+			(UInt64)(  8*1024 +  0*2*1024)*1024,
+			(UInt64)(  8*1024 +  1*2*1024)*1024,
+			(UInt64)(  8*1024 +  2*2*1024)*1024,
+			(UInt64)(  8*1024 +  3*2*1024)*1024,
 			(UInt64)( 16*1024 +  0*4*1024)*1024,
 			(UInt64)( 16*1024 +  1*4*1024)*1024,
 			(UInt64)( 16*1024 +  2*4*1024)*1024,
