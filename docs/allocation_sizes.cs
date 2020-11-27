@@ -15,7 +15,7 @@ namespace SuperAlloc
 			return i - 1;
 		}
 
-		public static UInt64 AllocSize(UInt64 size)
+		public static UInt64 AlignAllocSize(UInt64 size)
 		{
 			size = AlignTo8(size);
 			UInt64 f = FloorPo2(size);
@@ -24,87 +24,11 @@ namespace SuperAlloc
 			return size;
 		}
 
-		public struct BinMap
+		public struct BinMapConfig
 		{
-			public UInt64 ChunkSize { get; set; }
 			public uint Count { get; set; }
 			public uint L1Len { get; set; }
 			public uint L2Len { get; set; }
-		}
-
-		public class Allocator
-		{
-			public int AllocatorIndex { get; set; } = 0;
-			public List<UInt64> AllocSizes { get; set; } = new List<UInt64>();
-			public UInt64 AddressRange { get; set; } = 0;
-			public UInt64 ChunkSize { get; set; } = 0;
-
-			public int PageTrackingGranularity { get; set; } = 0;
-			public int PageTrackingNodeBits { get; set; } = 0;
-			public string PageTrackingMode { get; set; } = "Ref";
-
-			public UInt64 MemoryFootPrint { get; set; } = 0;
-		}
-
-		public static List<Allocator> ConstructAllocators()
-		{
-			List<Allocator> allocators = new List<Allocator>();
-			Allocator alloc0 = new Allocator();
-			Allocator alloc1 = new Allocator();
-			Allocator alloc2 = new Allocator();
-			Allocator alloc3 = new Allocator();
-			Allocator alloc4 = new Allocator();
-			Allocator alloc5 = new Allocator();
-			allocators.Add(alloc0);
-			allocators.Add(alloc1);
-			allocators.Add(alloc2);
-			allocators.Add(alloc3);
-			allocators.Add(alloc4);
-			allocators.Add(alloc5);
-
-			foreach (UInt64 size in Sizes)
-			{
-				if (size <= 256)
-				{
-					alloc0.AddressRange = 256 * 1024 * 1024;
-					alloc0.ChunkSize = 64 * 1024;
-					alloc0.AllocSizes.Add(size);
-					alloc0.PageTrackingGranularity = 1;
-				}
-				else if (size <= 2048)
-				{
-					alloc1.AddressRange = 256 * 1024 * 1024;
-					alloc1.ChunkSize = 512 * 1024;
-					alloc1.AllocSizes.Add(size);
-					alloc0.PageTrackingGranularity = 1;
-				}
-				else if (size <= 24576)
-				{
-					alloc2.AddressRange = 1 * 1024 * 1024 * 1024;
-					alloc2.ChunkSize = 4 * 1024 * 1024;
-					alloc2.AllocSizes.Add(size);
-					alloc0.PageTrackingGranularity = 1;
-				}
-				else if (size < 512 * 1024)
-				{
-					alloc3.AddressRange = (UInt64)8 * 1024 * 1024 * 1024;
-					alloc3.ChunkSize = 32 * 1024 * 1024;
-					alloc3.AllocSizes.Add(size);
-				}
-				else if (size < 16 * 1024 * 1024)
-				{
-					alloc4.AddressRange = (UInt64)16 * 1024 * 1024 * 1024;
-					alloc4.ChunkSize = 64 * 1024 * 1024;
-					alloc4.AllocSizes.Add(size);
-				}
-				else 
-				{
-					alloc5.AddressRange = (UInt64)16 * 1024 * 1024 * 1024;
-					alloc5.ChunkSize = (UInt64)1 * 1024 * 1024 * 1024;
-					alloc5.AllocSizes.Add(size);
-				}
-			}
-			return allocators;
 		}
 
 		public static UInt64 CalcAddressRange(UInt64 size)
@@ -134,7 +58,7 @@ namespace SuperAlloc
 
 		public static int CalcPageTrackingGranularity(UInt64 s)
 		{
-			if (s < (2*65536)) return 1;
+			if (s < (2 * 65536)) return 1;
 			else return (int)(s / 65536);
 		}
 
@@ -142,7 +66,7 @@ namespace SuperAlloc
 		{
 			if (s <= 256) return 16;
 			else if (s < 65536) return 8;
-			else if (s < (512*1024)) return 8;
+			else if (s < (512 * 1024)) return 8;
 			return 16;
 		}
 
@@ -162,7 +86,7 @@ namespace SuperAlloc
 			return 0;
 		}
 
-		public static BinMap CalcBinMap(UInt64 s)
+		public static BinMapConfig CalcBinMap(UInt64 s)
 		{
 			UInt64 size = s;
 			UInt64 chunksize = CalcChunkSize(s);
@@ -179,8 +103,7 @@ namespace SuperAlloc
 			UInt64 l1_len = (l2_len + 15) / (UInt64)16;
 			if (l1_len < 2) l1_len = 2;
 
-			BinMap bm = new BinMap();
-			bm.ChunkSize = (UInt64)chunksize;
+			BinMapConfig bm = new BinMapConfig();
 			bm.Count = (uint)(chunksize / size);
 			if (bm.Count <= 32)
 			{
@@ -198,29 +121,187 @@ namespace SuperAlloc
 		public static void Main()
 		{
 			UInt64 page = 64 * 1024;
-			foreach (UInt64 size in Sizes)
+			foreach (AllocSize size in Sizes)
 			{
-				BinMap bm = CalcBinMap(size);
-				UInt64 c = (bm.ChunkSize / size);
+				BinMapConfig bm = CalcBinMap(size.Size);
+				UInt64 chunkSize = CalcChunkSize(size.Size);
+				UInt64 c = (chunkSize / size.Size);
 				UInt64 pages;
-				if (bm.ChunkSize > 65536)
+				if (chunkSize > 65536)
 				{
 					do
 					{
-						if (((c * size) & (page - 1)) == 0)
+						if (((c * size.Size) & (page - 1)) == 0)
 							break;
 						c--;
 					} while (true);
-					pages = (c * size) / page;
+					pages = (c * size.Size) / page;
 				}
 				else
 				{
 					pages = 1;
 				}
 
-				Console.WriteLine("{0}: Alloc(Size:{1}, Count:{4}), Pages:{2}, Chunk:{3}, BinMapSize(4,{5},{6}):{7}, Tracking(M:{8},P:{9},W:{10})", AllocSizeToBin(size), size, pages, bm.ChunkSize.ToByteSize(), c, bm.L1Len, bm.L2Len, 4 + 2 * (bm.L1Len + bm.L2Len), CalcPageTrackingMode(size), CalcPageTrackingGranularity(size), CalcPageTrackingNodeBits(size));
+				Console.WriteLine("{0}: Alloc(Size:{1}, Count:{4}), Pages:{2}, Chunk:{3}, BinMapSize(4,{5},{6}):{7}, Tracking(M:{8},P:{9},W:{10})", AllocSizeToBin(size.Size), size.Size, pages, CalcChunkSize(size.Size).ToByteSize(), c, bm.L1Len, bm.L2Len, 4 + 2 * (bm.L1Len + bm.L2Len), CalcPageTrackingMode(size.Size), CalcPageTrackingGranularity(size.Size), CalcPageTrackingNodeBits(size.Size));
 			}
 		}
+
+		public class PageTracker
+		{
+			public int PageGranularity { get; set; } = 0;
+			public int NodeBits { get; set; } = 0;
+			public string Mode { get; set; } = "Ref";
+		}
+
+		static PageTracker[] PageTrackers = new PageTracker[] {
+			new PageTracker() { PageGranularity=1, NodeBits=16, Mode= "Ref" },
+			new PageTracker { PageGranularity= 1, NodeBits=  8, Mode= "Ref" },
+			new PageTracker { PageGranularity= 1, NodeBits=  8, Mode= "Ref" },
+			new PageTracker { PageGranularity= 1, NodeBits=  8, Mode= "Ref" },
+			new PageTracker { PageGranularity= 1, NodeBits= 16, Mode= "Count" },
+			new PageTracker { PageGranularity= 1, NodeBits= 16, Mode= "Count" },
+		};
+
+		public class Allocator
+		{
+			public int Index { get; set; } = 0;
+			public UInt64 AddressRange { get; set; } = 0;
+			public UInt64 ChunkSize { get; set; } = 0;
+			public int ChunkCount { get; set; } = 0;
+			public List<AllocSize> AllocSizes { get; set; } = new List<AllocSize>();
+			public PageTracker PageTracker { get; set; }
+			public UInt64 MemoryFootPrint { get; set; } = 0;
+		};
+
+		static Allocator[] Allocators = new Allocator[] {
+			new Allocator { Index=0, AddressRange= MB(512), ChunkSize= KB(64) },  // Nodes=8K (u16)
+			new Allocator { Index=1, AddressRange= GB(1), ChunkSize= KB(512) },   // Nodes=16K (u8)
+			new Allocator { Index=2, AddressRange= GB(1), ChunkSize= MB(4) },     // Nodes=16K (u8)
+			new Allocator { Index=3, AddressRange= GB(1), ChunkSize= MB(32) },    // Nodes=16K (u8)
+			new Allocator { Index=4, AddressRange= GB(4), ChunkSize= MB(64) },    // Nodes=8K (u16)
+			new Allocator { Index=5, AddressRange= GB(16), ChunkSize= GB(1) },   // Nodes=1K (u16)
+		};
+
+		public struct AllocSize
+		{
+			public UInt64 Size { get; set; }
+			public Allocator Allocator { get; set; }
+            public PageTracker PageTracker { get; set; }
+		};
+
+		static AllocSize[] Sizes = new AllocSize[] {
+			// The page-tracking needs to track the ref-count of a page
+			new AllocSize { Size=8, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=16, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=24, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=32, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=40, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=48, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=56, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=64, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=80, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=96, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=112, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=128, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=160, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=192, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=224, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+			new AllocSize { Size=256, Allocator= Allocators[0], PageTracker= PageTrackers[0] },
+
+			new AllocSize { Size= 320, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 384, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 448, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 512, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 640, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 768, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 896, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 1024, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 1280, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 1536, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 1792, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+			new AllocSize { Size= 2048, Allocator= Allocators[1], PageTracker= PageTrackers[1] },
+
+			new AllocSize { Size= 2560, Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= 3072, Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= 3584, Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(4), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(5), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(6), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(7), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(8), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(10), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(12), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(14), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(16), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(20), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+			new AllocSize { Size= KB(24), Allocator= Allocators[2], PageTracker= PageTrackers[2] },
+
+			new AllocSize { Size=(UInt64)KB(28), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(32), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(36), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(40), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(48), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(56), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(64), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(80), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(96), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(112), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(128), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(160), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(192), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(224), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+
+			// From here the page-tracking needs to store the actual pages committed (and not the ref-count)
+			// However the granularity for tracking is different
+			new AllocSize { Size=(UInt64)KB(256), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(320), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(384), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+			new AllocSize { Size=(UInt64)KB(448), Allocator= Allocators[3], PageTracker= PageTrackers[3] },
+
+			new AllocSize { Size=(UInt64)KB(512), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(640), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(768), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(896), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(1024), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(1280), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(1536), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(1792), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(2048), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(2560), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(3072), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)KB(3584), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)MB(4), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)MB(5), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)MB(6), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)MB(7), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)MB(8), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)MB(10), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)MB(12), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+			new AllocSize { Size=(UInt64)MB(14), Allocator= Allocators[4], PageTracker= PageTrackers[4] },
+
+			new AllocSize { Size = (UInt64)MB(16), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(20), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(24), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(28), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(32), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(40), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(48), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(56), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(64), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(80), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(96), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(112), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(128), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(160), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(192), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(224), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+			new AllocSize { Size = (UInt64)MB(256), Allocator= Allocators[5], PageTracker= PageTrackers[5] },
+		};
+
+		static UInt64 KB(int mb) { return (UInt64)mb * 1024; }
+		static UInt64 MB(int mb) { return (UInt64)mb * 1024 * 1024; }
+		static UInt64 GB(int mb) { return (UInt64)mb * 1024 * 1024 * 1024; }
+
 
 		public static UInt64 CeilPo2(UInt64 v)
 		{
@@ -339,92 +420,6 @@ namespace SuperAlloc
 		{
 			return (v + (32 - 1)) & ~((UInt64)32 - 1);
 		}
-
-		static UInt64[] Sizes = new UInt64[] {
-
-			// The page-tracking needs to track the ref-count of a page
-			8,16,24,32,40,48,56,64,
-			80,96,112,128,
-			160,192,224,256,
-			320,384,448,512,
-			640,768,896,1024,
-			1280,1536,1792,2048,
-			2560,3072,3584,4096,
-			5120,
-			6144,
-			7168,
-			8192,
-			10240,
-			12288,
-			14336,
-			16384,
-			20480,
-			24576,
-			28672,
-			32768,
-			36864,
-			40960,
-			49152,
-			57344,
-
-			// From this allocation size onward, on one page you can only have a head and tail (ref-count == 2)
-			// So 4-bits should be enough, but probably not worth the extra code.
-			(UInt64)((64 + 0*16)*1024),
-			(UInt64)((64 + 1*16)*1024),			// The page-tracking (still) needs to track the ref-count of a page
-			(UInt64)((64 + 2*16)*1024),
-			(UInt64)((64 + 3*16)*1024),
-
-			(UInt64)((128+0*32)*1024),
-			(UInt64)((128+1*32)*1024),
-			(UInt64)((128+2*32)*1024),
-			(UInt64)((128+3*32)*1024),
-
-			// From here we are page-aligned
-			(UInt64)((256 + 0*64)*1024),
-			(UInt64)((256 + 1*64)*1024),
-			(UInt64)((256 + 2*64)*1024),
-			(UInt64)((256 + 3*64)*1024),
-
-			// From here the page-tracking needs to store the actual pages committed (and not the ref-count)
-			// However the granularity for tracking is different
-			(UInt64)(     512 +     0*128)*1024,
-			(UInt64)(     512 +     1*128)*1024,
-			(UInt64)(     512 +     2*128)*1024,
-			(UInt64)(     512 +     3*128)*1024,
-			(UInt64)(  1*1024 +     0*256)*1024,
-			(UInt64)(  1*1024 +     1*256)*1024,
-			(UInt64)(  1*1024 +     2*256)*1024,
-			(UInt64)(  1*1024 +     3*256)*1024,
-			(UInt64)(  2*1024 +     0*512)*1024,
-			(UInt64)(  2*1024 +     1*512)*1024,
-			(UInt64)(  2*1024 +     2*512)*1024,
-			(UInt64)(  2*1024 +     3*512)*1024,
-			(UInt64)(  4*1024 +  0*1*1024)*1024,
-			(UInt64)(  4*1024 +  1*1*1024)*1024,
-			(UInt64)(  4*1024 +  2*1*1024)*1024,
-			(UInt64)(  4*1024 +  3*1*1024)*1024,
-			(UInt64)(  8*1024 +  0*2*1024)*1024,
-			(UInt64)(  8*1024 +  1*2*1024)*1024,
-			(UInt64)(  8*1024 +  2*2*1024)*1024,
-			(UInt64)(  8*1024 +  3*2*1024)*1024,
-			(UInt64)( 16*1024 +  0*4*1024)*1024,
-			(UInt64)( 16*1024 +  1*4*1024)*1024,
-			(UInt64)( 16*1024 +  2*4*1024)*1024,
-			(UInt64)( 16*1024 +  3*4*1024)*1024,
-			(UInt64)( 32*1024 +  0*8*1024)*1024,
-			(UInt64)( 32*1024 +  1*8*1024)*1024,
-			(UInt64)( 32*1024 +  2*8*1024)*1024,
-			(UInt64)( 32*1024 +  3*8*1024)*1024,
-			(UInt64)( 64*1024 + 0*16*1024)*1024,
-			(UInt64)( 64*1024 + 1*16*1024)*1024,
-			(UInt64)( 64*1024 + 2*16*1024)*1024,
-			(UInt64)( 64*1024 + 3*16*1024)*1024,
-			(UInt64)(128*1024 + 0*32*1024)*1024,
-			(UInt64)(128*1024 + 1*32*1024)*1024,
-			(UInt64)(128*1024 + 2*32*1024)*1024,
-			(UInt64)(128*1024 + 3*32*1024)*1024,
-			(UInt64)(256*1024 + 0*64*1024)*1024,
-		};
 	}
 
 	public static class IntExtensions
