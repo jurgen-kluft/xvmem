@@ -186,7 +186,7 @@ namespace SuperAlloc
 		{
 			public UInt64 Size { get; set; }
 			public Allocator Allocator { get; set; }
-            public PageTracker PageTracker { get; set; }
+			public PageTracker PageTracker { get; set; }
 		};
 
 		static AllocSize[] Sizes = new AllocSize[] {
