@@ -153,6 +153,15 @@ namespace SuperAlloc
 			public string Mode { get; set; } = "Ref";
 		}
 
+		/// Page Granularity = 1
+		/// Deallocate(void* ptr)
+		///   We find the page is now empty
+		///   Inform the page-tracker of the free-page
+		///
+		/// Allocate()
+		///   Request a free-page from the page-tracker
+		///   
+
 		static PageTracker[] PageTrackers = new PageTracker[] {
 			new PageTracker() { PageGranularity=1, NodeBits=16, Mode= "Ref" },
 			new PageTracker { PageGranularity= 1, NodeBits=  8, Mode= "Ref" },
