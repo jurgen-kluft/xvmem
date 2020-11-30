@@ -11,6 +11,33 @@
 
 namespace xcore
 {
+
+    // Intrusive management of items
+    // Minimum item-size is 8 bytes
+    // There are many of these for the following sizes:
+    // 4, 8, 16, 32, 64, 128, 256, 512, 1024
+    struct VirtualArray
+    {
+        u32   m_item_size;
+        u32   m_item_count;
+        u32   m_page_size;
+        u32   m_page_count_current;
+        u16   m_page_count_maximum;
+        u16   m_page_item_max;
+        void* m_address;
+        u16*  m_page_item_count;
+        u32*  m_page_item_freelist;
+    };
+
+    // Can only allocate, used internally to allocate initially required memory
+    struct HeapAllocator
+    {
+        void* m_address;
+        u32   m_page_count_current;
+        u32   m_page_count_maximum;
+        u64   m_page_current;
+    };
+
     struct BinMap
     {
         struct Config
@@ -24,8 +51,8 @@ namespace xcore
                 ASSERT((m_count <= 32) || ((m_l1_len * 16) <= m_l2_len));
             }
 
-            u8  const m_l1_len;
-            u8  const m_l2_len;
+            u8 const  m_l1_len;
+            u8 const  m_l2_len;
             u16 const m_count;
         };
 
@@ -43,9 +70,24 @@ namespace xcore
         void Clr(Config const& cfg, u32 bin);
         bool Get(Config const& cfg, u32 bin) const;
         u32  Find(Config const& cfg) const;
- 
+
         u32 m_l0;
-        u16 m_free_index;
+        u32 m_free_index;
+        u32 m_l1_offset;
+        u32 m_l2_offset;
+    };
+
+    struct AllocSizeBin
+    {
+        u32 m_alloc_size;
+        u32 m_alloc_bin : 8;
+        u32 m_allocator_index : 8;
+        u32 m_use_binmaps : 1;
+        u32 m_use_allocmaps : 1;
+    };
+
+    static const AllocSizeBin AllocSizeBins[] = {
+
     };
 
     // Page(s) Commit/Decommit
@@ -58,13 +100,14 @@ namespace xcore
 
     struct PageManagement
     {
-        enum {
-            COUNT_MASK = 0x0001,
-            COUNT_REFS = 0x0000,
-            COUNT_PAGES = 0x0001,
+        enum
+        {
+            COUNT_MASK     = 0x0001,
+            COUNT_REFS     = 0x0000,
+            COUNT_PAGES    = 0x0001,
             NODE_BITS_MASK = 0x00F0,
-            NODE_BITS_U8 = 0x0010,
-            NODE_BITS_U16 = 0x0020,
+            NODE_BITS_U8   = 0x0010,
+            NODE_BITS_U16  = 0x0020,
         };
 
         u16   m_page_granularity;
@@ -74,13 +117,13 @@ namespace xcore
 
         void Allocate(u32 pageStart, u16 pages)
         {
-            if ((m_flags&COUNT_MASK)==COUNT_PAGES)
+            if ((m_flags & COUNT_MASK) == COUNT_PAGES)
             {
                 // Set the page-count on the node
                 u32 nodeIndex = pageStart / m_page_granularity;
                 if ((m_flags & NODE_BITS_MASK) == NODE_BITS_U16)
                 {
-                    u16* nodes = (u16*)m_nodes;
+                    u16* nodes       = (u16*)m_nodes;
                     nodes[nodeIndex] = pages;
                 }
                 else
@@ -90,7 +133,7 @@ namespace xcore
                     nodes[nodeIndex] = (u8)pages;
                 }
             }
-            else if ((m_flags&COUNT_MASK)==COUNT_REFS)
+            else if ((m_flags & COUNT_MASK) == COUNT_REFS)
             {
                 // Increase the ref count of that page
                 u32 nodeHeadIndex = pageStart / m_page_granularity;
@@ -128,15 +171,37 @@ namespace xcore
             u16 m_elem_size;
         };
 
+        Alloc(void* memory_base, u64 memory_range, u64 chunksize);
+
         void*             m_memory_base;
         u64               m_memory_range;
         u64               m_chunk_size;
-        u32               m_chunks_cnt;
-        Chunk*            m_chunks;
-        BinMap**          m_binmaps;
-        xalist_t::node_t* m_chunk_listnodes;
+        u32               m_chunk_cnt;
+        Chunk*            m_chunk_array;
+        u32*              m_binmaps;
+        u32*              m_allocmaps;
+        xalist_t::node_t* m_chunk_list;
         xalist_t          m_free_chunk_list;
-        xalist_t::index   m_used_chunk_list_per_size[32];
+        xalist_t          m_cache_chunk_list;
+        xalist_t::head    m_used_chunk_list_per_size[32];
+    };
+
+    static Alloc global_allocators[] = {
+        Alloc(nullptr, 0, 0), //
+        Alloc(nullptr, 0, 0), //
+        Alloc(nullptr, 0, 0), //
+        Alloc(nullptr, 0, 0), //
+        Alloc(nullptr, 0, 0), //
+        Alloc(nullptr, 0, 0), //
+        Alloc(nullptr, 0, 0), //
+        Alloc(nullptr, 0, 0), //
+        Alloc(nullptr, 0, 0)  //
+    };
+
+    class SuperAlloc
+    {
+    public:
+        Alloc m_allocators[];
     };
 
     void Initialize(Alloc::Chunk& c)
@@ -150,12 +215,12 @@ namespace xcore
         u32 page_size;
         vmem->reserve(a.m_memory_range, page_size, 0, a.m_memory_base);
 
-        for (s32 i = 0; i < a.m_chunks_cnt; ++i)
+        for (s32 i = 0; i < a.m_chunk_cnt; ++i)
         {
-            Initialize(a.m_chunks[i]);
-            a.m_binmaps[i] = nullptr;
+            Initialize(a.m_chunk_array[i]);
+            a.m_binmaps[i] = 0xffffffff;
         }
-        a.m_free_chunk_list.initialize(&a.m_chunk_listnodes[0], a.m_chunks_cnt, a.m_chunks_cnt);
+        a.m_free_chunk_list.initialize(&a.m_chunk_list[0], a.m_chunk_cnt, a.m_chunk_cnt);
         for (s32 i = 0; i < 32; i++)
         {
             a.m_used_chunk_list_per_size[i] = xalist_t::NIL;
@@ -164,24 +229,26 @@ namespace xcore
 
     void* Allocate(Alloc& region, u32 size, u32 bin)
     {
-        // Get the page from 'm_used_chunk_list_per_size[bin]'
+        // Get the chunk from 'm_used_chunk_list_per_size[bin]'
         //   If it is NIL then take one from 'm_free_chunk_list_cache'
         //   If it is NIL then take one from 'm_free_chunk_list'
+        //   Initialize Chunk using ChunkInfo related to bin
+        //   If according to ChunkInfo we need a BinMap, allocate it and set offset
         //   Add it to 'm_used_chunk_list_per_size[bin]'
 
-        // Pop an element from the page, if page is empty set 'm_used_chunk_list_per_size[bin]' to NIL
+        // Remove an element from the chunk, if chunk is empty set 'm_used_chunk_list_per_size[bin]' to NIL
 
         return nullptr;
     }
 
     u32 Deallocate(Alloc& region, void* ptr)
     {
-        // Convert 'ptr' to page-index and elem-index
-        // Convert m_chunks[page-index].m_elem_size to bin-index
+        // Convert 'ptr' to chunk-index and elem-index
+        // Convert m_chunks[chunk-index].m_elem_size to bin-index
         // Copy m_elem_size from chunk to return it from this function
-        // Push the now free element to the page, if page was full then add it to 'm_used_chunk_list_per_size[bin]'
-        // If page is now totally empty add it to the 'm_free_chunk_list_cache'
-        //  If 'm_free_chunk_list_cache' is full then decommit the page add it to the 'm_free_chunk_list'
+        // Push the now free element to the chunk, if chunk was full then add it to 'm_used_chunk_list_per_size[bin]'
+        // If chunk is now totally empty add it to the 'm_free_chunk_list_cache'
+        //  If 'm_free_chunk_list_cache' is full then decommit the chunk add it to the 'm_free_chunk_list'
 
         return 0;
     }

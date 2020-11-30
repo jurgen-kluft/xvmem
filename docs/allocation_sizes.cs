@@ -246,19 +246,19 @@ namespace SuperAlloc
         };
 
         static Allocator[] Allocators = new Allocator[] {
-            new Allocator { Index=0, Min=8, Max=256, AddressRange= MB(128), ChunkSize= KB(64) },  // Nodes=8K (u16)
-			new Allocator { Index=1, Min=0, Max=2048, AddressRange= GB(1), ChunkSize= KB(512) },   // Nodes=16K (u8)
-			new Allocator { Index=2, Min=0, Max=KB(64), AddressRange= GB(1), ChunkSize= MB(1) },     // Nodes=16K (u8)
-			new Allocator { Index=3, Min=0, Max=KB(512), AddressRange= GB(1), ChunkSize= MB(4) },    // Nodes=16K (u8)
-			new Allocator { Index=4, Min=0, Max=KB(1024), AddressRange= GB(1), ChunkSize= MB(1) },    // Nodes=8K (u16)
-			new Allocator { Index=5, Min=0, Max=KB(2048), AddressRange= GB(1), ChunkSize= MB(2) },   // Nodes=1K (u16)
-			new Allocator { Index=6, Min=0, Max=MB(4), AddressRange= GB(1), ChunkSize= MB(4) },   // Nodes=1K (u16)
-			new Allocator { Index=7, Min=0, Max=MB(8), AddressRange= GB(1), ChunkSize= MB(8) },   // Nodes=1K (u16)
-			new Allocator { Index=8, Min=0, Max=MB(16), AddressRange= GB(1), ChunkSize= MB(16) },   // Nodes=1K (u16)
-			new Allocator { Index=9, Min=0, Max=MB(32), AddressRange= GB(1), ChunkSize= MB(32) },   // Nodes=1K (u16)
-			new Allocator { Index=10, Min=0, Max=MB(64), AddressRange= GB(1), ChunkSize= MB(64) },   // Nodes=1K (u16)
-			new Allocator { Index=11, Min=0, Max=MB(128), AddressRange= GB(1), ChunkSize= MB(128) },   // Nodes=1K (u16)
-			new Allocator { Index=12, Min=0, Max=MB(256), AddressRange= GB(1), ChunkSize= MB(256) },   // Nodes=1K (u16)
+            new Allocator { Index=0, Min=8, Max=256, AddressRange= MB(128), ChunkSize= KB(64) },
+			new Allocator { Index=1, Min=0, Max=2048, AddressRange= GB(1), ChunkSize= KB(512) },
+			new Allocator { Index=2, Min=0, Max=KB(64), AddressRange= GB(1), ChunkSize= MB(1) },
+			new Allocator { Index=3, Min=0, Max=KB(512), AddressRange= GB(1), ChunkSize= MB(4) },
+			new Allocator { Index=4, Min=0, Max=KB(1024), AddressRange= GB(1), ChunkSize= MB(1) },
+			new Allocator { Index=5, Min=0, Max=KB(2048), AddressRange= GB(1), ChunkSize= MB(2) },
+			new Allocator { Index=6, Min=0, Max=MB(4), AddressRange= GB(1), ChunkSize= MB(4) },
+			new Allocator { Index=7, Min=0, Max=MB(8), AddressRange= GB(1), ChunkSize= MB(8) },
+			new Allocator { Index=8, Min=0, Max=MB(16), AddressRange= GB(1), ChunkSize= MB(16) },
+			new Allocator { Index=9, Min=0, Max=MB(32), AddressRange= GB(1), ChunkSize= MB(32) },
+			new Allocator { Index=10, Min=0, Max=MB(64), AddressRange= GB(1), ChunkSize= MB(64) },
+			new Allocator { Index=11, Min=0, Max=MB(128), AddressRange= GB(2), ChunkSize= MB(128) },
+			new Allocator { Index=12, Min=0, Max=MB(256), AddressRange= GB(4), ChunkSize= MB(256) },
 		};
 
 
