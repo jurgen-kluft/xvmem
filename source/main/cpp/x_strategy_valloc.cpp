@@ -65,7 +65,7 @@ namespace xcore
     class superfsa
     {
     public:
-        void  initialize(superheap* heap, u64 address_range, u32 num_pages_to_cache);
+        void  initialize(superheap* heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache);
 
         u32   alloc(u32 size);
         void  dealloc(u32 index);
@@ -78,19 +78,121 @@ namespace xcore
         {
             u16             m_item_size;
             u16             m_item_index;
-            u16             m_item_available;
+            u16             m_item_count;
+            u16             m_item_max;
+            u16             m_dummy;
             xalist_t::head  m_item_freelist;
+
+            void initialize(u32 size, u32 pagesize)
+            {
+                m_item_size = size;
+                m_item_index = 0;
+                m_item_count = 0;
+                m_item_max = pagesize / size;
+                m_dummy = 0x10DA;
+                m_item_freelist = xalist_t::NIL;
+            }
+
+            inline bool is_full() const { return m_item_count == m_item_max; }
+            inline bool is_empty() const { return m_item_count == 0; }
+
+            inline u32 index_of_elem(void* const page_base_address, void* const elem) const
+            {
+                u32 const index = (u32)(((u64)elem - (u64)page_base_address) / m_item_size);
+                return index;
+            }
+
+            inline u32* pointer_to_elem(void* const page_base_address, u32 const index) const
+            {
+                u32* elem = (u32*)((xbyte*)page_base_address + ((u64)index * (u64)m_item_size));
+                return elem;
+            }
+
+            void* allocate(void* page_address)
+            {
+                m_item_count++;
+                if (m_item_freelist != xalist_t::NIL)
+                {
+                    u32 const  ielem = m_item_freelist;
+                    u32* const pelem = pointer_to_elem(page_address, ielem);
+                    m_item_freelist  = pelem[0];
+                    return (void*)pelem;
+                }
+                else if (m_item_index < m_item_max)
+                {
+                    u32 const  ielem = m_item_index++;
+                    u32* const pelem = pointer_to_elem(page_address, ielem);
+                    return (void*)pelem;
+                }
+                // panic
+                m_item_count-=1;
+                return nullptr;
+            }
         };
 
         xvmem*   m_vmem;
         void*    m_address;
         u64      m_address_range;
+        u32      m_page_count;
         u32      m_page_size;
         page*    m_page_array;
         xalist_t m_free_page_list;
         xalist_t m_cached_page_list;
-        xalist_t m_used_page_list_per_size[16];
+        xalist_t::head m_used_page_list_per_size[16];
     };
+        
+    void  superfsa::initialize(superheap* heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache)
+    {
+        m_vmem = vmem;
+        u32 attributes = 0;
+        m_vmem->reserve(address_range, m_page_size, attributes, m_address);
+        m_address_range = address_range;
+        m_page_count = address_range / m_page_size;
+        m_page_array = (page*)heap->allocate(m_page_count * sizeof(page));
+        m_free_page_list.initialize(m_page_array, m_page_count, m_page_count);
+        for (s32 i = 0; i < m_page_count; i++)
+            m_page_array[i].initialize(8, 0);
+        for (s32 i = 0; i < 16; i++)
+            m_used_page_list_per_size[i] = xalist_t::NIL;
+    }
+
+    u32   superfsa::alloc(u32 size)
+    {
+        size = alignto(size, 8);
+        size = xceilpo2(size);
+        s32 const c = (xcountTrailingZeros(size) - 3) - 1;
+        if (m_used_page_list_per_size[c] == xalist_t::NIL)
+        {
+            // Get a page and initialize that page for this size
+            page* p = nullptr;
+            if (!m_cached_page_list.is_empty())
+            {
+                xalist_t::index ipage = m_cached_page_list.remove_headi(m_page_array);
+                p = &m_page_array[ipage];
+            } 
+            else if (!m_free_page_list.is_empty())
+            {
+                xalist_t::index ipage = m_free_page_list.remove_headi(m_page_array);
+                p = &m_page_array[ipage];
+                p->initialize(size, m_page_size);
+            }
+
+        }
+        return 0;
+    }
+    void  superfsa::dealloc(u32 index)
+    {
+
+    }
+
+    void* superfsa::idx2ptr(u32 i) const
+    {
+        return nullptr;
+    }
+    u32   superfsa::ptr2idx(void* ptr) const
+    {
+        return 0;
+    }
 
     struct binmap
     {
