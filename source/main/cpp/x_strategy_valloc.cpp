@@ -11,38 +11,92 @@
 
 namespace xcore
 {
-
-    // Intrusive management of items
-    // Minimum item-size is 8 bytes
-    // There are many of these for the following sizes:
-    // 4, 8, 16, 32, 64, 128, 256, 512, 1024
-    struct VirtualArray
-    {
-        u32   m_item_size;
-        u32   m_item_count;
-        u32   m_page_size;
-        u32   m_page_count_current;
-        u16   m_page_count_maximum;
-        u16   m_page_item_max;
-        void* m_address;
-        u16*  m_page_item_count;
-        u32*  m_page_item_freelist;
-    };
+    static inline u64 alignto(u64 value, u64 alignment) { return (value + (alignment - 1)) & ~(alignment - 1); }
+    static inline void* toaddress(void* base, u64 offset) { return (void*)((u64)base + offset);  }
 
     // Can only allocate, used internally to allocate initially required memory
-    struct HeapAllocator
+    class superheap
     {
+    public:
+        void  initialize(xvmem* vmem, u64 memory_range, u64 size_to_pre_allocate);
+        void* allocate(u32 size);
+
         void* m_address;
+        xvmem* m_vmem;
+        u32   m_size_alignment;
+        u32   m_page_size;
         u32   m_page_count_current;
         u32   m_page_count_maximum;
-        u64   m_page_current;
+        u64   m_ptr;
     };
 
-    struct BinMap
+    void superheap::initialize(xvmem* vmem, u64 memory_range, u64 size_to_pre_allocate)
     {
-        struct Config
+        u32 attributes = 0;
+        m_vmem = vmem;
+        m_vmem->reserve(memory_range, m_page_size, attributes, m_address);
+        m_size_alignment = 32;
+        m_page_count_maximum = memory_range / m_page_size;
+        m_page_count_current = size_to_pre_allocate;
+        m_ptr = 0;
+    }
+
+    void* superheap::allocate(u32 size)
+    {
+        size = alignto(size, m_size_alignment);
+        u64 ptr_max = ((u64)m_page_count_current * m_page_size);
+        if ((m_ptr + size) > ptr_max)
         {
-            Config(u8 l1_len, u8 l2_len, u32 count)
+            // add more pages
+            u32 const page_count = alignto(m_ptr + size, m_page_size) / (u64)m_page_size;
+            u32 const page_count_to_commit = page_count - m_page_count_current;
+            u64 commit_base = ((u64)m_page_count_current * m_page_size);
+            m_vmem->commit(toaddress(m_address, commit_base), m_page_size, page_count_to_commit);
+            m_page_count_current += page_count_to_commit;
+        }
+        u64 const offset = m_ptr;
+        m_ptr += size;
+        return toaddress(m_address, offset);
+    }
+
+    // Book-keeping for chunks requires to allocate/deallocate blocks of data
+    // Power-of-2 sizes, minimum size = 8, maximum_size = 16384
+    // @note: returned index to the user is u32[u16(page-index):u16(item-index)] 
+    class superfsa
+    {
+    public:
+        void  initialize(superheap* heap, u64 address_range, u32 num_pages_to_cache);
+
+        u32   alloc(u32 size);
+        void  dealloc(u32 index);
+
+        void* idx2ptr(u32 i) const;
+        u32   ptr2idx(void* ptr) const;
+
+    private:
+        struct page : public xalist_t::node_t
+        {
+            u16             m_item_size;
+            u16             m_item_index;
+            u16             m_item_available;
+            xalist_t::head  m_item_freelist;
+        };
+
+        xvmem*   m_vmem;
+        void*    m_address;
+        u64      m_address_range;
+        u32      m_page_size;
+        page*    m_page_array;
+        xalist_t m_free_page_list;
+        xalist_t m_cached_page_list;
+        xalist_t m_used_page_list_per_size[16];
+    };
+
+    struct binmap
+    {
+        struct config
+        {
+            config(u8 l1_len, u8 l2_len, u32 count)
                 : m_l1_len(l1_len)
                 , m_l2_len(l2_len)
                 , m_count(count)
@@ -56,20 +110,20 @@ namespace xcore
             u16 const m_count;
         };
 
-        BinMap(u32 count)
+        binmap(u32 count)
             : m_l0(0)
             , m_free_index(0)
         {
         }
 
-        inline u16* get_l1() const { return (u16*)this + (sizeof(BinMap) / 2); }
-        inline u16* get_l2(Config const& cfg) const { return (u16*)(this + (sizeof(BinMap) / 2) + cfg.m_l1_len); }
+        inline u16* get_l1() const { return (u16*)this + (sizeof(binmap) / 2); }
+        inline u16* get_l2(config const& cfg) const { return (u16*)(this + (sizeof(binmap) / 2) + cfg.m_l1_len); }
 
-        void Init(Config const& cfg);
-        void Set(Config const& cfg, u32 bin);
-        void Clr(Config const& cfg, u32 bin);
-        bool Get(Config const& cfg, u32 bin) const;
-        u32  Find(Config const& cfg) const;
+        void init(config const& cfg);
+        void set(config const& cfg, u32 bin);
+        void clr(config const& cfg, u32 bin);
+        bool get(config const& cfg, u32 bin) const;
+        u32  find(config const& cfg) const;
 
         u32 m_l0;
         u32 m_free_index;
@@ -77,107 +131,31 @@ namespace xcore
         u32 m_l2_offset;
     };
 
-    struct AllocSizeBin
+    struct asbin
     {
         u32 m_alloc_size;
         u32 m_alloc_bin : 8;
-        u32 m_allocator_index : 8;
+        u32 m_alloc_index : 8;
         u32 m_use_binmaps : 1;
         u32 m_use_allocmaps : 1;
     };
 
-    static const AllocSizeBin AllocSizeBins[] = {
-
-    };
-
-    // Page(s) Commit/Decommit
-    // There will be different types due to allocation sizes being smaller or being larger than the page-size.
-    // Alloc Size:
-    // <=    256, node_width = u16 (ref), granularity = 1
-    //  >    256, node width =  u8 (ref), granularity = 1
-    //  >=  64KB, node width =  u8 (ref), granularity = AllocSize/65536
-    //  >= 512KB, node width = u16 (cnt), granularity = AllocSize/65536
-
-    struct PageManagement
+    struct superalloc
     {
-        enum
-        {
-            COUNT_MASK     = 0x0001,
-            COUNT_REFS     = 0x0000,
-            COUNT_PAGES    = 0x0001,
-            NODE_BITS_MASK = 0x00F0,
-            NODE_BITS_U8   = 0x0010,
-            NODE_BITS_U16  = 0x0020,
-        };
-
-        u16   m_page_granularity;
-        u16   m_flags;
-        u32   m_num_nodes;
-        void* m_nodes; // u8* or u16*
-
-        void Allocate(u32 pageStart, u16 pages)
-        {
-            if ((m_flags & COUNT_MASK) == COUNT_PAGES)
-            {
-                // Set the page-count on the node
-                u32 nodeIndex = pageStart / m_page_granularity;
-                if ((m_flags & NODE_BITS_MASK) == NODE_BITS_U16)
-                {
-                    u16* nodes       = (u16*)m_nodes;
-                    nodes[nodeIndex] = pages;
-                }
-                else
-                {
-                    u8* nodes = (u8*)m_nodes;
-                    ASSERT(pages < 256);
-                    nodes[nodeIndex] = (u8)pages;
-                }
-            }
-            else if ((m_flags & COUNT_MASK) == COUNT_REFS)
-            {
-                // Increase the ref count of that page
-                u32 nodeHeadIndex = pageStart / m_page_granularity;
-                u32 nodeTailIndex = (pageStart + pages) / m_page_granularity;
-                if ((m_flags & NODE_BITS_MASK) == NODE_BITS_U16)
-                {
-                    u16* nodes = (u16*)m_nodes;
-                    nodes[nodeHeadIndex] += 1;
-                    nodes[nodeTailIndex] += 1;
-                }
-                else
-                {
-                    u8* nodes = (u8*)m_nodes;
-                    nodes[nodeHeadIndex] += 1;
-                    nodes[nodeTailIndex] += 1;
-                }
-            }
-            else
-            {
-                ASSERT(false);
-            }
-        }
-
-        void Deallocate(u32 page_start, u32 pages)
-        {
-            // Decrease the ref count of that page
-        }
-    };
-
-    struct Alloc
-    {
-        struct Chunk
+        struct chunk
         {
             u16 m_elem_used;
             u16 m_elem_size;
         };
 
-        Alloc(void* memory_base, u64 memory_range, u64 chunksize);
+        superalloc() {}
+        superalloc(void* memory_base, u64 memory_range, u64 chunksize) {}
 
         void*             m_memory_base;
         u64               m_memory_range;
         u64               m_chunk_size;
         u32               m_chunk_cnt;
-        Chunk*            m_chunk_array;
+        chunk*            m_chunk_array;
         u32*              m_binmaps;
         u32*              m_allocmaps;
         xalist_t::node_t* m_chunk_list;
@@ -186,38 +164,43 @@ namespace xcore
         xalist_t::head    m_used_chunk_list_per_size[32];
     };
 
-    static Alloc global_allocators[] = {
-        Alloc(nullptr, 0, 0), //
-        Alloc(nullptr, 0, 0), //
-        Alloc(nullptr, 0, 0), //
-        Alloc(nullptr, 0, 0), //
-        Alloc(nullptr, 0, 0), //
-        Alloc(nullptr, 0, 0), //
-        Alloc(nullptr, 0, 0), //
-        Alloc(nullptr, 0, 0), //
-        Alloc(nullptr, 0, 0)  //
-    };
-
-    class SuperAlloc
+    class superallocator
     {
     public:
-        Alloc m_allocators[];
+        const asbin m_asbins[128] = {
+            asbin(),
+            asbin()
+        };
+
+        superalloc m_allocators[32] = {
+            superalloc(nullptr, 0, 0), //
+            superalloc(nullptr, 0, 0), //
+            superalloc(nullptr, 0, 0), //
+            superalloc(nullptr, 0, 0), //
+            superalloc(nullptr, 0, 0), //
+            superalloc(nullptr, 0, 0), //
+            superalloc(nullptr, 0, 0), //
+            superalloc(nullptr, 0, 0), //
+            superalloc(nullptr, 0, 0)  //
+        };
+
+        superfsa m_internal_fsa;
     };
 
-    void Initialize(Alloc::Chunk& c)
+    void initialize(superalloc::chunk& c)
     {
         c.m_elem_used = 0;
         c.m_elem_size = 0;
     }
 
-    void Initialize(Alloc& a, xvmem* vmem)
+    void initialize(superalloc& a, xvmem* vmem)
     {
         u32 page_size;
         vmem->reserve(a.m_memory_range, page_size, 0, a.m_memory_base);
 
         for (s32 i = 0; i < a.m_chunk_cnt; ++i)
         {
-            Initialize(a.m_chunk_array[i]);
+            initialize(a.m_chunk_array[i]);
             a.m_binmaps[i] = 0xffffffff;
         }
         a.m_free_chunk_list.initialize(&a.m_chunk_list[0], a.m_chunk_cnt, a.m_chunk_cnt);
@@ -227,7 +210,7 @@ namespace xcore
         }
     }
 
-    void* Allocate(Alloc& region, u32 size, u32 bin)
+    void* allocate(superalloc& a, u32 size, u32 bin)
     {
         // Get the chunk from 'm_used_chunk_list_per_size[bin]'
         //   If it is NIL then take one from 'm_free_chunk_list_cache'
@@ -241,7 +224,7 @@ namespace xcore
         return nullptr;
     }
 
-    u32 Deallocate(Alloc& region, void* ptr)
+    u32 deallocate(superalloc& a, void* ptr)
     {
         // Convert 'ptr' to chunk-index and elem-index
         // Convert m_chunks[chunk-index].m_elem_size to bin-index
@@ -253,7 +236,7 @@ namespace xcore
         return 0;
     }
 
-    void ResetArray(u32 count, u32 len, u16* data)
+    void resetarray(u32 count, u32 len, u16* data)
     {
         for (u32 i = 0; i < len; i++)
             data[i] = 0;
@@ -265,22 +248,22 @@ namespace xcore
             wd2       = 0xffff;
         }
     }
-    void BinMap::Init(Config const& cfg)
+    void binmap::init(config const& cfg)
     {
         // Set those bits that we never touch to '1' the rest to '0'
         u16 l0len = cfg.m_count;
         if (cfg.m_count > 32)
         {
             u16* const l2 = get_l2(cfg);
-            ResetArray(cfg.m_count, cfg.m_l2_len, l2);
+            resetarray(cfg.m_count, cfg.m_l2_len, l2);
             u16* const l1 = get_l1();
-            ResetArray(cfg.m_l2_len, cfg.m_l1_len, l1);
+            resetarray(cfg.m_l2_len, cfg.m_l1_len, l1);
             l0len = cfg.m_l1_len;
         }
         m_l0 = 0xffffffff << (l0len & (32 - 1));
     }
 
-    void BinMap::Set(Config const& cfg, u32 k)
+    void binmap::set(config const& cfg, u32 k)
     {
         if (cfg.m_count <= 32)
         {
@@ -312,7 +295,7 @@ namespace xcore
         }
     }
 
-    void BinMap::Clr(Config const& cfg, u32 k)
+    void binmap::clr(config const& cfg, u32 k)
     {
         if (cfg.m_count <= 32)
         {
@@ -345,7 +328,7 @@ namespace xcore
         }
     }
 
-    bool BinMap::Get(Config const& cfg, u32 k) const
+    bool binmap::get(config const& cfg, u32 k) const
     {
         if (cfg.m_count <= 32)
         {
@@ -362,7 +345,7 @@ namespace xcore
         }
     }
 
-    u32 BinMap::Find(Config const& cfg) const
+    u32 binmap::find(config const& cfg) const
     {
         u32 const bi0 = (u32)xfindFirstBit(~m_l0);
         if (cfg.m_count <= 32)
