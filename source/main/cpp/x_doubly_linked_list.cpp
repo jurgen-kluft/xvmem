@@ -7,18 +7,14 @@
 
 namespace xcore
 {
-    const u16 xalist_t::NIL = 0xffff;
-
-    void xalist_t::initialize(node_t* list, u16 size, u16 max_size)
+    void llist_t::initialize(llnode_t* list, u16 size, u16 max_size)
     {
         ASSERT(max_size > 0);
         ASSERT(size <= max_size);
         m_size     = size;
         m_size_max = max_size;
-        m_head     = NIL;
-
-        m_head = 0;
-        for (u32 i = 0; i < max_size; ++i)
+        m_head     = 0;
+        for (u16 i = 0; i < max_size; ++i)
         {
             list[i].link(i - 1, i + 1);
         }
@@ -26,176 +22,215 @@ namespace xcore
         list[max_size - 1].link(max_size - 2, 0);
     }
 
-    void xalist_t::insert(node_t* list, u16 item)
+    void llhead_t::insert(llnode_t* list, llindex_t item)
     {
-        node_t* const pitem = idx2node(list, item);
-        if (m_head == NIL)
+        llnode_t* const pitem = idx2node(list, item);
+        if (is_nil())
         {
             pitem->link(item, item);
         }
         else
         {
-            u16 const     inext = m_head;
-            node_t* const pnext = idx2node(list, inext);
-            u16 const     iprev = pnext->m_prev;
-            node_t* const pprev = idx2node(list, iprev);
+            llindex_t const inext = m_index;
+            llnode_t* const pnext = idx2node(list, inext);
+            llindex_t const iprev = pnext->m_prev;
+            llnode_t* const pprev = idx2node(list, iprev);
             pitem->link(iprev, inext);
             pnext->m_prev = item;
             pprev->m_next = item;
         }
-        m_head = item;
-        m_size += 1;
+        m_index = item.get();
     }
 
-    void xalist_t::insert_tail(node_t* list, u16 item)
+    void llhead_t::insert_tail(llnode_t* list, llindex_t item)
     {
-        node_t* const pitem = idx2node(list, item);
-        if (m_head == NIL)
+        llnode_t* const pitem = idx2node(list, item);
+        if (is_nil())
         {
             pitem->link(item, item);
-            m_head = item;
+            m_index = item.get();
         }
         else
         {
-            u16 const     inext = m_head;
-            node_t* const pnext = idx2node(list, inext);
-            u16 const     iprev = pnext->m_prev;
-            node_t* const pprev = idx2node(list, iprev);
+            llindex_t const inext = m_index;
+            llnode_t* const pnext = idx2node(list, inext);
+            llindex_t const iprev = pnext->m_prev;
+            llnode_t* const pprev = idx2node(list, iprev);
             pitem->link(iprev, inext);
             pnext->m_prev = item;
             pprev->m_next = item;
         }
-        m_size += 1;
     }
 
-    static void s_remove_item(xalist_t& list, xalist_t::node_t* nodes, u16 item, xalist_t::node_t*& out_node, u16& out_idx)
+    static s32 s_remove_item(llhead_t& head, llnode_t* nodes, llindex_t item, llnode_t*& out_node)
     {
-        xalist_t::node_t* const pitem = list.idx2node(nodes, item);
-        xalist_t::node_t* const pprev = list.idx2node(nodes, pitem->m_prev);
-        xalist_t::node_t* const pnext = list.idx2node(nodes, pitem->m_next);
-        pprev->m_next                 = pitem->m_next;
-        pnext->m_prev                 = pitem->m_prev;
+        llnode_t* const pitem = llhead_t::idx2node(nodes, item);
+        llnode_t* const pprev = llhead_t::idx2node(nodes, pitem->m_prev);
+        llnode_t* const pnext = llhead_t::idx2node(nodes, pitem->m_next);
+        pprev->m_next       = pitem->m_next;
+        pnext->m_prev       = pitem->m_prev;
         pitem->unlink();
-        ASSERT(list.m_size >= 1);
-        if (list.m_size == 1)
+
+        if (head.is_nil())
         {
-            list.m_head = xalist_t::NIL;
-            list.m_size = 0;
+            return 0;
         }
         else
         {
-            if (list.m_head == item)
+            if (head.get() == item.get())
             {
-                list.m_head = list.node2idx(nodes, pnext);
+                head = head.node2idx(nodes, pnext);
             }
-            list.m_size--;
         }
         out_node = pitem;
-        out_idx  = item;
+        return 1;
     }
 
-    static bool s_remove_head(xalist_t& list, xalist_t::node_t* nodes, xalist_t::node_t*& out_node, u16& out_idx)
+    static s32 s_remove_head(llhead_t& head, llnode_t* nodes, llnode_t*& out_node)
     {
-        if (list.m_head == xalist_t::NIL)
+        if (head.is_nil())
         {
             out_node = nullptr;
-            out_idx  = xalist_t::NIL;
+            return 0;
         }
 
-        u16 const               iitem = list.m_head;
-        xalist_t::node_t* const pitem = list.idx2node(nodes, iitem);
-        u16 const               inext = pitem->m_next;
-        xalist_t::node_t* const pnext = list.idx2node(nodes, inext);
-        u16 const               iprev = pitem->m_prev;
-        xalist_t::node_t* const pprev = list.idx2node(nodes, iprev);
-        pprev->m_next                 = inext;
-        pnext->m_prev                 = iprev;
-        pitem->link(xalist_t::NIL, xalist_t::NIL);
-
-        ASSERT(list.m_size >= 1);
-        if (list.m_size == 1)
+        llindex_t const iitem = head;
+        llnode_t* const pitem = llhead_t::idx2node(nodes, iitem);
+        llindex_t const inext = pitem->m_next;
+        llnode_t* const pnext = llhead_t::idx2node(nodes, inext);
+        llindex_t const iprev = pitem->m_prev;
+        llnode_t* const pprev = llhead_t::idx2node(nodes, iprev);
+        if (iitem == inext && iitem == iprev)
         {
-            list.m_head = xalist_t::NIL;
+            head.reset();
         }
         else
         {
-            list.m_head = inext;
+            pprev->m_next = inext;
+            pnext->m_prev = iprev;
+            head          = inext;
         }
-        list.m_size -= 1;
 
+        pitem->unlink();
         out_node = pitem;
-        out_idx  = iitem;
-        return true;
+        return 1;
     }
 
-    static bool s_remove_tail(xalist_t& list, xalist_t::node_t* nodes, xalist_t::node_t*& out_node, u16& out_idx)
+    static s32 s_remove_tail(llhead_t& head, llnode_t* nodes, llnode_t*& out_node)
     {
-        if (list.m_head == xalist_t::NIL)
+        if (head.is_nil())
         {
             out_node = nullptr;
-            out_idx  = xalist_t::NIL;
             return false;
         }
-        u16 const               inext = list.m_head;
-        xalist_t::node_t* const pnext = list.idx2node(nodes, inext);
-        u16 const               iitem = pnext->m_prev;
-        xalist_t::node_t* const pitem = list.idx2node(nodes, iitem);
-        u16 const               iprev = pitem->m_prev;
-        xalist_t::node_t* const pprev = list.idx2node(nodes, iprev);
-        pprev->m_next                 = inext;
-        pnext->m_prev                 = iprev;
-        pitem->link(xalist_t::NIL, xalist_t::NIL);
-
-        ASSERT(list.m_size >= 1);
-        if (list.m_size == 1)
+        llindex_t const inext = head;
+        llnode_t* const pnext = llhead_t::idx2node(nodes, inext);
+        llindex_t const iitem = pnext->m_prev;
+        llnode_t* const pitem = llhead_t::idx2node(nodes, iitem);
+        llindex_t const iprev = pitem->m_prev;
+        llnode_t* const pprev = llhead_t::idx2node(nodes, iprev);
+        if (iitem == inext && inext == iprev)
         {
-            list.m_head = xalist_t::NIL;
+            head.reset();
         }
-        list.m_size -= 1;
+        else
+        {
+            pprev->m_next = inext;
+            pnext->m_prev = iprev;
+        }
 
+        pitem->unlink();
         out_node = pitem;
-        out_idx  = iitem;
         return true;
     }
 
-    xalist_t::node_t* xalist_t::remove_item(node_t* list, u16 item)
+    llnode_t* llhead_t::remove_item(llnode_t* list, llindex_t item)
     {
-        xalist_t::node_t* node;
-        u16               index;
-        s_remove_item(*this, list, item, node, index);
+        llnode_t* node;
+        s_remove_item(*this, list, item, node);
         return node;
     }
 
-    xalist_t::node_t* xalist_t::remove_head(node_t* list)
+    llnode_t* llhead_t::remove_head(llnode_t* list)
     {
-        xalist_t::node_t* node;
-        u16               index;
-        s_remove_head(*this, list, node, index);
+        llnode_t* node;
+        s_remove_head(*this, list, node);
         return node;
     }
 
-    xalist_t::node_t* xalist_t::remove_tail(node_t* list)
+    llnode_t* llhead_t::remove_tail(llnode_t* list)
     {
-        xalist_t::node_t* node;
-        u16               index;
-        s_remove_tail(*this, list, node, index);
+        llnode_t* node;
+        s_remove_tail(*this, list, node);
         return node;
     }
 
-    u16 xalist_t::remove_headi(node_t* list)
+    llindex_t llhead_t::remove_headi(llnode_t* list)
     {
-        xalist_t::node_t* node;
-        u16               index;
-        s_remove_head(*this, list, node, index);
-        return index;
+        llnode_t* node;
+        s_remove_head(*this, list, node);
+        return node2idx(list, node);
     }
 
-    u16 xalist_t::remove_taili(node_t* list)
+    llindex_t llhead_t::remove_taili(llnode_t* list)
     {
-        xalist_t::node_t* node;
-        u16               index;
-        s_remove_tail(*this, list, node, index);
-        return index;
+        llnode_t* node;
+        s_remove_tail(*this, list, node);
+        return node2idx(list, node);
+    }
+
+    void llist_t::insert(llnode_t* list, llindex_t item)
+    {
+        ASSERT(m_size < m_size_max);
+        m_head.insert(list, item);
+        m_size += 1;
+    }
+
+    void llist_t::insert_tail(llnode_t* list, llindex_t item)
+    {
+        ASSERT(m_size < m_size_max);
+        m_head.insert_tail(list, item);
+        m_size += 1;
+    }
+
+    llnode_t* llist_t::remove_item(llnode_t* list, llindex_t item)
+    {
+        llnode_t* node;
+        ASSERT(m_size > 0);
+        m_size += s_remove_item(m_head, list, item, node);
+        return node;
+    }
+
+    llnode_t* llist_t::remove_head(llnode_t* list)
+    {
+        llnode_t* node;
+        ASSERT(m_size > 0);
+        m_size += s_remove_head(m_head, list, node);
+        return node;
+    }
+
+    llnode_t* llist_t::remove_tail(llnode_t* list)
+    {
+        llnode_t* node;
+        ASSERT(m_size > 0);
+        m_size += s_remove_tail(m_head, list, node);
+        return node;
+    }
+
+    llindex_t llist_t::remove_headi(llnode_t* list)
+    {
+        llnode_t* node;
+        ASSERT(m_size > 0);
+        m_size += s_remove_head(m_head, list, node);
+        return node2idx(list, node);
+    }
+
+    llindex_t llist_t::remove_taili(llnode_t* list)
+    {
+        llnode_t* node;
+        ASSERT(m_size > 0);
+        m_size += s_remove_tail(m_head, list, node);
+        return node2idx(list, node);
     }
 
 } // namespace xcore

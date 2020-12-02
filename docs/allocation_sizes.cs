@@ -251,9 +251,6 @@ namespace SuperAlloc
         // CPU Memory Configuration for ~5 GB of device memory (PS4, Xbox One, Nintendo Switch)
         static Allocator[] Allocators = new Allocator[] {
             new Allocator { MinAllocSize=8, MaxAllocSize=     256, AddressRange= MB(128), ChunkSize=  KB(64) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=   KB(2), AddressRange= MB(512), ChunkSize= KB(512) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=  KB(64), AddressRange= MB(512), ChunkSize= KB(512) },
-			new Allocator { MinAllocSize=0, MaxAllocSize= KB(256), AddressRange= MB(512), ChunkSize= KB(512) },
 			new Allocator { MinAllocSize=0, MaxAllocSize= KB(512), AddressRange= MB(512), ChunkSize= KB(512) },
 			new Allocator { MinAllocSize=0, MaxAllocSize=   MB(1), AddressRange=   GB(1), ChunkSize=   MB(1) },
 			new Allocator { MinAllocSize=0, MaxAllocSize=   MB(2), AddressRange=   GB(1), ChunkSize=   MB(2) },

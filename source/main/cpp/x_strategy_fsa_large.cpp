@@ -65,10 +65,10 @@ namespace xcore
         u32               m_block_count;
         xblock_t**        m_block_array;
         xblock_info_t*    m_binfo_array;
-        xalist_t::node_t* m_list_array;
-        xalist_t          m_block_empty_list;
-        xalist_t          m_block_used_list;
-        xalist_t          m_block_full_list;
+        llnode*           m_list_array;
+        llist             m_block_empty_list;
+        llist             m_block_used_list;
+        llist             m_block_full_list;
     };
 
     xalloc* create_alloc_fsa_large(xalloc* main_heap, xfsa* node_heap, void* mem_base, u64 mem_range, u32 pagesize, u32 allocsize)
@@ -79,7 +79,7 @@ namespace xcore
         u32 const         block_count = (u32)(mem_range / block_range);
         xblock_t**        block_array = (xblock_t**)main_heap->allocate(sizeof(xblock_t*) * block_count);
         xblock_info_t*    binfo_array = (xblock_info_t*)main_heap->allocate(sizeof(xblock_info_t) * block_count);
-        xalist_t::node_t* list_nodes  = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * block_count);
+        llnode* list_nodes  = (llnode*)main_heap->allocate(sizeof(llnode) * block_count);
 
         xalloc_fsa_large* instance = main_heap->construct<xalloc_fsa_large>();
         instance->m_main_heap      = main_heap;
@@ -95,8 +95,8 @@ namespace xcore
 
         // Initialize the block list by linking all blocks into the empty list
         instance->m_block_empty_list.initialize(list_nodes, block_count, block_count);
-        instance->m_block_used_list = xalist_t(0, block_count);
-        instance->m_block_full_list = xalist_t(0, block_count);
+        instance->m_block_used_list = llist(0, block_count);
+        instance->m_block_full_list = llist(0, block_count);
 
         // All block pointers are initially NULL
         for (u32 i = 0; i < block_count; ++i)
@@ -213,18 +213,18 @@ namespace xcore
         {
             if (!m_block_empty_list.is_empty())
             {
-                xalist_t::node_t* pnode = m_block_empty_list.remove_head(m_list_array);
-                u16 const         inode = m_block_empty_list.node2idx(m_list_array, pnode);
-                xblock_t*         block = create_block_at(this, inode);
+                llnode* pnode = m_block_empty_list.remove_head(m_list_array);
+                llindex const     inode = m_block_empty_list.node2idx(m_list_array, pnode);
+                xblock_t*         block = create_block_at(this, inode.get());
                 m_block_used_list.insert(m_list_array, inode);
-                return allocate_from(this, inode, size);
+                return allocate_from(this, inode.get(), size);
             }
         }
         else
         {
-            u16 const      bi    = m_block_used_list.m_head;
-            xblock_info_t* binfo = get_binfo_at(this, bi);
-            void*          ptr   = allocate_from(this, bi, size);
+            llindex const  bi    = m_block_used_list.m_head;
+            xblock_info_t* binfo = get_binfo_at(this, bi.get());
+            void*          ptr   = allocate_from(this, bi.get(), size);
             if (is_block_full(binfo))
             {
                 m_block_used_list.remove_item(m_list_array, bi);

@@ -6,7 +6,6 @@
 #endif
 
 #include "xbase/x_allocator.h"
-#include "xvmem/private/x_doubly_linked_list.h"
 
 namespace xcore
 {
@@ -25,7 +24,7 @@ namespace xcore
 
         void init(u32 pool_size, u32 elem_size)
         {
-            m_free_list  = xalist_t::NIL;
+            m_free_list  = 0xffff;
             m_free_index = 0;
             m_elem_used  = 0;
             m_elem_total = pool_size / elem_size;

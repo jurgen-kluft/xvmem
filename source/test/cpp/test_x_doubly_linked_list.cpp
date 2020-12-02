@@ -9,17 +9,16 @@ using namespace xcore;
 
 extern xalloc* gTestAllocator;
 
-xalist_t::node_t* gCreateList(u32 count)
+llnode* gCreateList(u32 count)
 {
-	xalist_t::node_t* list = (xalist_t::node_t*)gTestAllocator->allocate(sizeof(xalist_t::node_t) * count);
+	llnode* list = (llnode*)gTestAllocator->allocate(sizeof(llnode) * count);
 	return list;
 }
 
-void gDestroyList(xalist_t::node_t* list)
+void gDestroyList(llnode* list)
 {
 	gTestAllocator->deallocate(list);
 }
-
 
 UNITTEST_SUITE_BEGIN(doubly_linked_list)
 {
@@ -31,32 +30,32 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
         UNITTEST_TEST(init) 
 		{
-			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list(0, 1024);
+			llnode* list_data = gCreateList(1024);
+			llist list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			gDestroyList(list_data);
 		}
 
         UNITTEST_TEST(insert_1) 
 		{
-			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list(0, 1024);
+			llnode* list_data = gCreateList(1024);
+			llist list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			list.insert(list_data, 0);
 
 			CHECK_FALSE(list.is_empty());
 			CHECK_EQUAL(1, list.size());
-			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_FALSE(list.m_head.is_nil());
 
-			xalist_t::node_t* node = list.idx2node(list_data, 0);
+			llnode* node = list.idx2node(list_data, 0);
 			CHECK_TRUE(node->is_linked());
 			CHECK_EQUAL(0, node->m_next);
 			CHECK_EQUAL(0, node->m_prev);
@@ -66,40 +65,40 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
         UNITTEST_TEST(insert_1_remove_head) 
 		{
-			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list(0, 1024);
+			llnode* list_data = gCreateList(1024);
+			llist list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			list.insert(list_data, 0);
 
 			CHECK_FALSE(list.is_empty());
 			CHECK_EQUAL(1, list.size());
-			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_FALSE(list.m_head.is_nil());
 
-			xalist_t::node_t* node = list.remove_head(list_data);
+			llnode* node = list.remove_head(list_data);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			CHECK_FALSE(node->is_linked());
-			CHECK_EQUAL(xalist_t::NIL, node->m_next);
-			CHECK_EQUAL(xalist_t::NIL, node->m_prev);
+			CHECK_TRUE(node->m_next.is_nil());
+			CHECK_TRUE(node->m_prev.is_nil());
 
 			gDestroyList(list_data);
 		}
 
         UNITTEST_TEST(insert_N_remove_head) 
 		{
-			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list(0, 1024);
+			llnode* list_data = gCreateList(1024);
+			llist list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			const s32 count = 256;
 			for (s32 i=0; i<count; ++i)
@@ -109,31 +108,31 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
 			CHECK_FALSE(list.is_empty());
 			CHECK_EQUAL(count, list.size());
-			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_FALSE(list.m_head.is_nil());
 
 			for (s32 i=0; i<count; ++i)
 			{
-				xalist_t::node_t* node = list.remove_head(list_data);
+				llnode* node = list.remove_head(list_data);
 				CHECK_FALSE(node->is_linked());
-				CHECK_EQUAL(xalist_t::NIL, node->m_next);
-				CHECK_EQUAL(xalist_t::NIL, node->m_prev);
+				CHECK_TRUE(node->m_next.is_nil());
+				CHECK_TRUE(node->m_prev.is_nil());
 			}
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			gDestroyList(list_data);
 		}
 
         UNITTEST_TEST(insert_N_remove_tail) 
 		{
-			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list(0, 1024);
+			llnode* list_data = gCreateList(1024);
+			llist list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			const s32 count = 256;
 			for (s32 i=0; i<count; ++i)
@@ -143,31 +142,31 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
 			CHECK_FALSE(list.is_empty());
 			CHECK_EQUAL(count, list.size());
-			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_FALSE(list.m_head.is_nil());
 
 			for (s32 i=0; i<count; ++i)
 			{
-				xalist_t::node_t* node = list.remove_tail(list_data);
+				llnode* node = list.remove_tail(list_data);
 				CHECK_FALSE(node->is_linked());
-				CHECK_EQUAL(xalist_t::NIL, node->m_next);
-				CHECK_EQUAL(xalist_t::NIL, node->m_prev);
+				CHECK_TRUE(node->m_next.is_nil());
+				CHECK_TRUE(node->m_prev.is_nil());
 			}
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			gDestroyList(list_data);
 		}
 
         UNITTEST_TEST(insert_N_remove_item) 
 		{
-			xalist_t::node_t* list_data = gCreateList(1024);
-			xalist_t list(0, 1024);
+			llnode* list_data = gCreateList(1024);
+			llist list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			const s32 count = 256;
 			for (s32 i=0; i<count; ++i)
@@ -177,19 +176,19 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
 			CHECK_FALSE(list.is_empty());
 			CHECK_EQUAL(count, list.size());
-			CHECK_NOT_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_FALSE(list.m_head.is_nil());
 
 			for (s32 i=0; i<count; ++i)
 			{
-				xalist_t::node_t* node = list.remove_item(list_data, i);
+				llnode* node = list.remove_item(list_data, i);
 				CHECK_FALSE(node->is_linked());
-				CHECK_EQUAL(xalist_t::NIL, node->m_next);
-				CHECK_EQUAL(xalist_t::NIL, node->m_prev);
+				CHECK_TRUE(node->m_next.is_nil());
+				CHECK_TRUE(node->m_prev.is_nil());
 			}
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
-			CHECK_EQUAL(xalist_t::NIL, list.m_head);
+			CHECK_TRUE(list.m_head.is_nil());
 
 			gDestroyList(list_data);
 		}
