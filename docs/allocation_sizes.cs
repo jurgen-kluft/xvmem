@@ -172,11 +172,11 @@ namespace SuperAlloc
                 int allocatorIndex = 0;
                 foreach (Allocator am in Allocators)
                 {
+                    ChunkManager cm = am.ChunkManager;
+                    cm.OneAllocPerChunk = (am.ChunkSize / am.MaxAllocSize) <= 1;
+
                     for (UInt64 size = am.MinAllocSize; size <= am.MaxAllocSize;)
                     {
-                        ChunkManager cm = am.ChunkManager;
-                        cm.OneAllocPerChunk = (am.ChunkSize / am.MaxAllocSize) <= 1;
-
                         UInt64 chunkSize = am.ChunkSize;
                         UInt64 chunkCount = am.AddressRange / am.ChunkSize;
                         UInt64 allocCountPerChunk = (chunkSize / size);
@@ -251,6 +251,7 @@ namespace SuperAlloc
         // CPU Memory Configuration for ~5 GB of device memory (PS4, Xbox One, Nintendo Switch)
         static Allocator[] Allocators = new Allocator[] {
             new Allocator { MinAllocSize=8, MaxAllocSize=     256, AddressRange= MB(128), ChunkSize=  KB(64) },
+			new Allocator { MinAllocSize=0, MaxAllocSize= KB(256), AddressRange= MB(384), ChunkSize= KB(512) },
 			new Allocator { MinAllocSize=0, MaxAllocSize= KB(512), AddressRange= MB(512), ChunkSize= KB(512) },
 			new Allocator { MinAllocSize=0, MaxAllocSize=   MB(1), AddressRange=   GB(1), ChunkSize=   MB(1) },
 			new Allocator { MinAllocSize=0, MaxAllocSize=   MB(2), AddressRange=   GB(1), ChunkSize=   MB(2) },

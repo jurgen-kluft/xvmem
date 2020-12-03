@@ -262,12 +262,31 @@ namespace xcore
     {
         struct chunk_t
         {
+            inline chunk_t()
+                : m_elem_used(0)
+                , m_elem_size(0)
+            {
+            }
             u16 m_elem_used;
             u16 m_elem_size;
         };
 
-        superalloc_t() {}
-        superalloc_t(void* memory_base, u64 memory_range, u64 chunksize, u32 numchunks2cache) {}
+        superalloc_t(u64 memory_range, u64 chunksize, u32 numchunks2cache, u32 numsizes)
+            : m_memory_base(nullptr)
+            , m_memory_range(memory_range)
+            , m_chunk_size(chunksize)
+            , m_chunk_cnt((u32)(memory_range / chunksize))
+            , m_chunk_array(nullptr)
+            , m_binmaps(nullptr)
+            , m_allocmaps(nullptr)
+            , m_chunk_list(nullptr)
+            , m_max_chunks_to_cache(numchunks2cache)
+            , m_num_sizes(numsizes)
+            , m_used_chunk_list_per_size(nullptr)
+        {
+        }
+
+        void initialize(xvmem* vmem, superfsa_t& alloc) {}
 
         void*     m_memory_base;
         u64       m_memory_range;
@@ -279,12 +298,17 @@ namespace xcore
         llnode_t* m_chunk_list;
         llist_t   m_free_chunk_list;
         llist_t   m_cache_chunk_list;
-        llhead_t  m_used_chunk_list_per_size[32];
+        u32       m_max_chunks_to_cache;
+        u32       m_num_sizes;
+        llhead_t* m_used_chunk_list_per_size;
     };
 
-    class superallocator
+    class superallocator_t
     {
     public:
+        void* allocate(u32 size, u32 alignment);
+        u32   deallocate(void* ptr);
+
         struct bin_t
         {
             inline bin_t()
@@ -311,34 +335,54 @@ namespace xcore
             u32 m_use_allocmaps : 1;
         };
 
-        // every allocation size has settings have some mapping info as well
-        // as info that indicates how to initialize a chunk.
         const bin_t m_asbins[128] = {
-            bin_t( 8,0,0,1,0),   // alloc-size=8
-            bin_t(16,0,0,1,0)
+            bin_t(8, 0, 0, 1, 0),           bin_t(16, 1, 0, 1, 0),          bin_t(24, 2, 0, 1, 0),          bin_t(32, 3, 0, 1, 0),          bin_t(40, 4, 0, 1, 0),          bin_t(48, 5, 0, 1, 0),          bin_t(56, 6, 0, 1, 0),
+            bin_t(64, 7, 0, 1, 0),          bin_t(80, 8, 0, 1, 0),          bin_t(96, 9, 0, 1, 0),          bin_t(112, 10, 0, 1, 0),        bin_t(128, 11, 0, 1, 0),        bin_t(160, 12, 0, 1, 0),        bin_t(192, 13, 0, 1, 0),
+            bin_t(224, 14, 0, 1, 0),        bin_t(256, 15, 0, 1, 0),        bin_t(320, 16, 1, 1, 0),        bin_t(384, 17, 1, 1, 0),        bin_t(448, 18, 1, 1, 0),        bin_t(512, 19, 1, 1, 0),        bin_t(640, 20, 1, 1, 0),
+            bin_t(768, 21, 1, 1, 0),        bin_t(896, 22, 1, 1, 0),        bin_t(1 * xkB, 23, 1, 1, 0),    bin_t(1.25 * xkB, 24, 1, 1, 0), bin_t(1.50 * xkB, 25, 1, 1, 0), bin_t(1.75 * xkB, 26, 1, 1, 0), bin_t(2 * xkB, 27, 1, 1, 0),
+            bin_t(2.50 * xkB, 28, 1, 1, 0), bin_t(3 * xkB, 29, 1, 1, 0),    bin_t(3.50 * xkB, 30, 1, 1, 0), bin_t(4 * xkB, 31, 1, 1, 0),    bin_t(5 * xkB, 32, 1, 1, 0),    bin_t(6 * xkB, 33, 1, 1, 0),    bin_t(7 * xkB, 34, 1, 1, 0),
+            bin_t(8 * xkB, 35, 1, 1, 0),    bin_t(10 * xkB, 36, 1, 1, 0),   bin_t(12 * xkB, 37, 1, 1, 0),   bin_t(14 * xkB, 38, 1, 1, 0),   bin_t(16 * xkB, 39, 1, 1, 0),   bin_t(20 * xkB, 40, 1, 1, 0),   bin_t(24 * xkB, 41, 1, 1, 0),
+            bin_t(28 * xkB, 42, 1, 1, 0),   bin_t(32 * xkB, 43, 1, 1, 0),   bin_t(40 * xkB, 44, 1, 1, 0),   bin_t(48 * xkB, 45, 1, 1, 0),   bin_t(56 * xkB, 46, 1, 1, 0),   bin_t(64 * xkB, 47, 1, 1, 0),   bin_t(80 * xkB, 48, 1, 1, 0),
+            bin_t(96 * xkB, 49, 1, 1, 0),   bin_t(112 * xkB, 50, 1, 1, 0),  bin_t(128 * xkB, 51, 1, 1, 0),  bin_t(160 * xkB, 52, 1, 1, 0),  bin_t(192 * xkB, 53, 1, 1, 0),  bin_t(224 * xkB, 54, 1, 1, 0),  bin_t(256 * xkB, 55, 1, 1, 0),
+            bin_t(320 * xkB, 56, 2, 1, 0),  bin_t(384 * xkB, 57, 2, 1, 0),  bin_t(448 * xkB, 58, 2, 1, 0),  bin_t(512 * xkB, 59, 2, 1, 0),  bin_t(640 * xkB, 60, 3, 1, 0),  bin_t(768 * xkB, 61, 3, 1, 0),  bin_t(896 * xkB, 62, 3, 1, 0),
+            bin_t(1 * xMB, 63, 3, 1, 0),    bin_t(1.25 * xMB, 64, 4, 1, 0), bin_t(1.50 * xMB, 65, 4, 1, 0), bin_t(1.75 * xMB, 66, 4, 1, 0), bin_t(2 * xMB, 67, 4, 1, 0),    bin_t(2.50 * xMB, 68, 5, 1, 0), bin_t(3 * xMB, 69, 5, 1, 0),
+            bin_t(3.50 * xMB, 70, 5, 1, 0), bin_t(4 * xMB, 71, 5, 1, 0),    bin_t(5 * xMB, 72, 6, 1, 0),    bin_t(6 * xMB, 73, 6, 1, 0),    bin_t(7 * xMB, 74, 6, 1, 0),    bin_t(8 * xMB, 75, 6, 1, 0),    bin_t(10 * xMB, 76, 7, 1, 0),
+            bin_t(12 * xMB, 77, 7, 1, 0),   bin_t(14 * xMB, 78, 7, 1, 0),   bin_t(16 * xMB, 79, 7, 1, 0),   bin_t(20 * xMB, 80, 8, 1, 0),   bin_t(24 * xMB, 81, 8, 1, 0),   bin_t(28 * xMB, 82, 8, 1, 0),   bin_t(32 * xMB, 83, 8, 1, 0),
+            bin_t(40 * xMB, 84, 9, 1, 0),   bin_t(48 * xMB, 85, 9, 1, 0),   bin_t(56 * xMB, 86, 9, 1, 0),   bin_t(64 * xMB, 87, 9, 1, 0),   bin_t(80 * xMB, 88, 10, 1, 0),  bin_t(96 * xMB, 89, 10, 1, 0),  bin_t(112 * xMB, 90, 10, 1, 0),
+            bin_t(128 * xMB, 91, 10, 1, 0), bin_t(160 * xMB, 92, 11, 1, 0), bin_t(192 * xMB, 93, 11, 1, 0), bin_t(224 * xMB, 94, 11, 1, 0), bin_t(256 * xMB, 95, 11, 1, 0)};
+
+        superalloc_t m_allocators[12] = {
+            superalloc_t(xMB * 128, xKB * 64, 512, 16), //
+            superalloc_t(xMB * 384, xKB * 512, 64, 40), //
+            superalloc_t(xMB * 512, xKB * 512, 2, 4),   //
+            superalloc_t(xGB * 1, xMB * 1, 0, 4),       //
+            superalloc_t(xGB * 1, xMB * 2, 0, 4),       //
+            superalloc_t(xGB * 1, xMB * 4, 0, 4),       //
+            superalloc_t(xGB * 1, xMB * 8, 0, 4),       //
+            superalloc_t(xGB * 1, xMB * 16, 0, 4),      //
+            superalloc_t(xGB * 1, xMB * 32, 0, 4),      //
+            superalloc_t(xGB * 1, xMB * 64, 0, 4),      //
+            superalloc_t(xGB * 2, xMB * 128, 0, 4),     //
+            superalloc_t(xGB * 4, xMB * 256, 0, 4)      //
         };
 
-        superalloc_t m_allocators[32] = {
-            superalloc_t(nullptr, 0, 0, 0), //
-            superalloc_t(nullptr, 0, 0, 0), //
-            superalloc_t(nullptr, 0, 0, 0), //
-            superalloc_t(nullptr, 0, 0, 0), //
-            superalloc_t(nullptr, 0, 0, 0), //
-            superalloc_t(nullptr, 0, 0, 0), //
-            superalloc_t(nullptr, 0, 0, 0), //
-            superalloc_t(nullptr, 0, 0, 0), //
-            superalloc_t(nullptr, 0, 0, 0)  //
-        };
+        static s32 size2bin(u32 size)
+        {
+            u32 const f = xfloorpo2(size);
+            s32 const r = xcountTrailingZeros(f >> 4) * 4;
+            s32 const t = xcountTrailingZeros(xalign(f, 8) >> 2);
+            s32 const i = (int)((size - (f & ~((u32)32 - 1))) >> t) + r;
+            return i - 1;
+        }
+
+        // Example: 32 GB -> 1 GB -> 256 MB
+        u8* m_allocator_map;
 
         superheap_t m_internal_heap;
         superfsa_t  m_internal_fsa;
     };
 
-    void initialize(superalloc_t::chunk_t& c)
-    {
-        c.m_elem_used = 0;
-        c.m_elem_size = 0;
-    }
+    void initchunk(superalloc_t& a, superheap_t& heap, u32 binindex, u32 chunkindex) {}
 
     void initialize(superalloc_t& a, xvmem* vmem, superheap_t& heap)
     {
@@ -348,8 +392,9 @@ namespace xcore
         a.m_allocmaps   = (u32*)heap.allocate(a.m_chunk_cnt * sizeof(u32));
         for (u32 i = 0; i < a.m_chunk_cnt; ++i)
         {
-            initialize(a.m_chunk_array[i]);
-            a.m_binmaps[i] = 0xffffffff;
+            a.m_chunk_array[i] = superalloc_t::chunk_t();
+            a.m_binmaps[i]     = 0xffffffff;
+            a.m_allocmaps[i]   = 0xffffffff;
         }
         a.m_free_chunk_list.initialize(&a.m_chunk_list[0], a.m_chunk_cnt, a.m_chunk_cnt);
         for (s32 i = 0; i < 32; i++)
@@ -361,7 +406,7 @@ namespace xcore
         vmem->reserve(a.m_memory_range, page_size, 0, a.m_memory_base);
     }
 
-    void* allocate(superalloc_t& a, u32 size, u32 bin)
+    void* allocate(superalloc_t& sa, superfsa_t& sfsa, u32 size, u32 bin)
     {
         // Get the chunk from 'm_used_chunk_list_per_size[bin]'
         //   If it is NIL then take one from 'm_free_chunk_list_cache'
@@ -376,7 +421,7 @@ namespace xcore
         return nullptr;
     }
 
-    u32 deallocate(superalloc_t& a, void* ptr)
+    u32 deallocate(superalloc_t& a, superfsa_t& sfsa, void* ptr)
     {
         // Convert 'ptr' to chunk-index and elem-index
         // Convert m_chunks[chunk-index].m_elem_size to bin-index
@@ -385,6 +430,24 @@ namespace xcore
         //  otherwise add it to the 'm_cached_chunk_list'.
         // If chunk is empty add it to the 'm_free_chunk_list_cache'
         //  If 'm_free_chunk_list_cache' is full then decommit the chunk add it to the 'm_free_chunk_list'
+
+        return 0;
+    }
+
+    void* superallocator_t::allocate(u32 size, u32 alignment)
+    {
+        size               = (size + (alignment - 1)) & ~(alignment - 1);
+        s32 const binindex = size2bin(size);
+
+        return nullptr;
+    }
+
+    u32 superallocator_t::deallocate(void* ptr)
+    {
+        //@note: For this we need to be able to find the allocator that we belong to.
+        //       So we need a hierarchical map that divides the memory, e.g.:
+        //       Total: 32 GB
+        //       u32[32] ->
 
         return 0;
     }
