@@ -35,8 +35,8 @@ namespace xcore
         {
         }
 
-        inline u16* get_l1() const { return (u16*)this + (sizeof(binmap) / 2); }
-        inline u16* get_l2(config_t const& cfg) const { return (u16*)(this + (sizeof(binmap) / 2) + cfg.m_l1_len); }
+        inline u16* get_l1() const { return (u16*)this + (sizeof(binmap_t) / 2); }
+        inline u16* get_l2(config_t const& cfg) const { return (u16*)(this + (sizeof(binmap_t) / 2) + cfg.m_l1_len); }
 
         void init(config_t const& cfg);
         void set(config_t const& cfg, u32 bin);

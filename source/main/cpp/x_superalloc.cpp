@@ -391,10 +391,9 @@ namespace xcore
             m_binmaps[i]     = 0xffffffff;
         }
         m_free_chunk_list.initialize(&m_chunk_list[0], m_chunk_cnt, m_chunk_cnt);
-        for (s32 i = 0; i < 32; i++)
-        {
+        m_used_chunk_list_per_size = (llhead_t*)heap.allocate(m_num_sizes * sizeof(llhead_t));
+        for (s32 i = 0; i < m_num_sizes; i++)
             m_used_chunk_list_per_size[i].reset();
-        }
 
         u32 page_size;
         vmem->reserve(m_memory_range, page_size, 0, m_memory_base);
