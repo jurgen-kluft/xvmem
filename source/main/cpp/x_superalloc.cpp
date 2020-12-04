@@ -307,18 +307,18 @@ namespace xcore
 
     struct superbin_t
     {
-        inline superbin_t(u32 allocsize, u8 bin, u8 allocindex, u8 use_binmap, u16 count, u8 l1len, u8 l2len)
+        inline superbin_t(u32 allocsize, u8 binidx, u8 allocindex, u8 use_binmap, u16 count, u8 l1len, u8 l2len)
             : m_alloc_size(allocsize)
-            , m_alloc_bin(bin)
+            , m_alloc_bin_index(binidx)
             , m_alloc_index(allocindex)
             , m_use_binmap(use_binmap)
             , m_binmap_cfg(l1len, l2len, count)
         {
         }
         u32                m_alloc_size;
-        u32                m_alloc_bin : 8;
-        u32                m_alloc_index : 8; // The index into the allocator that manages us
-        u32                m_use_binmap : 1;  // How do we manage a chunk (binmap or page-count)
+        u32                m_alloc_bin_index : 8;  // Only one indirection is allowed
+        u32                m_alloc_index : 8;      // The index into the allocator that manages us
+        u32                m_use_binmap : 1;       // How do we manage a chunk (binmap or page-count)
         binmap_t::config_t m_binmap_cfg;
     };
 
@@ -435,7 +435,7 @@ namespace xcore
     void* superallocator_t::allocate(u32 size, u32 alignment)
     {
         size                 = (size + (alignment - 1)) & ~(alignment - 1);
-        u32 const binindex   = size2bin(size);
+        u32 const binindex   = m_asbins[size2bin(size)].m_alloc_bin_index;
         s32 const allocindex = m_asbins[binindex].m_alloc_index;
         void*     ptr        = m_allocators[allocindex].allocate(m_internal_fsa, m_asbins[binindex]);
         return ptr;
