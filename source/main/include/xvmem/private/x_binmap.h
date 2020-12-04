@@ -10,11 +10,11 @@
 namespace xcore
 {
 
-    struct binmap
+    struct binmap_t
     {
-        struct config
+        struct config_t
         {
-            config(u8 l1_len, u8 l2_len, u32 count)
+            config_t(u8 l1_len, u8 l2_len, u32 count)
                 : m_l1_len(l1_len)
                 , m_l2_len(l2_len)
                 , m_count(count)
@@ -28,7 +28,7 @@ namespace xcore
             u16 const m_count;
         };
 
-        binmap(u32 count)
+        binmap_t(u32 count)
             : m_l0(0)
             , m_l1_offset(0xffffffff)
             , m_l2_offset(0xffffffff)
@@ -36,13 +36,13 @@ namespace xcore
         }
 
         inline u16* get_l1() const { return (u16*)this + (sizeof(binmap) / 2); }
-        inline u16* get_l2(config const& cfg) const { return (u16*)(this + (sizeof(binmap) / 2) + cfg.m_l1_len); }
+        inline u16* get_l2(config_t const& cfg) const { return (u16*)(this + (sizeof(binmap) / 2) + cfg.m_l1_len); }
 
-        void init(config const& cfg);
-        void set(config const& cfg, u32 bin);
-        void clr(config const& cfg, u32 bin);
-        bool get(config const& cfg, u32 bin) const;
-        u32  find(config const& cfg) const;
+        void init(config_t const& cfg);
+        void set(config_t const& cfg, u32 bin);
+        void clr(config_t const& cfg, u32 bin);
+        bool get(config_t const& cfg, u32 bin) const;
+        u32  find(config_t const& cfg) const;
 
         u32 m_l0;
         u32 m_l1_offset;

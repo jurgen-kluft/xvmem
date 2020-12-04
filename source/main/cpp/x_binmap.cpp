@@ -20,7 +20,7 @@ namespace xcore
             wd2       = 0xffff;
         }
     }
-    void binmap::init(config const& cfg)
+    void binmap_t::init(config_t const& cfg)
     {
         // Set those bits that we never touch to '1' the rest to '0'
         u16 l0len = cfg.m_count;
@@ -35,7 +35,7 @@ namespace xcore
         m_l0 = 0xffffffff << (l0len & (32 - 1));
     }
 
-    void binmap::set(config const& cfg, u32 k)
+    void binmap_t::set(config_t const& cfg, u32 k)
     {
         if (cfg.m_count <= 32)
         {
@@ -67,7 +67,7 @@ namespace xcore
         }
     }
 
-    void binmap::clr(config const& cfg, u32 k)
+    void binmap_t::clr(config_t const& cfg, u32 k)
     {
         if (cfg.m_count <= 32)
         {
@@ -100,7 +100,7 @@ namespace xcore
         }
     }
 
-    bool binmap::get(config const& cfg, u32 k) const
+    bool binmap_t::get(config_t const& cfg, u32 k) const
     {
         if (cfg.m_count <= 32)
         {
@@ -117,7 +117,7 @@ namespace xcore
         }
     }
 
-    u32 binmap::find(config const& cfg) const
+    u32 binmap_t::find(config_t const& cfg) const
     {
         u32 const bi0 = (u32)xfindFirstBit(~m_l0);
         if (cfg.m_count <= 32)
