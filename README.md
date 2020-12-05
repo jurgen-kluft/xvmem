@@ -2,8 +2,6 @@
 
 A library that provides cross-platform usage of virtual memory.
 
-The virtual memory allocator based on the size request is delegating the call to:
-
 ## New Version (superalloc)
 
 Currently a new allocator is being implemented 'superalloc' that is a *lot* smaller in code size than the current version.
@@ -12,6 +10,8 @@ The new allocator will be data-driven and all book-keeping data will be outside 
 Note: Benchmarks are on the TODO list.
 
 ## Current version
+
+The virtual memory allocator based on the size request is delegating the call to:
 
 - fixed size allocator (FSA) (8B to 4KB, 512 MB memory range, page based commit/decommit with page caching)
 - medium size (coalesce) allocator (4KB to 64KB, 1 GB memory range, region based commit/decommit)
