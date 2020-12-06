@@ -511,7 +511,8 @@ namespace xcore
             binmap_t* binmap = (binmap_t*)fsa.idx2ptr(m_binmaps[chunkindex]);
             u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
             u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
-            u32 const i      = binmap->find(bin.m_alloc_count, l1, l2);
+            //@TODO: Combine find + set into one function
+            u32 const i = binmap->find(bin.m_alloc_count, l1, l2);
             binmap->set(bin.m_alloc_count, l1, l2, i);
             ptr = toaddress(m_memory_base, i * bin.m_alloc_size);
 
