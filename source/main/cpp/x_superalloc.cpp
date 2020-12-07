@@ -365,6 +365,8 @@ namespace xcore
     {
     public:
         void  initialize(xvmem* vmem);
+        void  deinitialize();
+
         void* allocate(u32 size, u32 alignment);
         u32   deallocate(void* ptr);
 
@@ -372,7 +374,7 @@ namespace xcore
         /// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         /// The following is a strict data-drive initialization of the bins and allocators, please know what you are doing when modifying any of this.
 
-        static const s32 c_num_bins           = 96;
+        static const s32 c_num_bins = 96;
         // superbin_t(allocation size, bin index, allocator index, use binmap?, maximum allocation count, binmap level 1 length, binmap level 2 length)
         const superbin_t m_asbins[c_num_bins] = {
             bin_t(8, 0, 0, 1, 8192, 32, 512),        bin_t(16, 1, 0, 1, 4096, 16, 256),       bin_t(24, 2, 0, 1, 2730, 16, 256),       bin_t(32, 3, 0, 1, 2048, 8, 128),     bin_t(40, 4, 0, 1, 1638, 8, 128),       bin_t(48, 5, 0, 1, 1365, 8, 128),
@@ -623,6 +625,15 @@ namespace xcore
             m_allocators[i].initialize(address_base, m_page_size, m_vmem, m_internal_heap, m_internal_fsa);
             address_base = toaddress(address_base, alignto(m_allocators[i].m_memory_range, c_address_divisor));
         }
+    }
+
+    void superallocator_t::deinitialize()
+    {
+        m_internal_fsa.deinitialize(m_internal_heap);
+        m_internal_heap.deinitialize();
+
+        m_vmem->release(m_address_base, c_address_range);
+        m_vmem = nullptr;
     }
 
     void* superallocator_t::allocate(u32 size, u32 alignment)
