@@ -21,9 +21,11 @@ namespace xcore
     {
     public:
         void  initialize(xvmem* vmem, u64 memory_range, u64 size_to_pre_allocate);
+        void  deinitialize();
         void* allocate(u32 size);
 
         void*  m_address;
+        u64    m_address_range;
         xvmem* m_vmem;
         u32    m_size_alignment;
         u32    m_page_size;
@@ -34,8 +36,9 @@ namespace xcore
 
     void superheap_t::initialize(xvmem* vmem, u64 memory_range, u64 size_to_pre_allocate)
     {
-        u32 attributes = 0;
-        m_vmem         = vmem;
+        u32 attributes  = 0;
+        m_vmem          = vmem;
+        m_address_range = memory_range;
         m_vmem->reserve(memory_range, m_page_size, attributes, m_address);
         m_size_alignment     = 32;
         m_page_count_maximum = (u32)(memory_range / m_page_size);
@@ -48,6 +51,19 @@ namespace xcore
             m_vmem->commit(m_address, m_page_size, pages_to_commit);
             m_page_count_current = pages_to_commit;
         }
+    }
+
+    void superheap_t::deinitialize()
+    {
+        m_vmem->release(m_address, m_address_range);
+        m_address            = nullptr;
+        m_address_range      = 0;
+        m_vmem               = nullptr;
+        m_size_alignment     = 0;
+        m_page_size          = 0;
+        m_page_count_current = 0;
+        m_page_count_maximum = 0;
+        m_ptr                = 0;
     }
 
     void* superheap_t::allocate(u32 size)
@@ -74,7 +90,8 @@ namespace xcore
     class superfsa_t
     {
     public:
-        void initialize(superheap_t* heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache);
+        void initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache);
+        void deinitialize(superheap_t& heap);
 
         u32  alloc(u32 size);
         void dealloc(u32 index);
@@ -150,14 +167,14 @@ namespace xcore
         llhead_t m_used_page_list_per_size[16];
     };
 
-    void superfsa_t::initialize(superheap_t* heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache)
+    void superfsa_t::initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache)
     {
         m_vmem         = vmem;
         u32 attributes = 0;
         m_vmem->reserve(address_range, m_page_size, attributes, m_address);
         m_address_range = address_range;
         m_page_count    = (u32)(address_range / (u64)m_page_size);
-        m_page_array    = (page_t*)heap->allocate(m_page_count * sizeof(page_t));
+        m_page_array    = (page_t*)heap.allocate(m_page_count * sizeof(page_t));
         m_free_page_list.initialize(m_page_array + num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
         for (u32 i = 0; i < m_page_count; i++)
             m_page_array[i].initialize(8, 0);
@@ -173,6 +190,13 @@ namespace xcore
             }
             m_vmem->commit(m_address, m_page_size, num_pages_to_cache);
         }
+    }
+
+    void superfsa_t::deinitialize(superheap_t& heap)
+    {
+        // let the heap destroy itself, we do not need to deallocate
+        // NOTE: Do we need to decommit the cached pages, or is 'release' enough?
+        m_vmem->release(m_address, m_address_range);
     }
 
     u32 superfsa_t::alloc(u32 size)
@@ -286,17 +310,20 @@ namespace xcore
         {
         }
 
-        void  initialize(xvmem* vmem, superheap_t& heap, superfsa_t& fsa);
+        void  initialize(void* memory_base, u32 page_size, xvmem* vmem, superheap_t& heap, superfsa_t& fsa);
         void* allocate(superfsa_t& sfsa, u32 size, superbin_t const& bin);
-        u32   deallocate(superfsa_t& sfsa, void* ptr);
+        u32   get_chunkindex(void* ptr) const;
+        u32   get_binindex(u32 chunkindex) const;
+        u32   deallocate(superfsa_t& sfsa, void* ptr, u32 chunkindex, superbin_t const& bin);
 
         void  initialize_chunk(superfsa_t& fsa, u32 chunkindex, superbin_t const& bin);
-        void  deinitialize_chunk(superfsa_t& fsa, u32 chunkindex);
+        void  deinitialize_chunk(superfsa_t& fsa, u32 chunkindex, superbin_t const& bin);
         void* allocate_from_chunk(superfsa_t& fsa, u32 chunkindex, u32 size, superbin_t const& bin, bool& chunk_is_now_full);
-        u32   deallocate_from_chunk(superfsa_t& fsa, u32 chunkindex, superbin_t const& bin, bool& chunk_is_now_empty);
+        u32   deallocate_from_chunk(superfsa_t& fsa, u32 chunkindex, void* ptr, superbin_t const& bin, bool& chunk_is_now_empty, bool& chunk_was_full);
 
         void*     m_memory_base;
         u64       m_memory_range;
+        xvmem*    m_vmem;
         u32       m_page_size;
         u64       m_chunk_size;
         u32       m_chunk_cnt;
@@ -322,6 +349,17 @@ namespace xcore
             , m_binmap_l2len(l2len)
         {
         }
+
+        static inline s32 size2bin(u32 size)
+        {
+            u32 const f = xfloorpo2(size);
+            s32 const r = xcountTrailingZeros(f >> 4) * 4;
+            s32 const t = xcountTrailingZeros(xalign(f, 8) >> 2);
+            s32 const i = (int)((size - (f & ~((u32)32 - 1))) >> t) + r;
+            ASSERT(i > 0 && i < 256);
+            return i - 1;
+        }
+
         u32 m_alloc_size;
         u32 m_alloc_bin_index : 8; // Only one indirection is allowed
         u32 m_alloc_index : 8;     // The index into the allocator that manages us
@@ -334,10 +372,16 @@ namespace xcore
     class superallocator_t
     {
     public:
+        void  initialize(xvmem* vmem);
         void* allocate(u32 size, u32 alignment);
         u32   deallocate(void* ptr);
 
-        const superbin_t m_asbins[96] = {
+        /// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        /// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        /// The following is a strict data-drive initialization of the bins and allocators, please know what you are doing when modifying any of this.
+
+        static const s32 c_num_bins           = 96;
+        const superbin_t m_asbins[c_num_bins] = {
             bin_t(8, 0, 0, 1, 8192, 32, 512),        bin_t(16, 1, 0, 1, 4096, 16, 256),       bin_t(24, 2, 0, 1, 2730, 16, 256),       bin_t(32, 3, 0, 1, 2048, 8, 128),     bin_t(40, 4, 0, 1, 1638, 8, 128),       bin_t(48, 5, 0, 1, 1365, 8, 128),
             bin_t(56, 6, 0, 1, 1170, 8, 128),        bin_t(64, 7, 0, 1, 1024, 4, 64),         bin_t(80, 8, 0, 1, 819, 4, 64),          bin_t(96, 9, 0, 1, 682, 4, 64),       bin_t(112, 10, 0, 1, 585, 4, 64),       bin_t(128, 11, 0, 1, 512, 2, 32),
             bin_t(160, 12, 0, 1, 409, 2, 32),        bin_t(192, 13, 0, 1, 341, 2, 32),        bin_t(224, 14, 0, 1, 292, 2, 32),        bin_t(256, 15, 0, 1, 256, 2, 16),     bin_t(320, 16, 1, 1, 1024, 4, 64),      bin_t(384, 17, 1, 1, 1024, 4, 64),
@@ -355,7 +399,8 @@ namespace xcore
             bin_t(40 * xMB, 84, 9, 1, 1, 0, 0),      bin_t(48 * xMB, 85, 9, 1, 1, 0, 0),      bin_t(56 * xMB, 86, 9, 1, 1, 0, 0),      bin_t(64 * xMB, 87, 9, 1, 1, 0, 0),   bin_t(80 * xMB, 88, 10, 1, 1, 0, 0),    bin_t(96 * xMB, 89, 10, 1, 1, 0, 0),
             bin_t(112 * xMB, 90, 10, 1, 1, 0, 0),    bin_t(128 * xMB, 91, 10, 1, 1, 0, 0),    bin_t(160 * xMB, 92, 11, 1, 1, 0, 0),    bin_t(192 * xMB, 93, 11, 1, 1, 0, 0), bin_t(224 * xMB, 94, 11, 1, 1, 0, 0),   bin_t(256 * xMB, 95, 11, 1, 1, 0, 0)};
 
-        superalloc_t m_allocators[12] = {
+        static const s32 c_num_allocators               = 12;
+        superalloc_t     m_allocators[c_num_allocators] = {
             superalloc_t(xMB * 128, xKB * 64, 512, 16), //
             superalloc_t(xMB * 384, xKB * 512, 64, 40), //
             superalloc_t(xMB * 512, xKB * 512, 2, 4),   //
@@ -370,26 +415,27 @@ namespace xcore
             superalloc_t(xGB * 4, xMB * 256, 0, 4)      //
         };
 
-        static s32 size2bin(u32 size)
-        {
-            u32 const f = xfloorpo2(size);
-            s32 const r = xcountTrailingZeros(f >> 4) * 4;
-            s32 const t = xcountTrailingZeros(xalign(f, 8) >> 2);
-            s32 const i = (int)((size - (f & ~((u32)32 - 1))) >> t) + r;
-            return i - 1;
-        }
+        static const u64 c_address_range                     = (u64)16 * xGB;
+        static const u64 c_address_divisor                   = (u64)1 * xGB;
+        static const s32 c_address_map_size                  = 16;
+        u8 const         m_allocator_map[c_address_map_size] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 11, 11};
 
-        // Example: 32 GB / 256 MB
-        void* m_address_base;
-        u64   m_address_range;
-        u64   m_address_divisor;
-        u8*   m_allocator_map;
+        static const u32 c_internal_heap_address_range = 32 * xMB;
+        static const u32 c_internal_heap_pre_size      = 2 * xMB;
+        static const u32 c_internal_fsa_address_range  = 32 * xMB;
+        static const u32 c_internal_fsa_pre_page_count = 512;
 
+        /// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        /// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+        void*       m_address_base;
+        xvmem*      m_vmem;
+        u32         m_page_size;
         superheap_t m_internal_heap;
         superfsa_t  m_internal_fsa;
     };
 
-    void superalloc_t::initialize(xvmem* vmem, superheap_t& heap, superfsa_t& fsa)
+    void superalloc_t::initialize(void* memory_base, u32 page_size, xvmem* vmem, superheap_t& heap, superfsa_t& fsa)
     {
         m_chunk_array = (superalloc_t::chunk_t*)heap.allocate(m_chunk_cnt * sizeof(superalloc_t::chunk_t));
         m_chunk_list  = (llnode_t*)heap.allocate(m_chunk_cnt * sizeof(llnode_t));
@@ -404,8 +450,7 @@ namespace xcore
         for (s32 i = 0; i < m_num_sizes; i++)
             m_used_chunk_list_per_size[i].reset();
 
-        u32 page_size;
-        vmem->reserve(m_memory_range, page_size, 0, m_memory_base);
+        m_memory_base = memory_base;
     }
 
     void* superalloc_t::allocate(superfsa_t& sfsa, u32 size, superbin_t const& bin)
@@ -440,17 +485,35 @@ namespace xcore
         return ptr;
     }
 
-    u32 superalloc_t::deallocate(superfsa_t& sfsa, void* ptr)
-    {
-        // Convert 'ptr' to chunk-index and elem-index
-        // Convert 'm_chunks[chunk-index].m_elem_size' to bin-index
-        // Remember 'm_elem_size' from chunk to return it from this function
-        // Push the now free element to the chunk, if chunk is not empty then add it to 'm_used_chunk_list_per_size[bin]'
-        //  otherwise add it to the 'm_cached_chunk_list'.
-        // If chunk is empty add it to the 'm_free_chunk_list_cache'
-        //  If 'm_free_chunk_list_cache' is full then decommit the chunk add it to the 'm_free_chunk_list'
+    u32 superalloc_t::get_chunkindex(void* ptr) const { return todistance(m_memory_base, ptr) / m_chunk_size; }
 
-        return 0;
+    u32 superalloc_t::get_binindex(u32 chunkindex) const
+    {
+        chunk_t& chunk = m_chunk_array[chunkindex];
+        return chunk.m_bin_index;
+    }
+
+    u32 superalloc_t::deallocate(superfsa_t& sfsa, void* ptr, u32 chunkindex, superbin_t const& bin)
+    {
+        // Remember 'm_elem_size' from chunk to return it from this function
+        // Push the now free element to the chunk
+        //   if chunk was full add it to 'm_used_chunk_list_per_size[bin]'
+        //   if chunk is empty add it to 'm_free_chunk_list_cache'
+        //   if 'm_free_chunk_list_cache' is full then decommit the chunk add it to the 'm_free_chunk_list'
+
+        chunk_t& chunk = m_chunk_array[chunkindex];
+        chunk.m_elem_used -= 1;
+
+        bool      chunk_is_now_empty = false;
+        bool      chunk_was_full     = false;
+        u32 const size               = deallocate_from_chunk(sfsa, chunkindex, ptr, bin, chunk_is_now_empty, chunk_was_full);
+
+        if (chunk_is_now_empty) {}
+        else if (chunk_was_full)
+        {
+            m_used_chunk_list_per_size[bin.m_alloc_bin_index].insert(m_chunk_list, chunkindex);
+        }
+        return size;
     }
 
     void superalloc_t::initialize_chunk(superfsa_t& fsa, u32 chunkindex, superbin_t const& bin)
@@ -476,15 +539,18 @@ namespace xcore
                 binmap->init(bin.m_alloc_count, nullptr, 0, nullptr, 0);
             }
         }
+        else
+        {
+            m_binmaps[chunkindex] = 0;
+        }
         chunk_t& chunk    = m_chunk_array[chunkindex];
         chunk.m_bin_index = bin.m_alloc_bin_index;
         chunk.m_elem_used = 0;
     }
 
-    void superalloc_t::deinitialize_chunk(superfsa_t& fsa, u32 chunkindex)
+    void superalloc_t::deinitialize_chunk(superfsa_t& fsa, u32 chunkindex, superbin_t const& bin)
     {
-        u16 const binindex = m_chunk_array[chunkindex].m_bin_index;
-        if (m_binmaps[chunkindex] != 0xffffffff)
+        if (bin.m_use_binmap == 1)
         {
             binmap_t* binmap = (binmap_t*)fsa.idx2ptr(m_binmaps[chunkindex]);
             if (binmap->m_l1_offset != 0xffffffff)
@@ -493,11 +559,13 @@ namespace xcore
                 fsa.dealloc(binmap->m_l2_offset);
             }
             fsa.dealloc(m_binmaps[chunkindex]);
-            m_binmaps[chunkindex] = 0xffffffff;
         }
-        chunk_t& chunk    = m_chunk_array[chunkindex];
-        chunk.m_bin_index = 0;
-        chunk.m_elem_used = 0;
+
+        // NOTE: For debug purposes
+        m_binmaps[chunkindex] = 0xffffffff;
+        chunk_t& chunk        = m_chunk_array[chunkindex];
+        chunk.m_bin_index     = 0xffff;
+        chunk.m_elem_used     = 0xffff;
     }
 
     void* superalloc_t::allocate_from_chunk(superfsa_t& fsa, u32 chunkindex, u32 size, superbin_t const& bin, bool& chunk_is_now_full)
@@ -511,43 +579,63 @@ namespace xcore
             binmap_t* binmap = (binmap_t*)fsa.idx2ptr(m_binmaps[chunkindex]);
             u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
             u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
-            //@TODO: Combine find + set into one function
-            u32 const i = binmap->find(bin.m_alloc_count, l1, l2);
-            binmap->set(bin.m_alloc_count, l1, l2, i);
-            ptr = toaddress(m_memory_base, i * bin.m_alloc_size);
-
-            chunk_t& chunk = m_chunk_array[chunkindex];
-            chunk.m_elem_used += 1;
-            chunk_is_now_full = chunk.m_elem_used == bin.m_alloc_count;
+            u32 const i      = binmap->findandset(bin.m_alloc_count, l1, l2);
+            ptr              = toaddress(m_memory_base, (m_chunk_size * chunkindex) + i * bin.m_alloc_size);
         }
         else
         {
             u32 const pages_required = alignto(size, m_page_size) / m_page_size;
-            chunk_t&  chunk          = m_chunk_array[chunkindex];
-            chunk.m_elem_used        = (u16)pages_required;
-            chunk_is_now_full        = true;
+            m_binmaps[chunkindex]    = pages_required;
+            ptr                      = toaddress(m_memory_base, (m_chunk_size * chunkindex));
         }
+
+        chunk_t& chunk = m_chunk_array[chunkindex];
+        chunk.m_elem_used += 1;
+        chunk_is_now_full = chunk.m_elem_used == bin.m_alloc_count;
 
         return ptr;
     }
 
-    u32 superalloc_t::deallocate_from_chunk(superfsa_t& fsa, u32 chunkindex, superbin_t const& bin, bool& chunk_is_now_empty)
+    u32 superalloc_t::deallocate_from_chunk(superfsa_t& fsa, u32 chunkindex, void* ptr, superbin_t const& bin, bool& chunk_is_now_empty, bool& chunk_was_full)
     {
-        // deallocate an item from the chunk
-        // compute index of item
-        // clear that index in the binmap
-        // decrement 'm_elem_used'
-        // return true in 'chunk_is_now_empty' if chunk ends up being empty
+        if (bin.m_use_binmap == 1)
+        {
+            u32 const i      = todistance(m_memory_base, ptr) / bin.m_alloc_size;
+            binmap_t* binmap = (binmap_t*)fsa.idx2ptr(m_binmaps[chunkindex]);
+            u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
+            u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
+            binmap->clr(bin.m_alloc_count, l1, l2, i);
+        }
 
-        // TODO: IMPLEMENTATION
+        chunk_t& chunk = m_chunk_array[chunkindex];
+        chunk_was_full = chunk.m_elem_used == bin.m_alloc_count;
+        chunk.m_elem_used -= 1;
+        chunk_is_now_empty = chunk.m_elem_used == 0;
 
         return bin.m_alloc_size;
     }
 
+    void superallocator_t::initialize(xvmem* vmem)
+    {
+        m_vmem = vmem;
+        m_internal_heap.initialize(m_vmem, c_internal_heap_address_range, c_internal_heap_pre_size);
+        m_internal_fsa.initialize(m_internal_heap, m_vmem, c_internal_fsa_address_range, c_internal_fsa_pre_page_count);
+
+        u32 const attrs = 0;
+        m_vmem->reserve(c_address_range, m_page_size, attrs, m_address_base);
+
+        void* address_base = m_address_base;
+        for (s32 i = 0; i < c_num_allocators; ++i)
+        {
+            m_allocators[i].initialize(address_base, m_page_size, m_vmem, m_internal_heap, m_internal_fsa);
+            address_base = toaddress(address_base, alignto(m_allocators[i].m_memory_range, c_address_divisor));
+        }
+    }
+
     void* superallocator_t::allocate(u32 size, u32 alignment)
     {
-        size                 = (size + (alignment - 1)) & ~(alignment - 1);
-        u32 const binindex   = m_asbins[size2bin(size)].m_alloc_bin_index;
+        size                 = alignto(size, alignment);
+        u32 const binindex   = m_asbins[superbin_t::size2bin(size)].m_alloc_bin_index;
         s32 const allocindex = m_asbins[binindex].m_alloc_index;
         void*     ptr        = m_allocators[allocindex].allocate(m_internal_fsa, size, m_asbins[binindex]);
         return ptr;
@@ -555,9 +643,11 @@ namespace xcore
 
     u32 superallocator_t::deallocate(void* ptr)
     {
-        u32 const mapindex   = (u32)(todistance(m_address_base, ptr) / m_address_divisor);
+        u32 const mapindex   = (u32)(todistance(m_address_base, ptr) / c_address_divisor);
         u32 const allocindex = m_allocator_map[mapindex];
-        u32       size       = m_allocators[allocindex].deallocate(m_internal_fsa, ptr);
+        u32 const chunkindex = m_allocators[allocindex].get_chunkindex(ptr);
+        u32 const binindex   = m_allocators[allocindex].get_binindex(chunkindex);
+        u32 const size       = m_allocators[allocindex].deallocate(m_internal_fsa, ptr, chunkindex, m_asbins[binindex]);
         return size;
     }
 

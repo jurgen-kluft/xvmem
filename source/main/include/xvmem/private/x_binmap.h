@@ -23,6 +23,7 @@ namespace xcore
         void clr(u32 count, u16* l1, u16* l2, u32 bin);
         bool get(u32 count, u16 const* l2, u32 bin) const;
         u32  find(u32 count, u16 const* l1, u16 const* l2) const;
+        u32  findandset(u32 count, u16* l1, u16* l2);
 
         u32 m_l0;
         u32 m_l1_offset;

@@ -125,4 +125,41 @@ namespace xcore
             return bi2 + wi2 * 16;
         }
     }
+
+    u32 binmap_t::findandset(u32 count, u16* l1, u16* l2)
+    {
+        if (count <= 32)
+        {
+            u32 const b0  = (u32)xfindFirstBit(~m_l0);
+            u32 const bi0 = 1 << (b0 & (32 - 1));
+            u32 const wd0 = m_l0 | bi0;
+            m_l0          = wd0;
+            return b0;
+        }
+        else
+        {
+            u32 const bi0 = (u32)xfindFirstBit(~m_l0);
+            u32 const wi1 = bi0 * 16;
+            u32 const bi1 = (u32)xfindFirstBit((u16)~l1[wi1]);
+            u32 const wi2 = bi1 * 16;
+            u32 const bi2 = (u32)xfindFirstBit((u16)~l2[wi2]);
+            u32 const k   = bi2 + wi2 * 16;
+
+            u16 const wd2 = l2[wi2] | (1 << bi2);
+            if (wd2 == 0xffff)
+            {
+                u16 const wd1 = l1[wi1] | (1 << bi1);
+                if (wd1 == 0xffff)
+                {
+                    u32 const b0 = 1 << (wi1 & (32 - 1));
+                    u32 const wd0 = m_l0 | b0;
+                    m_l0          = wd0;
+                }
+                l1[wi1] = wd1;
+            }
+            l2[wi2] = wd2;
+        }
+    }
+
+
 } // namespace xcore
