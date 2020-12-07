@@ -96,10 +96,6 @@ namespace xcore
         u32  alloc(u32 size);
         void dealloc(u32 index);
 
-        void* idx2ptr(u32 i) const;
-        u32   ptr2idx(void* ptr) const;
-
-    private:
         struct page_t : public llnode_t
         {
             u16      m_item_size;
@@ -121,10 +117,8 @@ namespace xcore
 
             inline bool is_full() const { return m_item_count == m_item_max; }
             inline bool is_empty() const { return m_item_count == 0; }
-
-            inline u32 ptr2idx(void* const ptr, void* const elem) const { return (u32)(((u64)elem - (u64)ptr) / m_item_size); }
-
-            inline u32* idx2ptr(void* const ptr, u32 const index) const { return (u32*)((xbyte*)ptr + ((u64)index * (u64)m_item_size)); }
+            inline u32  ptr2idx(void* const ptr, void* const elem) const { return (u32)(((u64)elem - (u64)ptr) / m_item_size); }
+            inline u32* idx2ptr(void* const ptr, u32 const index) const { return (u32*)((xbyte*)ptr + (index * (u32)m_item_size)); }
 
             void* allocate(void* page_address)
             {
@@ -154,7 +148,24 @@ namespace xcore
             }
         };
 
-        void* pageindex_to_address(u16 ipage) const { return toaddress(m_address, (u64)ipage * m_page_size); }
+        inline void* pageindex_to_pageaddress(u16 ipage) const { return toaddress(m_address, (u64)ipage * m_page_size); }
+        inline void* idx2ptr(u32 i) const
+        {
+            u16 const           pageindex = i >> 16;
+            u16 const           itemindex = i & 0xFFFF;
+            page_t const* const ppage     = &m_page_array[pageindex];
+            void* const         paddr     = pageindex_to_pageaddress(pageindex);
+            return ppage->idx2ptr(paddr, itemindex);
+        }
+
+        inline u32 ptr2idx(void* ptr) const
+        {
+            u32 const           pageindex = (u32)(todistance(m_address, ptr) / m_page_size);
+            page_t const* const ppage     = &m_page_array[pageindex];
+            void* const         paddr     = pageindex_to_pageaddress(pageindex);
+            u32 const           itemindex = ppage->ptr2idx(paddr, ptr);
+            return (pageindex << 16) | (itemindex & 0xFFFF);
+        }
 
         xvmem*   m_vmem;
         void*    m_address;
@@ -245,7 +256,7 @@ namespace xcore
         u16 const     pageindex = i >> 16;
         u16 const     itemindex = i & 0xFFFF;
         page_t* const ppage     = &m_page_array[pageindex];
-        void* const   paddr     = pageindex_to_address(pageindex);
+        void* const   paddr     = pageindex_to_pageaddress(pageindex);
         ppage->deallocate(paddr, itemindex);
         if (ppage->is_full())
         {
@@ -261,25 +272,6 @@ namespace xcore
                 m_free_page_list.insert(m_page_array, pageindex);
             }
         }
-    }
-
-    void* superfsa_t::idx2ptr(u32 i) const
-    {
-        u16 const           pageindex = i >> 16;
-        u16 const           itemindex = i & 0xFFFF;
-        page_t const* const ppage     = &m_page_array[pageindex];
-        void* const         paddr     = pageindex_to_address(pageindex);
-        return ppage->idx2ptr(paddr, itemindex);
-    }
-
-    u32 superfsa_t::ptr2idx(void* ptr) const
-    {
-        u32 const           pageindex = (u32)(((u64)ptr - (u64)m_address) / m_page_size);
-        page_t const* const ppage     = &m_page_array[pageindex];
-        void* const         paddr     = pageindex_to_address(pageindex);
-        u32 const           itemindex = ppage->ptr2idx(paddr, ptr);
-        return (pageindex << 16) | (itemindex & 0xFFFF);
-        ;
     }
 
     // @superalloc manages an address range, a list of chunks and a range of allocation sizes.
@@ -381,6 +373,7 @@ namespace xcore
         /// The following is a strict data-drive initialization of the bins and allocators, please know what you are doing when modifying any of this.
 
         static const s32 c_num_bins           = 96;
+        // superbin_t(allocation size, bin index, allocator index, use binmap?, maximum allocation count, binmap level 1 length, binmap level 2 length)
         const superbin_t m_asbins[c_num_bins] = {
             bin_t(8, 0, 0, 1, 8192, 32, 512),        bin_t(16, 1, 0, 1, 4096, 16, 256),       bin_t(24, 2, 0, 1, 2730, 16, 256),       bin_t(32, 3, 0, 1, 2048, 8, 128),     bin_t(40, 4, 0, 1, 1638, 8, 128),       bin_t(48, 5, 0, 1, 1365, 8, 128),
             bin_t(56, 6, 0, 1, 1170, 8, 128),        bin_t(64, 7, 0, 1, 1024, 4, 64),         bin_t(80, 8, 0, 1, 819, 4, 64),          bin_t(96, 9, 0, 1, 682, 4, 64),       bin_t(112, 10, 0, 1, 585, 4, 64),       bin_t(128, 11, 0, 1, 512, 2, 32),
@@ -401,7 +394,7 @@ namespace xcore
 
         static const s32 c_num_allocators               = 12;
         superalloc_t     m_allocators[c_num_allocators] = {
-            superalloc_t(xMB * 128, xKB * 64, 512, 16), //
+            superalloc_t(xMB * 128, xKB * 64, 256, 16), // memory range, chunk size, number of chunks to cache, number of sizes
             superalloc_t(xMB * 384, xKB * 512, 64, 40), //
             superalloc_t(xMB * 512, xKB * 512, 2, 4),   //
             superalloc_t(xGB * 1, xMB * 1, 0, 4),       //
