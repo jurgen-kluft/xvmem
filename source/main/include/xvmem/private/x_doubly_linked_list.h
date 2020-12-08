@@ -105,6 +105,7 @@ namespace xcore
         {
             llindex_t i = m_head.node2idx(list, node);
             ASSERT(i.get() < m_size_max);
+            return i;
         }
 
         u16    m_size;
