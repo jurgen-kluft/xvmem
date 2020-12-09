@@ -94,7 +94,7 @@ namespace xcore
         u32  alloc(u32 size);
         void dealloc(u32 index);
 
-        struct page_t : public llnode_t
+        struct page_t
         {
             u16      m_item_size;
             u16      m_item_index;
@@ -171,6 +171,7 @@ namespace xcore
         u32              m_page_count;
         u32              m_page_size;
         page_t*          m_page_array;
+        llnode_t*        m_page_list;
         llist_t          m_free_page_list;
         llist_t          m_cached_page_list;
         static const s32 c_max_num_sizes = 16;
@@ -185,9 +186,10 @@ namespace xcore
         m_address_range              = address_range;
         m_page_count                 = (u32)(address_range / (u64)m_page_size);
         m_page_array                 = (page_t*)heap.allocate(m_page_count * sizeof(page_t));
+        m_page_list                  = (llnode_t*)heap.allocate(m_page_count * sizeof(llnode_t));
         u32 const num_pages_to_cache = xalign(size_to_pre_allocate, m_page_size) / m_page_size;
         ASSERT(num_pages_to_cache <= m_page_count);
-        m_free_page_list.initialize(m_page_array, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
+        m_free_page_list.initialize(m_page_list, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
         for (u32 i = 0; i < m_page_count; i++)
             m_page_array[i].initialize(8, 0);
         for (u32 i = 0; i < c_max_num_sizes; i++)
@@ -195,7 +197,7 @@ namespace xcore
 
         if (num_pages_to_cache > 0)
         {
-            m_cached_page_list.initialize(m_page_array, 0, num_pages_to_cache, num_pages_to_cache);
+            m_cached_page_list.initialize(m_page_list, 0, num_pages_to_cache, num_pages_to_cache);
             m_vmem->commit(m_address, m_page_size, num_pages_to_cache);
         }
     }
@@ -221,25 +223,31 @@ namespace xcore
             // Get a page and initialize that page for this size
             if (!m_cached_page_list.is_empty())
             {
-                ipage = m_cached_page_list.remove_headi(m_page_array).get();
+                ipage = m_cached_page_list.remove_headi(m_page_list).get();
                 ppage = &m_page_array[ipage];
                 ppage->initialize(size, m_page_size);
             }
             else if (!m_free_page_list.is_empty())
             {
-                ipage = m_free_page_list.remove_headi(m_page_array).get();
+                ipage = m_free_page_list.remove_headi(m_page_list).get();
                 ppage = &m_page_array[ipage];
                 ppage->initialize(size, m_page_size);
                 m_vmem->commit(ppage, m_page_size, 1);
             }
+            m_used_page_list_per_size[c].insert(m_page_list, ipage);
+        }
+        else
+        {
+            ipage = m_used_page_list_per_size[c].get();
+            ppage = &m_page_array[ipage];
         }
         if (ppage != nullptr)
         {
             paddress  = toaddress(m_address, (u64)ipage * m_page_size);
             void* ptr = ppage->allocate(paddress);
-            if (ppage->is_empty())
+            if (ppage->is_full())
             {
-                m_used_page_list_per_size[c].remove_head(m_page_array);
+                m_used_page_list_per_size[c].remove_head(m_page_list);
             }
             return ptr2idx(ptr);
         }
@@ -256,19 +264,19 @@ namespace xcore
         page_t* const ppage     = &m_page_array[pageindex];
         void* const   paddr     = pageindex_to_pageaddress(pageindex);
         ppage->deallocate(paddr, itemindex);
-        if (ppage->is_full())
+        if (ppage->is_empty())
         {
             s32 const c = (xcountTrailingZeros(ppage->m_item_size) - 3);
             ASSERT(c >= 0 && c < c_max_num_sizes);
-            m_used_page_list_per_size[c].remove_head(m_page_array);
+            m_used_page_list_per_size[c].remove_head(m_page_list);
             if (!m_cached_page_list.is_full())
             {
-                m_cached_page_list.insert(m_page_array, pageindex);
+                m_cached_page_list.insert(m_page_list, pageindex);
             }
             else
             {
                 m_vmem->decommit(paddr, m_page_size, 1);
-                m_free_page_list.insert(m_page_array, pageindex);
+                m_free_page_list.insert(m_page_list, pageindex);
             }
         }
     }
@@ -337,7 +345,7 @@ namespace xcore
     struct superbin_t
     {
         inline superbin_t(u32 allocsize_mb, u32 allocsize_kb, u32 allocsize_b, u8 binidx, u8 allocindex, u8 use_binmap, u16 count, u16 l1len, u16 l2len)
-            : m_alloc_size((xGB * allocsize_mb) + (xKB * allocsize_kb) + (allocsize_b))
+            : m_alloc_size((xMB * allocsize_mb) + (xKB * allocsize_kb) + (allocsize_b))
             , m_alloc_bin_index(binidx)
             , m_alloc_index(allocindex)
             , m_use_binmap(use_binmap)
@@ -455,11 +463,12 @@ namespace xcore
         }
 
         m_free_chunk_list.initialize(m_chunk_list, m_max_chunks_to_cache, m_chunk_cnt - m_max_chunks_to_cache, m_chunk_cnt);
-
-        m_cache_chunk_list.initialize(m_chunk_list, 0, m_max_chunks_to_cache, m_max_chunks_to_cache);
-        u32 const num_physical_pages = (u32)(((u64)m_chunk_size * m_max_chunks_to_cache) / m_page_size);
-        m_vmem->commit(m_memory_base, m_page_size, num_physical_pages);
-
+        if (m_max_chunks_to_cache > 0)
+        {
+            m_cache_chunk_list.initialize(m_chunk_list, 0, m_max_chunks_to_cache, m_max_chunks_to_cache);
+            u32 const num_physical_pages = (u32)(((u64)m_chunk_size * m_max_chunks_to_cache) / m_page_size);
+            m_vmem->commit(m_memory_base, m_page_size, num_physical_pages);
+        }
         m_used_chunk_list_per_size = (llhead_t*)heap.allocate(m_num_sizes * sizeof(llhead_t));
         for (u32 i = 0; i < m_num_sizes; i++)
             m_used_chunk_list_per_size[i].reset();
@@ -493,9 +502,9 @@ namespace xcore
             m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base] = chunkindex;
         }
 
-        bool        chunk_is_now_empty = false;
-        void* const ptr                = allocate_from_chunk(sfsa, chunkindex.get(), size, bin, chunk_is_now_empty);
-        if (chunk_is_now_empty)
+            bool        chunk_is_now_full = false;
+            void* const ptr               = allocate_from_chunk(sfsa, chunkindex.get(), size, bin, chunk_is_now_full);
+            if (chunk_is_now_full)  // Chunk is full, no more allocations possible
         {
             m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].remove_headi(m_chunk_list);
         }
@@ -512,8 +521,6 @@ namespace xcore
 
     u32 superalloc_t::deallocate(superfsa_t& sfsa, void* ptr, u32 chunkindex, superbin_t const& bin)
     {
-        chunk_t& chunk = m_chunk_array[chunkindex];
-        chunk.m_elem_used -= 1;
 
         bool      chunk_is_now_empty = false;
         bool      chunk_was_full     = false;
@@ -548,8 +555,8 @@ namespace xcore
             m_binmaps[chunkindex] = ibinmap;
             if (bin.m_alloc_count > 32)
             {
-                binmap->m_l1_offset = fsa.alloc(bin.m_binmap_l1len);
-                binmap->m_l2_offset = fsa.alloc(bin.m_binmap_l2len);
+                binmap->m_l1_offset = fsa.alloc(sizeof(u16) * bin.m_binmap_l1len);
+                binmap->m_l2_offset = fsa.alloc(sizeof(u16) * bin.m_binmap_l2len);
                 u16* l1             = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
                 u16* l2             = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
                 binmap->init(bin.m_alloc_count, l1, bin.m_binmap_l1len, l2, bin.m_binmap_l2len);
@@ -639,7 +646,7 @@ namespace xcore
             u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
             u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
             u32 const i      = binmap->findandset(bin.m_alloc_count, l1, l2);
-            ptr              = toaddress(m_memory_base, (m_chunk_size * chunkindex) + (u32)(i * bin.m_alloc_size));
+                ptr              = toaddress(m_memory_base, (m_chunk_size * chunkindex) + i * bin.m_alloc_size);
         }
         else
         {

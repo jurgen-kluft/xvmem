@@ -200,7 +200,7 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size += s_remove_item(m_head, list, item, node);
+        m_size -= s_remove_item(m_head, list, item, node);
         return node;
     }
 
@@ -208,7 +208,7 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size += s_remove_head(m_head, list, node);
+        m_size -= s_remove_head(m_head, list, node);
         return node;
     }
 
@@ -216,7 +216,7 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size += s_remove_tail(m_head, list, node);
+        m_size -= s_remove_tail(m_head, list, node);
         return node;
     }
 
@@ -224,7 +224,7 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size += s_remove_head(m_head, list, node);
+        m_size -= s_remove_head(m_head, list, node);
         return node2idx(list, node);
     }
 
@@ -232,7 +232,7 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size += s_remove_tail(m_head, list, node);
+        m_size -= s_remove_tail(m_head, list, node);
         return node2idx(list, node);
     }
 
