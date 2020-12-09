@@ -7,19 +7,22 @@
 
 namespace xcore
 {
-    void llist_t::initialize(llnode_t* list, u16 size, u16 max_size)
+    void llist_t::initialize(llnode_t* list, u16 start, u16 size, u16 max_size)
     {
         ASSERT(max_size > 0);
         ASSERT(size <= max_size);
         m_size     = size;
         m_size_max = max_size;
-        m_head     = 0;
-        for (u16 i = 0; i < max_size; ++i)
+        m_head     = start;
+
+        const u16 end = start + size;
+        for (u16 i = 0; i < size; ++i)
         {
-            list[i].link(i - 1, i + 1);
+            u16 const t = start + i;
+            list[t].link(t - 1, t + 1);
         }
-        list[0].link(max_size - 1, 1);
-        list[max_size - 1].link(max_size - 2, 0);
+        list[start].link(end - 1, start + 1);
+        list[end - 1].link(end - 2, start);
     }
 
     void llhead_t::insert(llnode_t* list, llindex_t item)

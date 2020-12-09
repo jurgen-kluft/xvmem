@@ -24,21 +24,21 @@ namespace xcore
     //
 
     class xalloc;
-    struct xalist_t;
     struct xpages_t;
+    struct llist_t;
 
     xpages_t* create_fsa_pages(xalloc* main_allocator, void* base_address, u64 memory_range, u32 page_size);
     void      destroy(xpages_t* pages);
 
-	xalist_t  init_list(xpages_t* pages);
-    void*     alloc_page(xpages_t* pages, xalist_t& page_list, u32 const elem_size);
-    void*     free_one_page(xpages_t* pages, xalist_t& page_list);
-    void      free_all_pages(xpages_t* pages, xalist_t& page_list);
-    void*     alloc_elem(xpages_t* pages, xalist_t& page_list, xalist_t& pages_empty_list, u32 const elem_size);
+    llist_t   init_list(xpages_t* pages);
+    void*     alloc_page(xpages_t* pages, llist_t& page_list, u32 const elem_size);
+    void*     free_one_page(xpages_t* pages, llist_t& page_list);
+    void      free_all_pages(xpages_t* pages, llist_t& page_list);
+    void*     alloc_elem(xpages_t* pages, llist_t& page_list, llist_t& pages_empty_list, u32 const elem_size);
     u32       sizeof_elem(xpages_t* pages, void* const ptr);
     u32       idx_of_elem(xpages_t* pages, void* const ptr);
     void*     ptr_of_elem(xpages_t* pages, u32 const index);
-    void      free_elem(xpages_t* pages, xalist_t& page_list, void* const ptr, xalist_t& pages_empty_list);
+    void      free_elem(xpages_t* pages, llist_t& page_list, void* const ptr, llist_t& pages_empty_list);
 
 } // namespace xcore
 

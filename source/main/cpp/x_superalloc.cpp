@@ -12,7 +12,7 @@ namespace xcore
     static inline u64   alignto(u64 value, u64 alignment) { return (value + (alignment - 1)) & ~(alignment - 1); }
     static inline u32   alignto(u32 value, u32 alignment) { return (value + (alignment - 1)) & ~(alignment - 1); }
     static inline void* toaddress(void* base, u64 offset) { return (void*)((u64)base + offset); }
-    static inline u64   todistance(void* base, void* ptr) { return (u64)((u64)ptr + (u64)base); }
+    static inline u64   todistance(void* base, void* ptr) { ASSERT(ptr > base);  return (u64)((u64)ptr - (u64)base); }
 
     // Can only allocate, used internally to allocate initially required memory
     class superheap_t
@@ -177,15 +177,17 @@ namespace xcore
         llhead_t         m_used_page_list_per_size[c_max_num_sizes];
     };
 
-    void superfsa_t::initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache)
+    void superfsa_t::initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 size_to_pre_allocate)
     {
         m_vmem         = vmem;
         u32 attributes = 0;
         m_vmem->reserve(address_range, m_page_size, attributes, m_address);
-        m_address_range = address_range;
-        m_page_count    = (u32)(address_range / (u64)m_page_size);
-        m_page_array    = (page_t*)heap.allocate(m_page_count * sizeof(page_t));
-        m_free_page_list.initialize(m_page_array + num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
+        m_address_range              = address_range;
+        m_page_count                 = (u32)(address_range / (u64)m_page_size);
+        m_page_array                 = (page_t*)heap.allocate(m_page_count * sizeof(page_t));
+        u32 const num_pages_to_cache = xalign(size_to_pre_allocate, m_page_size) / m_page_size;
+        ASSERT(num_pages_to_cache <= m_page_count);
+        m_free_page_list.initialize(m_page_array, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
         for (u32 i = 0; i < m_page_count; i++)
             m_page_array[i].initialize(8, 0);
         for (u32 i = 0; i < c_max_num_sizes; i++)
@@ -193,7 +195,7 @@ namespace xcore
 
         if (num_pages_to_cache > 0)
         {
-            m_cached_page_list.initialize(m_page_array, num_pages_to_cache, num_pages_to_cache);
+            m_cached_page_list.initialize(m_page_array, 0, num_pages_to_cache, num_pages_to_cache);
             m_vmem->commit(m_address, m_page_size, num_pages_to_cache);
         }
     }
@@ -209,11 +211,11 @@ namespace xcore
     {
         size               = xalign(size, 8);
         size               = xceilpo2(size);
-        s32 const c        = (xcountTrailingZeros(size) - 3) - 1;
+        s32 const c        = (xcountTrailingZeros(size) - 3);
         void*     paddress = nullptr;
         page_t*   ppage    = nullptr;
         u32       ipage    = 0xffffffff;
-        ASSERT(c < c_max_num_sizes);
+        ASSERT(c >= 0 && c < c_max_num_sizes);
         if (m_used_page_list_per_size[c].is_nil())
         {
             // Get a page and initialize that page for this size
@@ -256,8 +258,8 @@ namespace xcore
         ppage->deallocate(paddr, itemindex);
         if (ppage->is_full())
         {
-            s32 const c = (xcountTrailingZeros(ppage->m_item_size) - 3) - 1;
-            ASSERT(c < c_max_num_sizes);
+            s32 const c = (xcountTrailingZeros(ppage->m_item_size) - 3);
+            ASSERT(c >= 0 && c < c_max_num_sizes);
             m_used_page_list_per_size[c].remove_head(m_page_array);
             if (!m_cached_page_list.is_full())
             {
@@ -425,7 +427,7 @@ namespace xcore
         static const u32 c_internal_heap_address_range = 32 * xMB;
         static const u32 c_internal_heap_pre_size      = 2 * xMB;
         static const u32 c_internal_fsa_address_range  = 32 * xMB;
-        static const u32 c_internal_fsa_pre_page_count = 512;
+        static const u32 c_internal_fsa_pre_size       = 4 * xMB;
 
         /// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         /// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -452,9 +454,9 @@ namespace xcore
             m_binmaps[i]     = 0xffffffff;
         }
 
-        m_free_chunk_list.initialize(m_chunk_list + m_max_chunks_to_cache, m_chunk_cnt - m_max_chunks_to_cache, m_chunk_cnt - m_max_chunks_to_cache);
+        m_free_chunk_list.initialize(m_chunk_list, m_max_chunks_to_cache, m_chunk_cnt - m_max_chunks_to_cache, m_chunk_cnt);
 
-        m_cache_chunk_list.initialize(m_chunk_list, m_max_chunks_to_cache, m_max_chunks_to_cache);
+        m_cache_chunk_list.initialize(m_chunk_list, 0, m_max_chunks_to_cache, m_max_chunks_to_cache);
         u32 const num_physical_pages = (u32)(((u64)m_chunk_size * m_max_chunks_to_cache) / m_page_size);
         m_vmem->commit(m_memory_base, m_page_size, num_physical_pages);
 
@@ -593,7 +595,7 @@ namespace xcore
     {
         if (bin.m_use_binmap == 1)
         {
-            u32 const   num_physical_pages = m_chunk_size / m_page_size;
+            u32 const   num_physical_pages = (u32)(m_chunk_size / m_page_size);
             void* const chunkaddress       = toaddress(m_memory_base, (m_chunk_size * chunkindex));
             m_vmem->commit(chunkaddress, m_page_size, num_physical_pages);
         }
@@ -637,7 +639,7 @@ namespace xcore
             u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
             u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
             u32 const i      = binmap->findandset(bin.m_alloc_count, l1, l2);
-            ptr              = toaddress(m_memory_base, (m_chunk_size * chunkindex) + i * bin.m_alloc_size);
+            ptr              = toaddress(m_memory_base, (m_chunk_size * chunkindex) + (u32)(i * bin.m_alloc_size));
         }
         else
         {
@@ -681,7 +683,7 @@ namespace xcore
     {
         m_vmem = vmem;
         m_internal_heap.initialize(m_vmem, c_internal_heap_address_range, c_internal_heap_pre_size);
-        m_internal_fsa.initialize(m_internal_heap, m_vmem, c_internal_fsa_address_range, c_internal_fsa_pre_page_count);
+        m_internal_fsa.initialize(m_internal_heap, m_vmem, c_internal_fsa_address_range, c_internal_fsa_pre_size);
 
         u32 const attrs = 0;
         m_vmem->reserve(c_address_range, m_page_size, attrs, m_address_base);

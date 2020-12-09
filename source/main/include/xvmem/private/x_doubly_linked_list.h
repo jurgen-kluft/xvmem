@@ -9,7 +9,7 @@ namespace xcore
 {
     struct llindex_t
     {
-        const u16 NIL = 0xFFFF;
+        static const u16 NIL = 0xFFFF;
 
         inline llindex_t() : m_index(NIL) {}
         inline llindex_t(u16 i) : m_index(i) {}
@@ -80,7 +80,7 @@ namespace xcore
         inline bool is_empty() const { return m_size == 0; }
         inline bool is_full() const { return m_size == m_size_max; }
 
-        void initialize(llnode_t* list, u16 size, u16 max_size);
+        void initialize(llnode_t* list, u16 start, u16 size, u16 max_size);
         inline void reset()
         {
             m_size = 0;

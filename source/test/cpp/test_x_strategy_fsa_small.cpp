@@ -76,7 +76,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             vmem.reserve(mem_range, page_size, page_attrs, mem_base);
             xpages_t* pages = create_fsa_pages(gTestAllocator, mem_base, mem_range, page_size);
 
-            xalist_t page_list = init_list(pages);
+            llist_t page_list = init_list(pages);
             CHECK_EQUAL(0, page_list.size());
             alloc_page(pages, page_list, 32);
             CHECK_EQUAL(1, page_list.size());
@@ -96,7 +96,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             vmem.reserve(mem_range, page_size, page_attrs, mem_base);
             xpages_t* pages = create_fsa_pages(gTestAllocator, mem_base, mem_range, page_size);
 
-            xalist_t page_list = init_list(pages);
+            llist_t page_list = init_list(pages);
             for (s32 i = 0; i < 1024; ++i)
             {
                 u32 const size = 32 + ((i / 64) * 32);
@@ -120,7 +120,7 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             vmem.reserve(mem_range, page_size, page_attrs, mem_base);
             xpages_t* pages = create_fsa_pages(gTestAllocator, mem_base, mem_range, page_size);
 
-            xalist_t page_list = init_list(pages);
+            llist_t page_list = init_list(pages);
             for (s32 i = 0; i < 1024; ++i)
             {
                 u32 const size = 32 + ((i / 64) * 32);
@@ -129,8 +129,8 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
                 const u32 cnt      = (64 * 1024) / size;
                 void**    elements = (void**)gTestAllocator->allocate(cnt * sizeof(void*), sizeof(void*));
 
-                xalist_t notfull_pages = init_list(pages);
-                xalist_t empty_pages = init_list(pages);
+                llist_t notfull_pages = init_list(pages);
+                llist_t empty_pages = init_list(pages);
                 {
                     elements[0] = alloc_elem(pages, notfull_pages, empty_pages, size);
                     for (u32 j = 1; j < cnt; ++j)
@@ -172,8 +172,8 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             const s32 cnt = 1024;
             void*     element[cnt];
 
-            xalist_t used_pages = init_list(pages);
-            xalist_t empty_pages = init_list(pages);
+            llist_t used_pages = init_list(pages);
+            llist_t empty_pages = init_list(pages);
             u32      i = 0;
             {
                 u32 const size = 32 + ((i / 64) * 32);
@@ -209,8 +209,8 @@ UNITTEST_SUITE_BEGIN(strategy_fsa_small)
             const s32 cnt = 1024;
             void*     element[cnt];
 
-            xalist_t used_pages = init_list(pages);
-            xalist_t empty_pages = init_list(pages);
+            llist_t used_pages = init_list(pages);
+            llist_t empty_pages = init_list(pages);
 
             for (s32 i = 0; i < 32; ++i)
             {

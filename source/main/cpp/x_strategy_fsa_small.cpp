@@ -33,7 +33,7 @@ namespace xcore
             u32 const size_index  = (alloc_size - m_fvsa_min_size) / m_fvsa_step_size;
             u32 const alloc_index = m_fvsa_size_to_index[size_index];
 
-            xalist_t& page_list = m_fvsa_pages_list[alloc_index];
+            llist_t& page_list = m_fvsa_pages_list[alloc_index];
             free_elem(m_fsa_pages, page_list, ptr, m_fsa_freepages_list);
 
 			// Check the size of the 'freepages list' to see if we need to free any pages
@@ -68,9 +68,9 @@ namespace xcore
         u8*       m_fvsa_size_to_index;
         u16*      m_fvsa_index_to_size;
         u32       m_fvsa_pages_list_size;
-        xalist_t* m_fvsa_pages_list; // N allocators
+        llist_t* m_fvsa_pages_list; // N allocators
         u32       m_fsa_page_size;   // 64 KB
-        xalist_t  m_fsa_freepages_list;
+        llist_t  m_fsa_freepages_list;
         xpages_t* m_fsa_pages;
     };
 
@@ -169,9 +169,9 @@ namespace xcore
         fsa->m_fvsa_step_size       = min_step;
         fsa->m_fvsa_max_size        = max_size;
         fsa->m_fvsa_pages_list_size = num_allocators;
-        fsa->m_fvsa_pages_list      = (xalist_t*)fsa->m_main_heap->allocate(sizeof(xalist_t) * fsa->m_fvsa_pages_list_size, sizeof(void*));
+        fsa->m_fvsa_pages_list      = (llist_t*)fsa->m_main_heap->allocate(sizeof(llist_t) * fsa->m_fvsa_pages_list_size, sizeof(void*));
 
-        xalist_t const default_list = init_list(fsa->m_fsa_pages);
+        llist_t const default_list = init_list(fsa->m_fsa_pages);
         for (u32 c = 0; c < fsa->m_fvsa_pages_list_size; ++c)
         {
             fsa->m_fvsa_pages_list[c] = default_list;

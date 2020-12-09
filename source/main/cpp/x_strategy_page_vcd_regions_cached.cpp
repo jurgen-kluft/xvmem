@@ -73,9 +73,9 @@ namespace xcore
             // Is cache too large?  ->  decommit the oldest
             while (m_regions_cache.size() > m_max_regions_cached)
             {
-                xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
-                u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
-                void*             reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
+                llnode_t*       pregion  = m_regions_cache.remove_head(m_regions_list);
+                llindex_t const iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
+                void*           reg_base = x_advance_ptr(m_mem_base, iregion.get() * m_reg_range);
                 m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
             }
         }
@@ -97,8 +97,8 @@ namespace xcore
         u32               m_num_regions;        // Number of regions
         u32               m_max_regions_cached; // Number of regions to cache (maximum)
         region_t*         m_regions;            // The array of regions
-        xalist_t          m_regions_cache;      // We do not immediatly decommit a region, we add it to this list
-        xalist_t::node_t* m_regions_list;       // Every region has a list node
+        llist_t           m_regions_cache;      // We do not immediatly decommit a region, we add it to this list
+        llnode_t*         m_regions_list;       // Every region has a list node
     };
 
     xalloc_page_vcd_regions_cached::xalloc_page_vcd_regions_cached()
@@ -215,9 +215,9 @@ namespace xcore
     {
 		while (m_regions_cache.is_empty() == false)
 		{
-            xalist_t::node_t* pregion  = m_regions_cache.remove_head(m_regions_list);
-            u16 const         iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
-            void*             reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
+            llnode_t*       pregion  = m_regions_cache.remove_head(m_regions_list);
+            llindex_t const iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
+            void*           reg_base = x_advance_ptr(m_mem_base, iregion.get() * m_reg_range);
             m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
 		}
 
@@ -240,11 +240,11 @@ namespace xcore
         proxy->m_num_regions        = (u32)(address_range / region_size);
         proxy->m_max_regions_cached = num_regions_to_cache;
         proxy->m_regions            = (xalloc_page_vcd_regions_cached::region_t*)main_heap->allocate(sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
-        proxy->m_regions_cache      = xalist_t(0, proxy->m_num_regions);
-        proxy->m_regions_list       = (xalist_t::node_t*)main_heap->allocate(sizeof(xalist_t::node_t) * proxy->m_num_regions);
+        proxy->m_regions_cache      = llist_t(0, proxy->m_num_regions);
+        proxy->m_regions_list       = (llnode_t*)main_heap->allocate(sizeof(llnode_t) * proxy->m_num_regions);
 
         x_memclr(proxy->m_regions, sizeof(xalloc_page_vcd_regions_cached::region_t) * proxy->m_num_regions);
-		x_memset(proxy->m_regions_list, 0xFFFFFFFF, sizeof(xalist_t::node_t) * proxy->m_num_regions);
+		x_memset(proxy->m_regions_list, 0xFFFFFFFF, sizeof(llnode_t) * proxy->m_num_regions);
 
         return proxy;
     }

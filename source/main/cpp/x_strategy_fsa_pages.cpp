@@ -14,7 +14,7 @@ namespace xcore
 {
     struct xpages_t
     {
-        xpages_t(xalloc* main_allocator, void* base_address, u32 page_size, u16 const page_cnt, llnode* list_data, xpage_t* const page_array)
+        xpages_t(xalloc* main_allocator, void* base_address, u32 page_size, u16 const page_cnt, llnode_t* list_data, xpage_t* const page_array)
             : m_main_allocator(main_allocator)
             , m_base_address(base_address)
             , m_page_size(page_size)
@@ -24,7 +24,7 @@ namespace xcore
             , m_page_list(list_data)
             , m_pages(page_array)
         {
-            m_free_page_list.initialize(list_data, page_cnt, page_cnt);
+            m_free_page_list.initialize(list_data, 0, page_cnt, page_cnt);
         }
 
         xpage_t* alloc_page(u32 const elem_size);
@@ -41,12 +41,12 @@ namespace xcore
         xpage_t* indexto_page(u16 const page) const;
         u16      indexof_page(xpage_t* const page) const;
 
-        llnode* next_node(llnode* const node);
-        llnode* prev_node(llnode* const node);
-        llindex next_node(llindex const node) const;
-        llindex prev_node(llindex const node) const;
-        llnode* indexto_node(llindex const node) const;
-        llindex indexof_node(llnode* const node) const;
+        llnode_t* next_node(llnode_t* const node);
+        llnode_t* prev_node(llnode_t* const node);
+        llindex_t next_node(llindex_t const node) const;
+        llindex_t prev_node(llindex_t const node) const;
+        llnode_t* indexto_node(llindex_t const node) const;
+        llindex_t indexof_node(llnode_t* const node) const;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
@@ -54,9 +54,9 @@ namespace xcore
         void*             m_base_address;
         u32               m_page_size;
         u16               m_free_page_index;
-        llist             m_free_page_list;
+        llist_t             m_free_page_list;
         u16 const         m_page_cnt;
-        llnode*           m_page_list;
+        llnode_t*           m_page_list;
         xpage_t*          m_pages;
     };
 
@@ -70,7 +70,7 @@ namespace xcore
         if (!m_free_page_list.is_empty())
         {
             // Get an empty page by removing it from the list
-            llindex const ipage = m_free_page_list.remove_headi(m_page_list);
+            llindex_t const ipage = m_free_page_list.remove_headi(m_page_list);
             ppage = indexto_page(ipage.get());
 
         }
@@ -150,35 +150,35 @@ namespace xcore
         return (ipage << 16) | (ielem);
     }
 
-    llnode* xpages_t::next_node(llnode* const node)
+    llnode_t* xpages_t::next_node(llnode_t* const node)
     {
-        llindex const inext = node->m_next;
+        llindex_t const inext = node->m_next;
         return indexto_node(inext);
     }
 
-    llnode* xpages_t::prev_node(llnode* const node)
+    llnode_t* xpages_t::prev_node(llnode_t* const node)
     {
-        llindex const iprev = node->m_prev;
+        llindex_t const iprev = node->m_prev;
         return indexto_node(iprev);
     }
 
-    llindex xpages_t::next_node(llindex const node) const
+    llindex_t xpages_t::next_node(llindex_t const node) const
     {
         if (node.is_nil())
-            return llindex();
+            return llindex_t();
         ASSERT(node.get() < m_page_cnt);
         return m_page_list[node.get()].m_next;
     }
 
-    llindex xpages_t::prev_node(llindex const node) const
+    llindex_t xpages_t::prev_node(llindex_t const node) const
     {
         if (node.is_nil())
-            return llindex();
+            return llindex_t();
         ASSERT(node.get() < m_page_cnt);
         return m_page_list[node.get()].m_prev;
     }
 
-    llnode* xpages_t::indexto_node(llindex const node) const
+    llnode_t* xpages_t::indexto_node(llindex_t const node) const
     {
         if (node.is_nil())
             return nullptr;
@@ -186,11 +186,11 @@ namespace xcore
         return &m_page_list[node.get()];
     }
 
-    llindex xpages_t::indexof_node(llnode* const node) const
+    llindex_t xpages_t::indexof_node(llnode_t* const node) const
     {
         if (node == nullptr)
-            return llindex();
-        llindex const index = (u16)(((u64)node - (u64)&m_page_list[0]) / sizeof(llnode));
+            return llindex_t();
+        llindex_t const index = (u16)(((u64)node - (u64)&m_page_list[0]) / sizeof(llnode_t));
         ASSERT(index.get() < m_page_cnt);
         return index;
     }
@@ -199,8 +199,8 @@ namespace xcore
     {
         if (page == nullptr)
             return nullptr;
-        llindex const index = indexof_page(page);
-        llindex const next  = next_node(index);
+        llindex_t const index = indexof_page(page);
+        llindex_t const next  = next_node(index);
         if (next.is_nil())
             return nullptr;
         return &m_pages[next.get()];
@@ -210,8 +210,8 @@ namespace xcore
     {
         if (page == nullptr)
             return nullptr;
-        llindex const index = indexof_page(page);
-        llindex const prev  = prev_node(index);
+        llindex_t const index = indexof_page(page);
+        llindex_t const prev  = prev_node(index);
         if (prev.is_nil())
             return nullptr;
         return &m_pages[prev.get()];
@@ -251,7 +251,7 @@ namespace xcore
         ASSERT(main_allocator != nullptr);
         u32 const         page_cnt       = (u32)(memory_range / page_size);
         xpage_t*          page_array     = (xpage_t*)main_allocator->allocate(sizeof(xpage_t) * page_cnt, sizeof(void*));
-        llnode* page_list_data = (llnode*)main_allocator->allocate(sizeof(llnode) * page_cnt, sizeof(void*));
+        llnode_t* page_list_data = (llnode_t*)main_allocator->allocate(sizeof(llnode_t) * page_cnt, sizeof(void*));
         xpages_t*         pages          = main_allocator->construct<xpages_t>(main_allocator, base_address, page_size, page_cnt, page_list_data, page_array);
 
         return pages;
@@ -268,12 +268,12 @@ namespace xcore
         pages->m_main_allocator->deallocate(pages);
     }
 
-	llist  init_list(xpages_t* pages)
+	llist_t  init_list(xpages_t* pages)
 	{
-		return llist(0, pages->m_page_cnt);
+		return llist_t(0, pages->m_page_cnt);
 	}
 
-    void* alloc_page(xpages_t* pages, llist& page_list, u32 const elem_size)
+    void* alloc_page(xpages_t* pages, llist_t& page_list, u32 const elem_size)
     {
         xpage_t*  ppage = pages->alloc_page(elem_size);
         u16 const ipage = pages->indexof_page(ppage);
@@ -281,9 +281,9 @@ namespace xcore
         return pages->address_of_page(ppage);
     }
 
-    void* free_one_page(xpages_t* pages, llist& page_list)
+    void* free_one_page(xpages_t* pages, llist_t& page_list)
     {
-        llhead const ipage = page_list.m_head;
+        llhead_t const ipage = page_list.m_head;
         if (ipage.is_nil())
             return nullptr;
         page_list.remove_item(pages->m_page_list, ipage);
@@ -293,24 +293,24 @@ namespace xcore
         return apage;
     }
 
-    void free_all_pages(xpages_t* pages, llist& page_list)
+    void free_all_pages(xpages_t* pages, llist_t& page_list)
     {
         while (!page_list.is_empty())
         {
-            llhead const ipage = page_list.m_head;
+            llhead_t const ipage = page_list.m_head;
             page_list.remove_item(pages->m_page_list, ipage);
             xpage_t* ppage = pages->indexto_page(ipage.get());
             pages->free_page(ppage);
         }
     }
 
-    void* alloc_elem(xpages_t* pages, llist& page_list, llist& pages_empty_list, u32 const elem_size)
+    void* alloc_elem(xpages_t* pages, llist_t& page_list, llist_t& pages_empty_list, u32 const elem_size)
     {
         // If list is empty, request a new page and add it to the page_list
         // Using the page allocate a new element
         // return pointer to element
         // If page is full remove it from the list
-        llindex  ipage;
+        llindex_t  ipage;
         xpage_t* ppage = nullptr;
         if (page_list.is_empty())
         {
@@ -355,7 +355,7 @@ namespace xcore
     u32   idx_of_elem(xpages_t* pages, void* const ptr) { return pages->ptr2idx(ptr); }
     void* ptr_of_elem(xpages_t* pages, u32 const index) { return pages->idx2ptr(index); }
 
-    void free_elem(xpages_t* pages, llist& page_list, void* const ptr, llist& page_empty_list)
+    void free_elem(xpages_t* pages, llist_t& page_list, void* const ptr, llist_t& page_empty_list)
     {
         // Find page that this pointer belongs to
         // Determine element index of this pointer

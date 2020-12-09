@@ -54,8 +54,8 @@ namespace xcore
     protected:
         xalloc* const   m_main_heap;
         xpages_t* const m_pages;
-        xalist_t        m_pages_notfull_list;
-        xalist_t        m_pages_empty_list;
+        llist_t         m_pages_notfull_list;
+        llist_t         m_pages_empty_list;
         u32 const       m_alloc_size;
     };
 
