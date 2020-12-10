@@ -12,7 +12,11 @@ namespace xcore
     static inline u64   alignto(u64 value, u64 alignment) { return (value + (alignment - 1)) & ~(alignment - 1); }
     static inline u32   alignto(u32 value, u32 alignment) { return (value + (alignment - 1)) & ~(alignment - 1); }
     static inline void* toaddress(void* base, u64 offset) { return (void*)((u64)base + offset); }
-    static inline u64   todistance(void* base, void* ptr) { ASSERT(ptr > base);  return (u64)((u64)ptr - (u64)base); }
+    static inline u64   todistance(void* base, void* ptr)
+    {
+        ASSERT(ptr > base);
+        return (u64)((u64)ptr - (u64)base);
+    }
 
     // Can only allocate, used internally to allocate initially required memory
     class superheap_t
@@ -499,12 +503,12 @@ namespace xcore
                     commit_chunk(chunkindex.get(), size, bin);
                 }
             }
-            m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base] = chunkindex;
+            m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].insert(m_chunk_list, chunkindex);
         }
 
-            bool        chunk_is_now_full = false;
-            void* const ptr               = allocate_from_chunk(sfsa, chunkindex.get(), size, bin, chunk_is_now_full);
-            if (chunk_is_now_full)  // Chunk is full, no more allocations possible
+        bool        chunk_is_now_full = false;
+        void* const ptr               = allocate_from_chunk(sfsa, chunkindex.get(), size, bin, chunk_is_now_full);
+        if (chunk_is_now_full) // Chunk is full, no more allocations possible
         {
             m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].remove_headi(m_chunk_list);
         }
@@ -646,7 +650,7 @@ namespace xcore
             u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
             u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
             u32 const i      = binmap->findandset(bin.m_alloc_count, l1, l2);
-                ptr              = toaddress(m_memory_base, (m_chunk_size * chunkindex) + i * bin.m_alloc_size);
+            ptr              = toaddress(m_memory_base, (m_chunk_size * chunkindex) + i * bin.m_alloc_size);
         }
         else
         {
@@ -665,7 +669,9 @@ namespace xcore
         u32 size;
         if (bin.m_use_binmap == 1)
         {
-            u32 const i      = (u32)(todistance(m_memory_base, ptr) / bin.m_alloc_size);
+            void* const chunkaddress = toaddress(m_memory_base, (m_chunk_size * chunkindex));
+            u32 const   i            = (u32)(todistance(chunkaddress, ptr) / bin.m_alloc_size);
+            ASSERT(i < bin.m_alloc_count);
             binmap_t* binmap = (binmap_t*)fsa.idx2ptr(m_binmaps[chunkindex]);
             u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
             u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);

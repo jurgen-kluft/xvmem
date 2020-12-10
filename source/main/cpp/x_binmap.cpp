@@ -120,7 +120,7 @@ namespace xcore
         {
             u32 const wi1 = bi0 * 16;
             u32 const bi1 = (u32)xfindFirstBit((u16)~l1[wi1]);
-            u32 const wi2 = bi1 * 16;
+            u32 const wi2 = wi1 * 16 + bi1;
             u32 const bi2 = (u32)xfindFirstBit((u16)~l2[wi2]);
             return bi2 + wi2 * 16;
         }
@@ -141,7 +141,7 @@ namespace xcore
             u32 const bi0 = (u32)xfindFirstBit(~m_l0);
             u32 const wi1 = bi0 * 16;
             u32 const bi1 = (u32)xfindFirstBit((u16)~l1[wi1]);
-            u32 const wi2 = bi1 * 16;
+            u32 const wi2 = wi1 * 16 + bi1;
             u32 const bi2 = (u32)xfindFirstBit((u16)~l2[wi2]);
             u32 const k   = bi2 + wi2 * 16;
 
@@ -158,6 +158,7 @@ namespace xcore
                 l1[wi1] = wd1;
             }
             l2[wi2] = wd2;
+            return  k;
         }
     }
 
