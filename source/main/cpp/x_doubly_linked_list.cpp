@@ -72,21 +72,32 @@ namespace xcore
         llnode_t* const pnext = llhead_t::idx2node(nodes, pitem->m_next);
         pprev->m_next       = pitem->m_next;
         pnext->m_prev       = pitem->m_prev;
-        pitem->unlink();
 
         if (head.is_nil())
         {
+            ASSERT(false);  // Should not happen!
+            pitem->unlink();
             return 0;
         }
         else
         {
-            if (head.get() == item.get())
+            llnode_t* const phead = llhead_t::idx2node(nodes, head);
+            if (phead->is_last())
             {
-                head = head.node2idx(nodes, pnext);
+                ASSERT(head.get() == item.get());
+                head.reset();
+                pitem->unlink();
             }
+            else
+            {
+                pprev->m_next = pitem->m_next;
+                pnext->m_prev = pitem->m_prev;
+                pitem->unlink();
+                head = pprev->m_next;
         }
         out_node = pitem;
         return 1;
+        }
     }
 
     static s32 s_remove_head(llhead_t& head, llnode_t* nodes, llnode_t*& out_node)
@@ -97,25 +108,24 @@ namespace xcore
             return 0;
         }
 
-        llindex_t const iitem = head;
-        llnode_t* const pitem = llhead_t::idx2node(nodes, iitem);
-        llindex_t const inext = pitem->m_next;
-        llnode_t* const pnext = llhead_t::idx2node(nodes, inext);
-        llindex_t const iprev = pitem->m_prev;
-        llnode_t* const pprev = llhead_t::idx2node(nodes, iprev);
-        if (iitem == inext && iitem == iprev)
+        llnode_t* const phead = llhead_t::idx2node(nodes, head);
+        if (phead->is_last())
         {
             head.reset();
         }
         else
         {
+            llindex_t const inext = phead->m_next;
+            llnode_t* const pnext = llhead_t::idx2node(nodes, inext);
+            llindex_t const iprev = phead->m_prev;
+            llnode_t* const pprev = llhead_t::idx2node(nodes, iprev);
             pprev->m_next = inext;
             pnext->m_prev = iprev;
             head          = inext;
         }
 
-        pitem->unlink();
-        out_node = pitem;
+        phead->unlink();
+        out_node = phead;
         return 1;
     }
 
@@ -128,22 +138,24 @@ namespace xcore
         }
         llindex_t const inext = head;
         llnode_t* const pnext = llhead_t::idx2node(nodes, inext);
-        llindex_t const iitem = pnext->m_prev;
-        llnode_t* const pitem = llhead_t::idx2node(nodes, iitem);
-        llindex_t const iprev = pitem->m_prev;
-        llnode_t* const pprev = llhead_t::idx2node(nodes, iprev);
-        if (iitem == inext && inext == iprev)
+        if (pnext->is_last())
         {
             head.reset();
+            pnext->unlink();
+            out_node = pnext;
         }
         else
         {
+            llindex_t const iitem = pnext->m_prev;
+            llnode_t* const pitem = llhead_t::idx2node(nodes, iitem);
+            llindex_t const iprev = pitem->m_prev;
+            llnode_t* const pprev = llhead_t::idx2node(nodes, iprev);
             pprev->m_next = inext;
             pnext->m_prev = iprev;
+            pitem->unlink();
+            out_node = pitem;
+            head = pprev->m_next;
         }
-
-        pitem->unlink();
-        out_node = pitem;
         return true;
     }
 
