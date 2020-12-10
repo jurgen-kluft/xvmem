@@ -9,8 +9,6 @@
 
 namespace xcore
 {
-    static inline u64   alignto(u64 value, u64 alignment) { return (value + (alignment - 1)) & ~(alignment - 1); }
-    static inline u32   alignto(u32 value, u32 alignment) { return (value + (alignment - 1)) & ~(alignment - 1); }
     static inline void* toaddress(void* base, u64 offset) { return (void*)((u64)base + offset); }
     static inline u64   todistance(void* base, void* ptr)
     {
@@ -49,7 +47,7 @@ namespace xcore
 
         if (size_to_pre_allocate > 0)
         {
-            u32 const pages_to_commit = (u32)(alignto(size_to_pre_allocate, (u64)m_page_size) / m_page_size);
+            u32 const pages_to_commit = (u32)(xalignUp(size_to_pre_allocate, (u64)m_page_size) / m_page_size);
             m_vmem->commit(m_address, m_page_size, pages_to_commit);
             m_page_count_current = pages_to_commit;
         }
@@ -70,12 +68,12 @@ namespace xcore
 
     void* superheap_t::allocate(u32 size)
     {
-        size        = alignto(size, m_size_alignment);
+        size        = xalignUp(size, m_size_alignment);
         u64 ptr_max = ((u64)m_page_count_current * m_page_size);
         if ((m_ptr + size) > ptr_max)
         {
             // add more pages
-            u32 const page_count           = (u32)(alignto(m_ptr + size, (u64)m_page_size) / (u64)m_page_size);
+            u32 const page_count           = (u32)(xalignUp(m_ptr + size, (u64)m_page_size) / (u64)m_page_size);
             u32 const page_count_to_commit = page_count - m_page_count_current;
             u64       commit_base          = ((u64)m_page_count_current * m_page_size);
             m_vmem->commit(toaddress(m_address, commit_base), m_page_size, page_count_to_commit);
@@ -105,7 +103,7 @@ namespace xcore
             u16      m_item_count;
             u16      m_item_max;
             u16      m_dummy;
-            llhead_t m_item_freelist;
+            u16      m_item_freelist;
 
             void initialize(u32 size, u32 pagesize)
             {
@@ -114,7 +112,7 @@ namespace xcore
                 m_item_count = 0;
                 m_item_max   = pagesize / size;
                 m_dummy      = 0x10DA;
-                m_item_freelist.reset();
+                m_item_freelist = 0xffff;
             }
 
             inline bool is_full() const { return m_item_count == m_item_max; }
@@ -125,10 +123,10 @@ namespace xcore
             void* allocate(void* page_address)
             {
                 m_item_count++;
-                if (m_item_freelist.is_nil() == false)
+                if (m_item_freelist != 0xffff)
                 {
-                    llindex_t const  ielem = m_item_freelist;
-                    llindex_t* const pelem = (llindex_t*)idx2ptr(page_address, ielem.get());
+                    u16 const  ielem = m_item_freelist;
+                    u16* const pelem = (u16*)idx2ptr(page_address, ielem);
                     m_item_freelist        = pelem[0];
                     return (void*)pelem;
                 }
@@ -143,7 +141,7 @@ namespace xcore
             }
             void deallocate(void* page_address, u16 item_index)
             {
-                llindex_t* const pelem = (llindex_t*)idx2ptr(page_address, item_index);
+                u16* const pelem = (u16*)idx2ptr(page_address, item_index);
                 pelem[0]               = m_item_freelist;
                 m_item_freelist        = item_index;
                 m_item_count -= 1;
@@ -191,7 +189,7 @@ namespace xcore
         m_page_count                 = (u32)(address_range / (u64)m_page_size);
         m_page_array                 = (page_t*)heap.allocate(m_page_count * sizeof(page_t));
         m_page_list                  = (llnode_t*)heap.allocate(m_page_count * sizeof(llnode_t));
-        u32 const num_pages_to_cache = xalign(size_to_pre_allocate, m_page_size) / m_page_size;
+        u32 const num_pages_to_cache = xalignUp(size_to_pre_allocate, m_page_size) / m_page_size;
         ASSERT(num_pages_to_cache <= m_page_count);
         m_free_page_list.initialize(m_page_list, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
         for (u32 i = 0; i < m_page_count; i++)
@@ -215,7 +213,7 @@ namespace xcore
 
     u32 superfsa_t::alloc(u32 size)
     {
-        size               = xalign(size, 8);
+        size               = xalignUp(size, 8);
         size               = xceilpo2(size);
         s32 const c        = (xcountTrailingZeros(size) - 3);
         void*     paddress = nullptr;
@@ -272,7 +270,7 @@ namespace xcore
         {
             s32 const c = (xcountTrailingZeros(ppage->m_item_size) - 3);
             ASSERT(c >= 0 && c < c_max_num_sizes);
-            m_used_page_list_per_size[c].remove_head(m_page_list);
+            m_used_page_list_per_size[c].remove_item(m_page_list, pageindex);
             if (!m_cached_page_list.is_full())
             {
                 m_cached_page_list.insert(m_page_list, pageindex);
@@ -363,7 +361,7 @@ namespace xcore
         {
             u32 const f = xfloorpo2(size);
             s32 const r = xcountTrailingZeros(f >> 4) * 4;
-            s32 const t = xcountTrailingZeros(xalign(f, 8) >> 2);
+            s32 const t = xcountTrailingZeros(xalignUp(f, 8) >> 2);
             s32 const i = (int)((size - (f & ~((u32)32 - 1))) >> t) + r;
             ASSERT(i > 0 && i < 256);
             return i - 1;
@@ -532,6 +530,10 @@ namespace xcore
 
         if (chunk_is_now_empty)
         {
+                if (!chunk_was_full)
+                {
+                    m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].remove_item(m_chunk_list, chunkindex);
+                }
             deinitialize_chunk(sfsa, chunkindex, bin);
             if (!m_cache_chunk_list.is_full())
             {
@@ -574,7 +576,7 @@ namespace xcore
         }
         else
         {
-            u32 const num_physical_pages = alignto(size, m_page_size) / m_page_size;
+            u32 const num_physical_pages = xalignUp(size, m_page_size) / m_page_size;
             m_binmaps[chunkindex]        = num_physical_pages;
         }
         chunk_t& chunk    = m_chunk_array[chunkindex];
@@ -613,7 +615,7 @@ namespace xcore
         else
         {
             u32 const num_physical_pages_committed = m_binmaps[chunkindex];
-            u32 const num_physical_pages_required  = alignto(size, m_page_size);
+            u32 const num_physical_pages_required  = xalignUp(size, m_page_size);
             // if this is a chunk not managed by a binmap than we need to
             // check here if this chunk has enough pages committed.
             if (num_physical_pages_required > num_physical_pages_committed)
@@ -650,7 +652,7 @@ namespace xcore
             u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
             u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
             u32 const i      = binmap->findandset(bin.m_alloc_count, l1, l2);
-            ptr              = toaddress(m_memory_base, (m_chunk_size * chunkindex) + i * bin.m_alloc_size);
+                ptr              = toaddress(m_memory_base, (u64)(m_chunk_size * chunkindex) + i * bin.m_alloc_size);
         }
         else
         {
@@ -705,7 +707,7 @@ namespace xcore
         for (s32 i = 0; i < c_num_allocators; ++i)
         {
             m_allocators[i].initialize(address_base, m_page_size, m_vmem, m_internal_heap, m_internal_fsa);
-            address_base = toaddress(address_base, alignto(m_allocators[i].m_memory_range, c_address_divisor));
+            address_base = toaddress(address_base, xalignUp(m_allocators[i].m_memory_range, c_address_divisor));
         }
     }
 
@@ -720,7 +722,7 @@ namespace xcore
 
     void* superallocator_t::allocate(u32 size, u32 alignment)
     {
-        size                 = alignto(size, alignment);
+        size                 = xalignUp(size, alignment);
         u32 const binindex   = m_asbins[superbin_t::size2bin(size)].m_alloc_bin_index;
         s32 const allocindex = m_asbins[binindex].m_alloc_index;
         void*     ptr        = m_allocators[allocindex].allocate(m_internal_fsa, size, m_asbins[binindex]);

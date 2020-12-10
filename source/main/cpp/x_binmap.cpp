@@ -139,7 +139,7 @@ namespace xcore
         else
         {
             u32 const bi0 = (u32)xfindFirstBit(~m_l0);
-            u32 const wi1 = bi0 * 16;
+            u32 const wi1 = bi0;
             u32 const bi1 = (u32)xfindFirstBit((u16)~l1[wi1]);
             u32 const wi2 = wi1 * 16 + bi1;
             u32 const bi2 = (u32)xfindFirstBit((u16)~l2[wi2]);
@@ -151,16 +151,15 @@ namespace xcore
                 u16 const wd1 = l1[wi1] | (1 << bi1);
                 if (wd1 == 0xffff)
                 {
-                    u32 const b0 = 1 << (wi1 & (32 - 1));
+                    u32 const b0  = 1 << (wi1 & (32 - 1));
                     u32 const wd0 = m_l0 | b0;
                     m_l0          = wd0;
                 }
                 l1[wi1] = wd1;
             }
             l2[wi2] = wd2;
-            return  k;
+            return k;
         }
     }
-
 
 } // namespace xcore
