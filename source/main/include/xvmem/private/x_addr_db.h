@@ -9,7 +9,7 @@
 
 namespace xcore
 {
-    class xfsadexed;
+    class fsadexed_t;
     class xsize_db;
 
 
@@ -45,8 +45,8 @@ namespace xcore
     class xaddr_db
     {
     public:
-		void    initialize(xalloc* main_heap, u64 memory_range, u32 addr_count);
-		void    release(xalloc*);
+		void    initialize(alloc_t* main_heap, u64 memory_range, u32 addr_count);
+		void    release(alloc_t*);
         void    reset();
 
 		// NOTE: This node should be exactly 16 bytes.
@@ -90,16 +90,16 @@ namespace xcore
 		};
 
 		// allocate
-        node_t* get_node_with_size_index(u32 const i, xdexer* dexer, u32 size_index);
-        void    alloc(u32 inode, node_t* pnode, xfsadexed* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg);
-        void    alloc_by_split(u32 inode, node_t* pnode, u32 size, xfsadexed* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg);
+        node_t* get_node_with_size_index(u32 const i, dexer_t* dexer, u32 size_index);
+        void    alloc(u32 inode, node_t* pnode, fsadexed_t* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg);
+        void    alloc_by_split(u32 inode, node_t* pnode, u32 size, fsadexed_t* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg);
 
 		// deallocate
-		node_t* get_node_with_addr(u32 const i, xdexer* dexer, u32 addr);
-		void    dealloc(u32 inode, node_t* pnode, bool merge_prev, bool merge_next, xsize_db* size_db, xsize_cfg const& size_cfg, xfsadexed* node_heap);
+		node_t* get_node_with_addr(u32 const i, dexer_t* dexer, u32 addr);
+		void    dealloc(u32 inode, node_t* pnode, bool merge_prev, bool merge_next, xsize_db* size_db, xsize_cfg const& size_cfg, fsadexed_t* node_heap);
 
-        void remove_node(u32 inode, node_t* pnode, xdexer* dexer);
-        bool has_size_index(u32 const i, xdexer* dexer, u32 size_index, u32 node_flag) const;
+        void remove_node(u32 inode, node_t* pnode, dexer_t* dexer);
+        bool has_size_index(u32 const i, dexer_t* dexer, u32 size_index, u32 node_flag) const;
 
         u32  m_addr_range; // The memory range of one addr node
         u32  m_addr_count; // The number of address nodes

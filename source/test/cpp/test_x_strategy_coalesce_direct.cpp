@@ -7,21 +7,21 @@
 
 using namespace xcore;
 
-extern xalloc* gTestAllocator;
+extern alloc_t* gTestAllocator;
 
 UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 {
     UNITTEST_FIXTURE(main)
     {
         static void*      sNodeData = nullptr;
-        static xfsadexed* sNodeHeap = nullptr;
+        static fsadexed_t* sNodeHeap = nullptr;
 
         UNITTEST_FIXTURE_SETUP()
         {
             const s32 sizeof_node  = 16;
             const s32 countof_node = 16384;
             sNodeData              = gTestAllocator->allocate(sizeof_node * countof_node);
-            sNodeHeap              = gTestAllocator->construct<xfsadexed_array>(sNodeData, sizeof_node, countof_node);
+            sNodeHeap              = gTestAllocator->construct<fsadexed_array_t>(sNodeData, sizeof_node, countof_node);
         }
 
         UNITTEST_FIXTURE_TEARDOWN()
@@ -32,13 +32,13 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 
         UNITTEST_TEST(coalescee_init)
         {
-            xalloc* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256, 4096);
+            alloc_t* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256, 4096);
             c->release();
         }
 
         UNITTEST_TEST(coalescee_alloc_dealloc_pairs)
         {
-            xalloc* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256, 4096);
+            alloc_t* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256, 4096);
 
             void* p1 = c->allocate(10 * 1024, 8);
             u32   s1 = c->deallocate(p1);
@@ -57,7 +57,7 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 
         UNITTEST_TEST(coalescee_alloc_dealloc_3_times)
         {
-            xalloc* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256, 4096);
+            alloc_t* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256, 4096);
 
             void* p1 = c->allocate(8 * 1024, 8);
             void* p2 = c->allocate(8 * 1024, 8);
@@ -72,7 +72,7 @@ UNITTEST_SUITE_BEGIN(strategy_coalesce_direct)
 
         UNITTEST_TEST(coalescee_alloc_dealloc_fixed_size_many)
         {
-            xalloc* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256, 4096);
+            alloc_t* c = create_alloc_coalesce_direct(gTestAllocator, sNodeHeap, (void*)0, 512 * 1024 * 1024, 4 * 1024, 64 * 1024, 256, 4096);
 
             const s32 cnt = 32;
             void*     ptrs[cnt];

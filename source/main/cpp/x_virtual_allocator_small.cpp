@@ -14,10 +14,10 @@ namespace xcore
     // ----------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------------------
-    class xvfsa_dexed : public xfsadexed
+    class xvfsa_dexed : public fsadexed_t
     {
     public:
-        inline xvfsa_dexed(xalloc* main_heap, xpages_t* pages, u32 allocsize)
+        inline xvfsa_dexed(alloc_t* main_heap, xpages_t* pages, u32 allocsize)
             : m_main_heap(main_heap)
             , m_pages(pages)
             , m_pages_notfull_list()
@@ -52,7 +52,7 @@ namespace xcore
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
     protected:
-        xalloc* const   m_main_heap;
+        alloc_t* const   m_main_heap;
         xpages_t* const m_pages;
         llist_t         m_pages_notfull_list;
         llist_t         m_pages_empty_list;
@@ -62,7 +62,7 @@ namespace xcore
     class xvfsa_dexed_own_pages : public xvfsa_dexed
     {
     public:
-        inline xvfsa_dexed_own_pages(xalloc* main_heap, xpages_t* pages, xvmem* vmem, void* mem_base, u64 mem_range, u32 allocsize)
+        inline xvfsa_dexed_own_pages(alloc_t* main_heap, xpages_t* pages, xvmem* vmem, void* mem_base, u64 mem_range, u32 allocsize)
             : xvfsa_dexed(main_heap, pages, allocsize)
             , m_pages_owned(pages)
             , m_vmem(vmem)
@@ -90,13 +90,13 @@ namespace xcore
 
     // Constraints:
     // - xvpages is not allowed to manage a memory range more than (4G * allocsize) (32-bit indices)
-    xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_heap, xpages_t* vpages, u32 allocsize)
+    fsadexed_t* gCreateVMemBasedDexedFsa(alloc_t* main_heap, xpages_t* vpages, u32 allocsize)
     {
         xvfsa_dexed* fsa = main_heap->construct<xvfsa_dexed>(main_heap, vpages, allocsize);
         return fsa;
     }
 
-    xfsadexed* gCreateVMemBasedDexedFsa(xalloc* main_heap, xvmem* vmem, u64 mem_range, u32 allocsize)
+    fsadexed_t* gCreateVMemBasedDexedFsa(alloc_t* main_heap, xvmem* vmem, u64 mem_range, u32 allocsize)
     {
         // create pages
         void*     mem_base  = nullptr;

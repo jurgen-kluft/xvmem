@@ -11,7 +11,7 @@
 
 namespace xcore
 {
-    class xalloc_segregated : public xalloc
+    class xalloc_segregated : public alloc_t
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
@@ -20,19 +20,19 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*  m_main_heap;
+        alloc_t*  m_main_heap;
         void*    m_mem_base;
         u64      m_mem_range;
         u32      m_alloc_size_min;
         u32      m_alloc_size_max;
         u32      m_alloc_size_align;
         u32      m_allocators_count;
-        xalloc** m_allocators;
+        alloc_t** m_allocators;
     };
 
     static inline void* advance_ptr(void* ptr, u64 size) { return (void*)((uptr)ptr + size); }
 
-    xalloc* create_alloc_segregated(xalloc* main_heap, xfsa* node_heap, void* mem_address, u64 mem_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align)
+    alloc_t* create_alloc_segregated(alloc_t* main_heap, fsa_t* node_heap, void* mem_address, u64 mem_range, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align)
     {
         ASSERT(xispo2(allocsize_min) && xispo2(allocsize_max) && xispo2(allocsize_align));
 
@@ -49,7 +49,7 @@ namespace xcore
         self->m_alloc_size_align = allocsize_align;
 
         self->m_allocators_count = xilog2(allocsize_max) - xilog2(allocsize_min);
-        self->m_allocators  = (xalloc**)main_heap->allocate(sizeof(xalloc*) * self->m_allocators_count);
+        self->m_allocators  = (alloc_t**)main_heap->allocate(sizeof(alloc_t*) * self->m_allocators_count);
 
         void*     fsa_mem_base  = mem_address;
         u64 const fsa_mem_range = mem_range / self->m_allocators_count;

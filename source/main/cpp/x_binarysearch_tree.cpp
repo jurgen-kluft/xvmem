@@ -714,14 +714,14 @@ namespace xcore
 
         namespace index_based
         {
-            node_t* idx2ptr(xdexer* dexer, u32 idx)
+            node_t* idx2ptr(dexer_t* dexer, u32 idx)
             {
                 if (idx == NIL)
                     return nullptr;
                 return (node_t*)dexer->idx2ptr(idx);
             }
 
-            u32 ptr2idx(xdexer* dexer, node_t* p)
+            u32 ptr2idx(dexer_t* dexer, node_t* p)
             {
                 if (p == nullptr)
                     return NIL;
@@ -759,7 +759,7 @@ namespace xcore
             bool is_color_black(node_t* n, tree_t* t) ;
             bool is_color_red(node_t* n, tree_t* t) ;
 
-            bool clear(u32& iiterator, tree_t* tree, xdexer* dexer, u32& n)
+            bool clear(u32& iiterator, tree_t* tree, dexer_t* dexer, u32& n)
             {
                 //	Rotate away the left links so that we can treat this like the destruction of a linked list
                 node_t* iterator = idx2ptr(dexer, iiterator);
@@ -791,7 +791,7 @@ namespace xcore
                 return false;
             }
 
-            bool find_specific(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found, compare_f comparer)
+            bool find_specific(u32& root, tree_t* tree, dexer_t* dexer, u64 data, u32& found, compare_f comparer)
             {
                 bool ret;
 
@@ -829,9 +829,9 @@ namespace xcore
                 return ret;
             }
 
-            bool find(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found) { return find_specific(root, tree, dexer, data, found, tree->m_compare_f); }
+            bool find(u32& root, tree_t* tree, dexer_t* dexer, u64 data, u32& found) { return find_specific(root, tree, dexer, data, found, tree->m_compare_f); }
 
-            bool upper(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found)
+            bool upper(u32& root, tree_t* tree, dexer_t* dexer, u64 data, u32& found)
             {
                 bool ret;
 
@@ -865,7 +865,7 @@ namespace xcore
                 return ret;
             }
 
-            static inline u32 helper_get_sibling(node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
+            static inline u32 helper_get_sibling(node_t* node, u32 inode, tree_t* tree, dexer_t* dexer)
             {
                 u32 iparent = get_parent(node);
                 if (iparent == NIL)
@@ -875,7 +875,7 @@ namespace xcore
                 return get_child(pparent, c);
             }
 
-            static inline u32 helper_get_grandparent(node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
+            static inline u32 helper_get_grandparent(node_t* node, u32 inode, tree_t* tree, dexer_t* dexer)
             {
                 u32 iparent = get_parent(node);
                 if (iparent == NIL)
@@ -884,7 +884,7 @@ namespace xcore
                 return get_parent(parent);
             }
 
-            static inline u32 helper_get_uncle(node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
+            static inline u32 helper_get_uncle(node_t* node, u32 inode, tree_t* tree, dexer_t* dexer)
             {
                 u32 igrandparent = helper_get_grandparent(node, inode, tree, dexer);
                 if (igrandparent == NIL)
@@ -894,7 +894,7 @@ namespace xcore
                 return get_child(grandparent, c);
             }
 
-            static inline void helper_rotate_left(node_t*& root, u32& iroot, node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
+            static inline void helper_rotate_left(node_t*& root, u32& iroot, node_t* node, u32 inode, tree_t* tree, dexer_t* dexer)
             {
                 u32     ix = inode;
                 node_t* x  = node;
@@ -925,7 +925,7 @@ namespace xcore
                 set_parent(x, iy);
             }
 
-            static inline void helper_rotate_right(node_t*& root, u32& iroot, node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
+            static inline void helper_rotate_right(node_t*& root, u32& iroot, node_t* node, u32 inode, tree_t* tree, dexer_t* dexer)
             {
                 u32     ix = inode;
                 node_t* x  = node;
@@ -957,7 +957,7 @@ namespace xcore
                 set_parent(x, iy);
             }
 
-            static void helper_insert_rebalance(tree_t* tree, xdexer* dexer, node_t*& root, u32& iroot, node_t* node, u32 inode)
+            static void helper_insert_rebalance(tree_t* tree, dexer_t* dexer, node_t*& root, u32& iroot, node_t* node, u32 inode)
             {
                 u32     inew_node_parent = get_parent(node);
                 node_t* new_node_parent  = idx2ptr(dexer, inew_node_parent);
@@ -1050,7 +1050,7 @@ namespace xcore
                 }
             }
 
-            bool insert(u32& iroot, tree_t* tree, xdexer* dexer, u64 key, u32 inode)
+            bool insert(u32& iroot, tree_t* tree, dexer_t* dexer, u64 key, u32 inode)
             {
                 bool ret;
 
@@ -1121,7 +1121,7 @@ namespace xcore
                 return ret;
             }
 
-            static node_t* helper_find_minimum(node_t* node, tree_t* tree, xdexer* dexer)
+            static node_t* helper_find_minimum(node_t* node, tree_t* tree, dexer_t* dexer)
             {
                 node_t* x = node;
                 while (has_left(x))
@@ -1132,7 +1132,7 @@ namespace xcore
                 return x;
             }
 
-            static node_t* helper_find_maximum(node_t* node, tree_t* tree, xdexer* dexer)
+            static node_t* helper_find_maximum(node_t* node, tree_t* tree, dexer_t* dexer)
             {
                 node_t* x = node;
                 while (has_right(x))
@@ -1143,7 +1143,7 @@ namespace xcore
                 return x;
             }
 
-            static node_t* helper_find_successor(node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
+            static node_t* helper_find_successor(node_t* node, u32 inode, tree_t* tree, dexer_t* dexer)
             {
                 node_t* x  = node;
                 u32     ix = inode;
@@ -1166,7 +1166,7 @@ namespace xcore
                 return y;
             }
 
-            static node_t* helper_find_predecessor(node_t* node, u32 inode, tree_t* tree, xdexer* dexer)
+            static node_t* helper_find_predecessor(node_t* node, u32 inode, tree_t* tree, dexer_t* dexer)
             {
                 u32     ix = inode;
                 node_t* x  = node;
@@ -1190,7 +1190,7 @@ namespace xcore
             }
 
             // Replace x with y, inserting y where x previously was
-            static void helper_swap_node(node_t*& root, u32& iroot, node_t* x, u32 ix, node_t* y, u32 iy, tree_t* tree, xdexer* dexer)
+            static void helper_swap_node(node_t*& root, u32& iroot, node_t* x, u32 ix, node_t* y, u32 iy, tree_t* tree, dexer_t* dexer)
             {
                 u32     ileft   = get_left(x);
                 u32     iright  = get_right(x);
@@ -1237,7 +1237,7 @@ namespace xcore
                 set_parent(x, NIL);
             }
 
-            static void helper_delete_rebalance(node_t*& root, u32 iroot, node_t* node, u32 inode, node_t* parent, u32 iparent, s32 node_is_left, tree_t* tree, xdexer* dexer)
+            static void helper_delete_rebalance(node_t*& root, u32 iroot, node_t* node, u32 inode, node_t* parent, u32 iparent, s32 node_is_left, tree_t* tree, dexer_t* dexer)
             {
                 u32     ix      = inode;
                 node_t* x       = node;
@@ -1341,7 +1341,7 @@ namespace xcore
                 }
             }
 
-            bool remove(u32& iroot, tree_t* tree, xdexer* dexer, u32 inode)
+            bool remove(u32& iroot, tree_t* tree, dexer_t* dexer, u32 inode)
             {
                 bool const ret = true;
 
@@ -1441,7 +1441,7 @@ namespace xcore
             bool is_color_black(node_t* n, tree_t* t)  { return t->m_get_color_f(n) == COLOR_BLACK; }
             bool is_color_red(node_t* n, tree_t* t)  { return t->m_get_color_f(n) == COLOR_RED; }
 
-            s32 validate(node_t* root, u32 iroot, tree_t* tree, xdexer* dexer, const char*& result)
+            s32 validate(node_t* root, u32 iroot, tree_t* tree, dexer_t* dexer, const char*& result)
             {
                 s32 lh, rh;
                 if (root == nullptr)
@@ -1493,7 +1493,7 @@ namespace xcore
                 }
             }
 
-            bool get_min(u32 iroot, tree_t* tree, xdexer* dexer, u32& found)
+            bool get_min(u32 iroot, tree_t* tree, dexer_t* dexer, u32& found)
             {
                 found         = 0xffffffff;
                 u32     inode = iroot;

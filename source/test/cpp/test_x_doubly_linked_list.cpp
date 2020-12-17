@@ -7,7 +7,7 @@
 
 using namespace xcore;
 
-extern xalloc* gTestAllocator;
+extern alloc_t* gTestAllocator;
 
 llnode_t* gCreateList(u32 count)
 {

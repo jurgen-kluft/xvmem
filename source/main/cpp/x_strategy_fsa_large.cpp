@@ -47,7 +47,7 @@ namespace xcore
     static inline bool is_block_empty(xblock_info_t* block) { return block->m_clr == 0xff; }
     static inline u32  get_word_index(u8 words_set) { return (u32)xfindFirstBit((u16) ~((u16)words_set | (u16)0xff00)); }
 
-    class xalloc_fsa_large : public xalloc
+    class xalloc_fsa_large : public alloc_t
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
@@ -56,8 +56,8 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*           m_main_heap;
-        xfsa*             m_node_heap;
+        alloc_t*           m_main_heap;
+        fsa_t*             m_node_heap;
         void*             m_address_base;
         u64               m_address_range;
         u32               m_allocsize;
@@ -71,7 +71,7 @@ namespace xcore
         llist_t           m_block_full_list;
     };
 
-    xalloc* create_alloc_fsa_large(xalloc* main_heap, xfsa* node_heap, void* mem_base, u64 mem_range, u32 pagesize, u32 allocsize)
+    alloc_t* create_alloc_fsa_large(alloc_t* main_heap, fsa_t* node_heap, void* mem_base, u64 mem_range, u32 pagesize, u32 allocsize)
     {
         ASSERT(sizeof(xblock_t) == node_heap->size());
 

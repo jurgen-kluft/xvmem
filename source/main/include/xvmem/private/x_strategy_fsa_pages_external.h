@@ -23,11 +23,11 @@ namespace xcore
     //   If you want to free all pages in the page list you can call ``free_all_pages``.
     //
 
-    class xalloc;
+    class alloc_t;
     struct xalist_t;
     struct xpages_ext_t;
 
-    xpages_ext_t* create_fsa_pages_ext(xalloc* main_allocator, void* base_address, u64 memory_range, u32 page_size);
+    xpages_ext_t* create_fsa_pages_ext(alloc_t* main_allocator, void* base_address, u64 memory_range, u32 page_size);
     void      destroy(xpages_ext_t* pages);
 
 	xalist_t  init_list(xpages_ext_t* pages);

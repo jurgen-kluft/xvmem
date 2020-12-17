@@ -10,7 +10,7 @@
 
 namespace xcore
 {
-    class xvmem_allocator_coalesce_direct : public xalloc
+    class xvmem_allocator_coalesce_direct : public alloc_t
     {
     public:
         xvmem_allocator_coalesce_direct()
@@ -23,12 +23,12 @@ namespace xcore
         virtual void  v_release();
 
         xvmem*  m_vmem;
-        xalloc* m_main_heap;
+        alloc_t* m_main_heap;
         void*   m_mem_base;  // The memory base address, reserved
         u64     m_mem_range; // 32 MB * 8 = 256 MB
         u32     m_min_size;
         u32     m_max_size;
-        xalloc* m_allocator;
+        alloc_t* m_allocator;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
     };
@@ -51,7 +51,7 @@ namespace xcore
         m_vmem->release(m_mem_base, m_mem_range);
     }
 
-    xalloc* gCreateVMemCoalesceBasedAllocator(xalloc* main_heap, xfsadexed* node_heap, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step)
+    alloc_t* gCreateVMemCoalesceBasedAllocator(alloc_t* main_heap, fsadexed_t* node_heap, xvmem* vmem, u64 mem_size, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step)
     {
         xvmem_allocator_coalesce_direct* allocator = main_heap->construct<xvmem_allocator_coalesce_direct>();
 

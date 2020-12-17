@@ -7,10 +7,10 @@
 
 namespace xcore
 {
-    class xalloc;
-    class xfsa;
+    class alloc_t;
+    class fsa_t;
 
-    xalloc* create_alloc_fsa_large(xalloc* main_alloc, xfsa* node_alloc, void* mem_address, u64 mem_range, u32 pagesize, u32 allocsize);
+    alloc_t* create_alloc_fsa_large(alloc_t* main_alloc, fsa_t* node_alloc, void* mem_address, u64 mem_range, u32 pagesize, u32 allocsize);
 
     class xfsa_large_utils
     {

@@ -14,7 +14,7 @@ namespace xcore
 {
     struct xpages_t
     {
-        xpages_t(xalloc* main_allocator, void* base_address, u32 page_size, u16 const page_cnt, llnode_t* list_data, xpage_t* const page_array)
+        xpages_t(alloc_t* main_allocator, void* base_address, u32 page_size, u16 const page_cnt, llnode_t* list_data, xpage_t* const page_array)
             : m_main_allocator(main_allocator)
             , m_base_address(base_address)
             , m_page_size(page_size)
@@ -50,7 +50,7 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*           m_main_allocator;
+        alloc_t*           m_main_allocator;
         void*             m_base_address;
         u32               m_page_size;
         u16               m_free_page_index;
@@ -246,7 +246,7 @@ namespace xcore
         ASSERT(ptr != nullptr);
     }
 
-    xpages_t* create_fsa_pages(xalloc* main_allocator, void* base_address, u64 memory_range, u32 page_size)
+    xpages_t* create_fsa_pages(alloc_t* main_allocator, void* base_address, u64 memory_range, u32 page_size)
     {
         ASSERT(main_allocator != nullptr);
         u32 const         page_cnt       = (u32)(memory_range / page_size);

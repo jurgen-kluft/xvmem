@@ -19,10 +19,10 @@ namespace xcore
         return i <= mem_range;
     }
 
-    class xvmem_allocator_large : public xalloc
+    class xvmem_allocator_large : public alloc_t
     {
     public:
-        xvmem_allocator_large(xalloc* main_heap)
+        xvmem_allocator_large(alloc_t* main_heap)
             : m_main_heap(main_heap)
             , m_vmem(nullptr)
             , m_memory_base(nullptr)
@@ -34,12 +34,12 @@ namespace xcore
         virtual u32   v_deallocate(void* p);
         virtual void  v_release();
 
-        xalloc* m_main_heap;
+        alloc_t* m_main_heap;
         xvmem*  m_vmem;
         void*   m_memory_base;
         u64     m_memory_range;
         u32     m_page_size;
-        xalloc* m_allocator;
+        alloc_t* m_allocator;
         XCORE_CLASS_PLACEMENT_NEW_DELETE;
     };
 
@@ -75,7 +75,7 @@ namespace xcore
         m_main_heap->deallocate(this);
     }
 
-    xalloc* gCreateVMemLargeAllocator(xalloc* internal_heap, xfsadexed* node_heap, xvmem* vmem, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max)
+    alloc_t* gCreateVMemLargeAllocator(alloc_t* internal_heap, fsadexed_t* node_heap, xvmem* vmem, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max)
     {
         xvmem_allocator_large* large_allocator = internal_heap->construct<xvmem_allocator_large>(internal_heap);
 

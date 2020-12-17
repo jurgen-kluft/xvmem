@@ -7,9 +7,9 @@
 
 namespace xcore
 {
-    class xalloc;
+    class alloc_t;
 
-    xalloc* create_alloc_segregated(xalloc* main_alloc, xfsa* node_heap, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align);
+    alloc_t* create_alloc_segregated(alloc_t* main_alloc, fsa_t* node_heap, void* mem_address, u64 mem_space, u32 allocsize_min, u32 allocsize_max, u32 allocsize_align);
 
 } // namespace xcore
 

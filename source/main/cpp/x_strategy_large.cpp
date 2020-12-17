@@ -9,7 +9,7 @@
 
 namespace xcore
 {
-    class xalloc_large : public xalloc
+    class xalloc_large : public alloc_t
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
@@ -25,7 +25,7 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*           m_main_heap;
+        alloc_t*           m_main_heap;
         void*             m_mem_base;
         u64               m_mem_range;
         u64               m_block_size;
@@ -36,7 +36,7 @@ namespace xcore
         entry_t*          m_entry_array;
     };
 
-    xalloc* create_alloc_large(xalloc* main_heap, void* mem_addr, u64 mem_size, u32 max_num_allocs)
+    alloc_t* create_alloc_large(alloc_t* main_heap, void* mem_addr, u64 mem_size, u32 max_num_allocs)
     {
         xalloc_large* instance   = main_heap->construct<xalloc_large>();
         u64 const     block_size = mem_size / max_num_allocs;

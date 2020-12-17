@@ -17,10 +17,10 @@
 
 namespace xcore
 {
-    class xvmem_allocator : public xalloc
+    class xvmem_allocator : public alloc_t
     {
     public:
-        void init(xalloc* heap_allocator, xvmem* vmem, xvmem_config const* const cfg);
+        void init(alloc_t* heap_allocator, xvmem* vmem, xvmem_config const* const cfg);
 
         virtual void* v_allocate(u32 size, u32 align);
         virtual u32   v_deallocate(void* ptr);
@@ -28,35 +28,35 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc*    m_main_heap;            // Internal heap
+        alloc_t*    m_main_heap;            // Internal heap
         xvmem*     m_vmem;                 // VMem interface
-        xfsadexed* m_node16_heap;          // 16 B node heap
-        xfsadexed* m_node32_heap;          // 16 B node heap
+        fsadexed_t* m_node16_heap;          // 16 B node heap
+        fsadexed_t* m_node32_heap;          // 16 B node heap
         void*      m_fsa_mem_base;         //
         u64        m_fsa_mem_range;        // A memory base pointer
         u32        m_fsa_min_size;         // 8 B
         u32        m_fsa_max_size;         // 4096 B
-        xalloc*    m_fsa_allocator;        //
+        alloc_t*    m_fsa_allocator;        //
         s32        m_med_count;            //
         void*      m_med_mem_base[2];      // A memory base pointer
         u32        m_med_mem_range[2];     // 768 MB
         u32        m_med_min_size[2];      // 4 KB
         u32        m_med_step_size[2];     // 256 B (size alignment)
         u32        m_med_max_size[2];      // 64 KB
-        xalloc*    m_med_allocator[2];     //
-        xalloc*    m_med_allocator_vcd[2]; // Virtual Commit/Decommit
+        alloc_t*    m_med_allocator[2];     //
+        alloc_t*    m_med_allocator_vcd[2]; // Virtual Commit/Decommit
         u32        m_seg_min_size;         // 640 KB
         u32        m_seg_max_size;         // 32 MB
         u32        m_seg_step_size;        // 1 MB
         void*      m_seg_mem_base;         // A memory base pointer
         u64        m_seg_mem_range;        // 128 GB
-        xalloc*    m_seg_allocator;        //
-        xalloc*    m_seg_allocator_vcd;    //
+        alloc_t*    m_seg_allocator;        //
+        alloc_t*    m_seg_allocator_vcd;    //
         u32        m_large_min_size;       // 32MB
         void*      m_large_mem_base;       // A memory base pointer
         u64        m_large_mem_range;      //
-        xalloc*    m_large_allocator;      //
-        xalloc*    m_large_allocator_vcd;  //
+        alloc_t*    m_large_allocator;      //
+        alloc_t*    m_large_allocator_vcd;  //
     };
 
     void* xvmem_allocator::v_allocate(u32 size, u32 align)
@@ -164,7 +164,7 @@ namespace xcore
 		m_main_heap->destruct(this);
     }
 
-    void xvmem_allocator::init(xalloc* main_heap, xvmem* vmem, xvmem_config const* const cfg)
+    void xvmem_allocator::init(alloc_t* main_heap, xvmem* vmem, xvmem_config const* const cfg)
     {
         m_main_heap = main_heap;
         m_vmem = vmem;
@@ -221,7 +221,7 @@ namespace xcore
         m_large_allocator_vcd = create_page_vcd_direct(main_heap, m_large_allocator, m_vmem, large_page_size);
     }
 
-    xalloc* gCreateVmAllocator(xalloc* internal_allocator, xvmem* vmem, xvmem_config const* cfg)
+    alloc_t* gCreateVmAllocator(alloc_t* internal_allocator, xvmem* vmem, xvmem_config const* cfg)
     {
         xvmem_allocator* main_allocator = internal_allocator->construct<xvmem_allocator>();
 

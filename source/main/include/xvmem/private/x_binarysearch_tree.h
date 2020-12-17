@@ -120,15 +120,15 @@ namespace xcore
 
             // Note: Call this repeatedly until function returns false
             // 'n' will contain the node that is unlinked from the tree.
-            bool clear(u32& root, tree_t* tree, xdexer* dexer, u32& n);
-			bool find_specific(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found, compare_f comparer);
-            bool find(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found);
-            bool upper(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32& found);
-            bool insert(u32& root, tree_t* tree, xdexer* dexer, u64 data, u32 node);
-            bool remove(u32& root, tree_t* tree, xdexer* dexer, u32 node);
-            s32  validate(node_t* root, u32 iroot, tree_t* tree, xdexer* dexer, const char*& result);
+            bool clear(u32& root, tree_t* tree, dexer_t* dexer, u32& n);
+			bool find_specific(u32& root, tree_t* tree, dexer_t* dexer, u64 data, u32& found, compare_f comparer);
+            bool find(u32& root, tree_t* tree, dexer_t* dexer, u64 data, u32& found);
+            bool upper(u32& root, tree_t* tree, dexer_t* dexer, u64 data, u32& found);
+            bool insert(u32& root, tree_t* tree, dexer_t* dexer, u64 data, u32 node);
+            bool remove(u32& root, tree_t* tree, dexer_t* dexer, u32 node);
+            s32  validate(node_t* root, u32 iroot, tree_t* tree, dexer_t* dexer, const char*& result);
 
-            bool get_min(u32 root, tree_t* tree, xdexer* dexer, u32& found);
+            bool get_min(u32 root, tree_t* tree, dexer_t* dexer, u32& found);
         } // namespace index_based
     }     // namespace xbst
 } // namespace xcore

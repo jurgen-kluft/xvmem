@@ -14,7 +14,7 @@ namespace xcore
 {
     namespace xcoalescestrat_direct
     {
-        class xalloc_coalesce_direct : public xalloc
+        class xalloc_coalesce_direct : public alloc_t
         {
         public:
             virtual void* v_allocate(u32 size, u32 alignment);
@@ -45,8 +45,8 @@ namespace xcore
             XCORE_CLASS_PLACEMENT_NEW_DELETE
 
             // Global variables
-            xalloc*    m_main_heap;
-            xfsadexed* m_node_heap;
+            alloc_t*    m_main_heap;
+            fsadexed_t* m_node_heap;
 
             // Local variables
             void*     m_mem_base;
@@ -112,7 +112,7 @@ namespace xcore
             }
         }
 
-        static void initialize(xalloc_coalesce_direct* instance, xalloc* main_heap, xfsadexed* node_heap, u32 size_min, u32 size_max, u32 size_step, void* memory_base, u64 memory_range, u32 addr_count)
+        static void initialize(xalloc_coalesce_direct* instance, alloc_t* main_heap, fsadexed_t* node_heap, u32 size_min, u32 size_max, u32 size_step, void* memory_base, u64 memory_range, u32 addr_count)
         {
             instance->m_main_heap = main_heap;
             instance->m_node_heap = node_heap;
@@ -190,7 +190,7 @@ namespace xcore
 
     using namespace xcoalescestrat_direct;
 
-    xalloc* create_alloc_coalesce_direct(xalloc* main_heap, xfsadexed* node_heap, void* mem_base, u32 mem_range, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 addr_cnt)
+    alloc_t* create_alloc_coalesce_direct(alloc_t* main_heap, fsadexed_t* node_heap, void* mem_base, u32 mem_range, u32 alloc_size_min, u32 alloc_size_max, u32 alloc_size_step, u32 addr_cnt)
     {
         xalloc_coalesce_direct* allocator = main_heap->construct<xalloc_coalesce_direct>();
         initialize(allocator, main_heap, node_heap, alloc_size_min, alloc_size_max, alloc_size_step, mem_base, mem_range, addr_cnt);

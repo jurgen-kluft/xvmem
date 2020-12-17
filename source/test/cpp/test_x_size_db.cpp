@@ -7,7 +7,7 @@
 
 using namespace xcore;
 
-extern xalloc* gTestAllocator;
+extern alloc_t* gTestAllocator;
 
 
 UNITTEST_SUITE_BEGIN(size_db)

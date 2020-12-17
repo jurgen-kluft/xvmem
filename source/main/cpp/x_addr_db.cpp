@@ -12,7 +12,7 @@
 
 namespace xcore
 {
-    static inline void rescan_for_size_index(xaddr_db* addr_db, u32 const addr_index, u8 const size_index, u32 const node_flag, xsize_db* size_db, xdexer* dexer)
+    static inline void rescan_for_size_index(xaddr_db* addr_db, u32 const addr_index, u8 const size_index, u32 const node_flag, xsize_db* size_db, dexer_t* dexer)
     {
         if (addr_db->has_size_index(addr_index, dexer, size_index, node_flag))
         {
@@ -20,7 +20,7 @@ namespace xcore
         }
     }
 
-	void xaddr_db::initialize(xalloc* main_heap, u64 memory_range, u32 addr_count)
+	void xaddr_db::initialize(alloc_t* main_heap, u64 memory_range, u32 addr_count)
 	{
         ASSERT(xispo2(addr_count)); // The address node count should be a power-of-2
         m_addr_count = addr_count;
@@ -29,7 +29,7 @@ namespace xcore
         reset();
 	}
 
-	void xaddr_db::release(xalloc* main_heap)
+	void xaddr_db::release(alloc_t* main_heap)
 	{
 		main_heap->deallocate(m_nodes);
 		m_nodes = nullptr;
@@ -43,7 +43,7 @@ namespace xcore
             m_nodes[i] = node_t::NIL;
     }
 
-    void xaddr_db::alloc(u32 inode, node_t* pnode, xfsadexed* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg)
+    void xaddr_db::alloc(u32 inode, node_t* pnode, fsadexed_t* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg)
     {
         // Mark this node as 'used' and thus remove it from the size-db
 		ASSERT(!pnode->is_used());
@@ -60,7 +60,7 @@ namespace xcore
         }
     }
 
-    void xaddr_db::alloc_by_split(u32 inode, node_t* pnode, u32 size, xfsadexed* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg)
+    void xaddr_db::alloc_by_split(u32 inode, node_t* pnode, u32 size, fsadexed_t* node_alloc, xsize_db* size_db, xsize_cfg const& size_cfg)
     {
         u32 const node_sidx = pnode->get_size_index();
         u32 const node_aidx = pnode->get_addr_index(m_addr_range);
@@ -115,7 +115,7 @@ namespace xcore
         size_db->insert_size(new_sidx, new_aidx);
     }
 
-    void xaddr_db::dealloc(u32 inode, node_t* pnode, bool merge_prev, bool merge_next, xsize_db* size_db, xsize_cfg const& size_cfg, xfsadexed* node_heap)
+    void xaddr_db::dealloc(u32 inode, node_t* pnode, bool merge_prev, bool merge_next, xsize_db* size_db, xsize_cfg const& size_cfg, fsadexed_t* node_heap)
     {
         if (!merge_next && !merge_prev)
         {
@@ -179,7 +179,7 @@ namespace xcore
         }
     }
 
-    void xaddr_db::remove_node(u32 inode, node_t* pnode, xdexer* dexer)
+    void xaddr_db::remove_node(u32 inode, node_t* pnode, dexer_t* dexer)
     {
         u32 const i = pnode->get_addr_index(m_addr_range);
         if (m_nodes[i] == inode)
@@ -207,7 +207,7 @@ namespace xcore
         pnode->m_next_addr = node_t::NIL;
     }
 
-    xaddr_db::node_t* xaddr_db::get_node_with_addr(u32 const i, xdexer* dexer, u32 addr)
+    xaddr_db::node_t* xaddr_db::get_node_with_addr(u32 const i, dexer_t* dexer, u32 addr)
     {
         u32 inode = m_nodes[i];
         if (inode != node_t::NIL)
@@ -226,7 +226,7 @@ namespace xcore
         return nullptr;
     }
 
-    xaddr_db::node_t* xaddr_db::get_node_with_size_index(u32 const i, xdexer* dexer, u32 size_index)
+    xaddr_db::node_t* xaddr_db::get_node_with_size_index(u32 const i, dexer_t* dexer, u32 size_index)
     {
         u32 inode = m_nodes[i];
         if (inode != node_t::NIL)
@@ -245,7 +245,7 @@ namespace xcore
         return nullptr;
     }
 
-    bool xaddr_db::has_size_index(u32 const i, xdexer* dexer, u32 size_index, u32 node_flag) const
+    bool xaddr_db::has_size_index(u32 const i, dexer_t* dexer, u32 size_index, u32 node_flag) const
     {
         u32 inode = m_nodes[i];
         if (inode != node_t::NIL)

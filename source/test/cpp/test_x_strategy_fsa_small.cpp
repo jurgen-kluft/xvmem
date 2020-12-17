@@ -9,18 +9,18 @@
 
 using namespace xcore;
 
-extern xalloc* gTestAllocator;
+extern alloc_t* gTestAllocator;
 
 class xvmem_test_fsa_small : public xvmem
 {
 public:
-    xalloc* m_main_allocator;
+    alloc_t* m_main_allocator;
     void*   m_mem_address;
     u64     m_mem_range;
     u32     m_page_size;
     u32     m_num_pages;
 
-    void init(xalloc* main_allocator, u64 mem_range, u32 page_size)
+    void init(alloc_t* main_allocator, u64 mem_range, u32 page_size)
     {
         m_main_allocator = main_allocator;
         m_page_size      = page_size;

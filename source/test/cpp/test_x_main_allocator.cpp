@@ -8,19 +8,19 @@
 
 using namespace xcore;
 
-extern xalloc* gTestAllocator;
+extern alloc_t* gTestAllocator;
 
 class xvmem_test : public xvmem
 {
 public:
-    xalloc* m_main_allocator;
+    alloc_t* m_main_allocator;
 
     u32   m_index;
     void* m_mem_address[8];
     u64   m_mem_range[8];
     u32   m_page_size;
 
-    void init(xalloc* main_allocator, u32 page_size)
+    void init(alloc_t* main_allocator, u32 page_size)
     {
         m_main_allocator = main_allocator;
         m_page_size      = page_size;
@@ -72,9 +72,9 @@ public:
     virtual bool decommit(void* address, u32 page_size, u32 page_count) { return true; }
 };
 
-class xalloc_with_stats : public xalloc
+class xalloc_with_stats : public alloc_t
 {
-    xalloc* mAllocator;
+    alloc_t* mAllocator;
     u32     mNumAllocs;
     u32     mNumDeallocs;
     u64     mMemoryAllocated;
@@ -90,7 +90,7 @@ public:
         mMemoryDeallocated = 0;
     }
 
-    void init(xalloc* allocator) { mAllocator = allocator; }
+    void init(alloc_t* allocator) { mAllocator = allocator; }
 
     virtual void* v_allocate(u32 size, u32 alignment)
     {
@@ -173,7 +173,7 @@ UNITTEST_SUITE_BEGIN(main_allocator)
 
         UNITTEST_TEST(init)
         {
-            xalloc* allocator = gCreateVmAllocator(&s_alloc, &s_vmem_test, &s_vmem_testconfig);
+            alloc_t* allocator = gCreateVmAllocator(&s_alloc, &s_vmem_test, &s_vmem_testconfig);
             allocator->release();
 
 			s_vmem_test.reset();

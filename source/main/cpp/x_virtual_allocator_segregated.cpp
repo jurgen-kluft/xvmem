@@ -8,26 +8,26 @@
 
 namespace xcore
 {
-    class xvmem_allocator_segregated : public xalloc
+    class xvmem_allocator_segregated : public alloc_t
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment);
         virtual u32   v_deallocate(void* p);
         virtual void  v_release();
 
-        void initialize(xalloc* main_alloc, xfsa* node_heap, xvmem* vmem, u64 mem_range, u32 allocsize_min, u32 allocsize_max);
+        void initialize(alloc_t* main_alloc, fsa_t* node_heap, xvmem* vmem, u64 mem_range, u32 allocsize_min, u32 allocsize_max);
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc* m_main_heap;
-        xalloc* m_segregated;
+        alloc_t* m_main_heap;
+        alloc_t* m_segregated;
         u32     m_page_size;
         void*   m_mem_base;
         u64     m_mem_range;
         xvmem*  m_vmem;
     };
 
-    void xvmem_allocator_segregated::initialize(xalloc* main_heap, xfsa* node_heap, xvmem* vmem, u64 mem_range, u32 allocsize_min, u32 allocsize_max)
+    void xvmem_allocator_segregated::initialize(alloc_t* main_heap, fsa_t* node_heap, xvmem* vmem, u64 mem_range, u32 allocsize_min, u32 allocsize_max)
     {
         m_mem_range = mem_range;
         m_vmem      = vmem;
@@ -56,7 +56,7 @@ namespace xcore
         m_main_heap->deallocate(this);
     }
 
-    xalloc* gCreateVMemSegregatedAllocator(xalloc* main_heap, xfsa* node_heap, xvmem* vmem, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max)
+    alloc_t* gCreateVMemSegregatedAllocator(alloc_t* main_heap, fsa_t* node_heap, xvmem* vmem, u64 mem_range, u32 alloc_size_min, u32 alloc_size_max)
     {
         xvmem_allocator_segregated* allocator = main_heap->construct<xvmem_allocator_segregated>();
         allocator->initialize(main_heap, node_heap, vmem, mem_range, alloc_size_min, alloc_size_max);

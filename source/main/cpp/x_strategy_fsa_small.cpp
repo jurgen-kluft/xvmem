@@ -11,7 +11,7 @@
 
 namespace xcore
 {
-    class xfsa_allocator : public xalloc
+    class xfsa_allocator : public alloc_t
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL
@@ -58,7 +58,7 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc* m_main_heap;
+        alloc_t* m_main_heap;
 
         void*     m_fvsa_mem_base;  // A memory base pointer
         u64       m_fvsa_mem_range; // 1 GB
@@ -89,7 +89,7 @@ namespace xcore
         u32 m_size_step;
     };
 
-    xalloc* create_alloc_fsa(xalloc* main_heap, xvmem* vmem, u64 mem_range, void*& mem_base)
+    alloc_t* create_alloc_fsa(alloc_t* main_heap, xvmem* vmem, u64 mem_range, void*& mem_base)
     {
         xfsa_allocator* fsa = main_heap->construct<xfsa_allocator>();
         fsa->m_main_heap    = main_heap;

@@ -19,8 +19,8 @@ namespace xcore
             WIDTH_OCC = 64
         };
 
-        void initialize(xalloc*, u32 sizecnt, u32 addrcnt);
-        void release(xalloc*);
+        void initialize(alloc_t*, u32 sizecnt, u32 addrcnt);
+        void release(alloc_t*);
         void reset();
 
         void remove_size(u32 size_index, u32 addr_index);

@@ -166,15 +166,15 @@ namespace xcore
         return out_size;
     }
 
-    class xalloc_coalesce : public xalloc
+    class xalloc_coalesce : public alloc_t
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
         virtual u32   v_deallocate(void* ptr) X_FINAL;
         virtual void  v_release();
 
-        xalloc*    m_main_heap;
-        xfsadexed* m_node_heap;
+        alloc_t*    m_main_heap;
+        fsadexed_t* m_node_heap;
         void*      m_memory_addr;
         u64        m_memory_size;
         u32        m_alloc_size_min;
@@ -183,7 +183,7 @@ namespace xcore
         u32        m_address_chain_head;
         u32        m_size_db_cnt;
         u32*       m_size_db;
-        xhibitset  m_size_db_occupancy;
+        hibitset_t  m_size_db_occupancy;
         u32        m_addr_db;
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
@@ -244,17 +244,17 @@ namespace xcore
         self->m_addr_db            = naddr_t::NIL;
     }
 
-    xalloc* create_alloc_coalesce(xalloc* main_alloc, xfsadexed* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step)
+    alloc_t* create_alloc_coalesce(alloc_t* main_alloc, fsadexed_t* node_heap, void* mem_addr, u64 mem_size, u32 size_min, u32 size_max, u32 size_step)
     {
         xalloc_coalesce* self = nullptr;
 
         const u32 size_db_cnt   = xalignUp(1 + ((size_max - size_min) / size_step), 2);
-        const u32 memblock_size = sizeof(xalloc_coalesce) + size_db_cnt * sizeof(u32) + xhibitset::size_in_dwords(size_db_cnt) * sizeof(u32);
+        const u32 memblock_size = sizeof(xalloc_coalesce) + size_db_cnt * sizeof(u32) + hibitset_t::size_in_dwords(size_db_cnt) * sizeof(u32);
         xbyte*    memblock      = (xbyte*)main_alloc->allocate(memblock_size);
 
-        xallocinplace aip(memblock, memblock_size);
+        allocinplace_t aip(memblock, memblock_size);
         self          = aip.construct<xalloc_coalesce>();
-        u32* hibitset = (u32*)aip.allocate(sizeof(u32) * xhibitset::size_in_dwords(size_db_cnt));
+        u32* hibitset = (u32*)aip.allocate(sizeof(u32) * hibitset_t::size_in_dwords(size_db_cnt));
         u32* size_db  = (u32*)aip.allocate(sizeof(u32) * size_db_cnt);
 
         reset(self);
@@ -274,7 +274,7 @@ namespace xcore
         }
 
         // Which sizes are available in 'm_size_db' is known through this hierarchical set of bits.
-        x_memset(hibitset, 0, sizeof(u32) + xhibitset::size_in_dwords(size_db_cnt));
+        x_memset(hibitset, 0, sizeof(u32) + hibitset_t::size_in_dwords(size_db_cnt));
         self->m_size_db_occupancy.init(hibitset, self->m_size_db_cnt);
 
         // The last db contains all sizes larger than m_alloc_size_max

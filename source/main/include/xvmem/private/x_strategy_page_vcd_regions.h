@@ -7,7 +7,7 @@
 
 namespace xcore
 {
-    class xalloc;
+    class alloc_t;
     class xvmem;
 
     // Memory range (address_range) is divided into regions (region_size)
@@ -20,7 +20,7 @@ namespace xcore
     // When the counter changes from '0' to '1' we commit the region.
     // When the counter changes from '1' to '0' we decommit the region.
 
-    xalloc* create_page_vcd_regions(xalloc* main_heap, xalloc* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size);
+    alloc_t* create_page_vcd_regions(alloc_t* main_heap, alloc_t* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size);
 
 } // namespace xcore
 

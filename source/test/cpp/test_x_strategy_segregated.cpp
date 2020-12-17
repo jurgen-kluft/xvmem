@@ -7,14 +7,14 @@
 
 using namespace xcore;
 
-extern xalloc* gTestAllocator;
+extern alloc_t* gTestAllocator;
 
 UNITTEST_SUITE_BEGIN(strategy_segregated)
 {
     UNITTEST_FIXTURE(main)
     {
         static void*      sNodeData = nullptr;
-        static xfsadexed* sNodeHeap = nullptr;
+        static fsadexed_t* sNodeHeap = nullptr;
 
         static const u64 sMemoryRange = (u64)128 * 1024 * 1024 * 1024;
         static const u64 sMinumSize   = (u64)512 * 1024;
@@ -26,7 +26,7 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
             const u32 sizeof_node  = 32;
             const u32 countof_node = 16384;
             sNodeData              = gTestAllocator->allocate(sizeof_node * countof_node, 8);
-            sNodeHeap              = gTestAllocator->construct<xfsadexed_array>(sNodeData, sizeof_node, countof_node);
+            sNodeHeap              = gTestAllocator->construct<fsadexed_array_t>(sNodeData, sizeof_node, countof_node);
         }
 
         UNITTEST_FIXTURE_TEARDOWN()
@@ -38,14 +38,14 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
         UNITTEST_TEST(init)
         {
             void*   mem_base = (void*)0x00ff000000000000ULL;
-            xalloc* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
+            alloc_t* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
             a->release();
         }
 
         UNITTEST_TEST(alloc_dealloc_1)
         {
             void*   mem_base = (void*)0x00ff000000000000ULL;
-            xalloc* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
+            alloc_t* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
 
             void* p1 = a->allocate(sMinumSize, sPageSize);
             a->deallocate(p1);
@@ -56,7 +56,7 @@ UNITTEST_SUITE_BEGIN(strategy_segregated)
         UNITTEST_TEST(alloc_dealloc_many)
         {
             void*   mem_base = (void*)0x00ff000000000000ULL;
-            xalloc* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
+            alloc_t* a        = create_alloc_segregated(gTestAllocator, sNodeHeap, mem_base, sMemoryRange, sMinumSize, sMaximumSize, sPageSize);
 
 			u32 size = sMinumSize;
 			for (s32 i=0; i<6; ++i)

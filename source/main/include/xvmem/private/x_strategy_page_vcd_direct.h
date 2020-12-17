@@ -7,10 +7,10 @@
 
 namespace xcore
 {
-    class xalloc;
+    class alloc_t;
     class xvmem;
 
-    xalloc* create_page_vcd_direct(xalloc* main_heap, xalloc* allocator, xvmem* vmem, u32 page_size);
+    alloc_t* create_page_vcd_direct(alloc_t* main_heap, alloc_t* allocator, xvmem* vmem, u32 page_size);
 
 } // namespace xcore
 

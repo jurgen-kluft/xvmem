@@ -13,7 +13,7 @@ namespace xcore
     //    This allocator is a proxy and keeps track of regions of memory to
     //    be able to decommit pages back to the system.
 
-    class xalloc_page_vcd_regions : public xalloc
+    class xalloc_page_vcd_regions : public alloc_t
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
@@ -30,8 +30,8 @@ namespace xcore
             u16 m_counter;
         };
 
-        xalloc*   m_main_heap;   // Internal allocator to allocate ourselves and bookkeeping data from
-        xalloc*   m_allocator;   // The allocator that does the allocations/deallocations
+        alloc_t*   m_main_heap;   // Internal allocator to allocate ourselves and bookkeeping data from
+        alloc_t*   m_allocator;   // The allocator that does the allocations/deallocations
         xvmem*    m_vmem;        // Virtual memory interface
         u32       m_page_size;   //
         void*     m_mem_base;    // Memory base pointer
@@ -140,7 +140,7 @@ namespace xcore
         m_main_heap->destruct(this);
     }
 
-    xalloc* create_page_vcd_regions(xalloc* main_heap, xalloc* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size)
+    alloc_t* create_page_vcd_regions(alloc_t* main_heap, alloc_t* allocator, xvmem* vmem, void* address_base, u64 address_range, u32 page_size, u32 region_size)
     {
         xalloc_page_vcd_regions* proxy = main_heap->construct<xalloc_page_vcd_regions>();
 

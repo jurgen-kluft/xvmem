@@ -10,7 +10,7 @@
 
 namespace xcore
 {
-    void xsize_db::initialize(xalloc* allocator, u32 sizecnt, u32 addrcnt)
+    void xsize_db::initialize(alloc_t* allocator, u32 sizecnt, u32 addrcnt)
     {
         m_size_cnt     = sizecnt;
         m_size_db1_cnt = (addrcnt + (DB1_WIDTH - 1)) / DB1_WIDTH;
@@ -20,7 +20,7 @@ namespace xcore
         reset();
     }
 
-    void xsize_db::release(xalloc* allocator)
+    void xsize_db::release(alloc_t* allocator)
     {
         allocator->deallocate(m_size_db0);
         allocator->deallocate(m_size_db1);

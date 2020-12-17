@@ -8,12 +8,12 @@
 
 using namespace xcore;
 
-extern xalloc* gTestAllocator;
+extern alloc_t* gTestAllocator;
 
 class xvmem_test_vcd : public xvmem
 {
 public:
-    xalloc* m_main_allocator;
+    alloc_t* m_main_allocator;
     void*   m_mem_address;
     u64     m_mem_range;
     u32     m_page_size;
@@ -21,7 +21,7 @@ public:
     u32     m_commit_cnt;
     u32     m_decommit_cnt;
 
-    void init(xalloc* main_allocator, u64 mem_range, u32 page_size)
+    void init(alloc_t* main_allocator, u64 mem_range, u32 page_size)
     {
         m_main_allocator = main_allocator;
         m_page_size      = page_size;
@@ -55,7 +55,7 @@ public:
     }
 };
 
-class xalloc_test : public xalloc
+class xalloc_test : public alloc_t
 {
 public:
     void* m_mem_base;
@@ -110,14 +110,14 @@ UNITTEST_SUITE_BEGIN(strategy_page_vcd_direct)
 
         UNITTEST_TEST(init)
         {
-            xalloc* page_vcd = create_page_vcd_direct(gTestAllocator, &alloc_test, &vmem, page_size);
+            alloc_t* page_vcd = create_page_vcd_direct(gTestAllocator, &alloc_test, &vmem, page_size);
             page_vcd->release();
 			alloc_test.reset(mem_base, page_size);
         }
 
         UNITTEST_TEST(alloc_dealloc)
         {
-            xalloc* page_vcd = create_page_vcd_direct(gTestAllocator, &alloc_test, &vmem, page_size);
+            alloc_t* page_vcd = create_page_vcd_direct(gTestAllocator, &alloc_test, &vmem, page_size);
 
             void* p1 = page_vcd->allocate(128 * 1024);
             CHECK_EQUAL(mem_base, p1);

@@ -8,7 +8,7 @@
 namespace xcore
 {
     // Forward declares
-    class xalloc;
+    class alloc_t;
     class xvmem;
 
     struct xvmem_config
@@ -89,7 +89,7 @@ namespace xcore
     // + Coalesce Allocator
     // + Segregated Allocator
     // + Large Allocator
-    extern xalloc* gCreateVmAllocator(xalloc* main_heap, xvmem* vmem, xvmem_config const* const cfg);
+    extern alloc_t* gCreateVmAllocator(alloc_t* main_heap, xvmem* vmem, xvmem_config const* const cfg);
 
 }; // namespace xcore
 

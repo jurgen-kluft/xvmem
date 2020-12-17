@@ -13,7 +13,7 @@ namespace xcore
     //    This allocator is a proxy and commits the pages of an allocation
     //    and decommits the pages of a deallocation.
 
-    class xalloc_page_vcd_direct : public xalloc
+    class xalloc_page_vcd_direct : public alloc_t
     {
     public:
         virtual void* v_allocate(u32 size, u32 alignment) X_FINAL;
@@ -22,8 +22,8 @@ namespace xcore
 
         XCORE_CLASS_PLACEMENT_NEW_DELETE
 
-        xalloc* m_main_heap; // Internal allocator to allocate ourselves and bookkeeping data from
-        xalloc* m_allocator; // The allocator that does the allocations/deallocations
+        alloc_t* m_main_heap; // Internal allocator to allocate ourselves and bookkeeping data from
+        alloc_t* m_allocator; // The allocator that does the allocations/deallocations
         xvmem*  m_vmem;      // Virtual memory interface
         u32     m_page_size; //
     };
@@ -51,7 +51,7 @@ namespace xcore
 
     void xalloc_page_vcd_direct::v_release() { m_main_heap->destruct(this); }
 
-    xalloc* create_page_vcd_direct(xalloc* main_heap, xalloc* allocator, xvmem* vmem, u32 page_size)
+    alloc_t* create_page_vcd_direct(alloc_t* main_heap, alloc_t* allocator, xvmem* vmem, u32 page_size)
     {
         xalloc_page_vcd_direct* proxy = main_heap->construct<xalloc_page_vcd_direct>();
 

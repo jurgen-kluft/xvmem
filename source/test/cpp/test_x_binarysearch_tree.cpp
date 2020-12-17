@@ -7,7 +7,7 @@
 
 using namespace xcore;
 
-extern xalloc* gTestAllocator;
+extern alloc_t* gTestAllocator;
 
 namespace xcore
 {
@@ -254,14 +254,14 @@ UNITTEST_SUITE_BEGIN(binarysearch_tree)
     UNITTEST_FIXTURE(index_based)
     {
 		static void* sNodeData = nullptr;
-		static xfsadexed* sNodeHeap = nullptr;
+		static fsadexed_t* sNodeHeap = nullptr;
 
         UNITTEST_FIXTURE_SETUP()
 		{
 			const s32 sizeof_node = sizeof(test_index_based::mynode);
 			const s32 countof_node = 16384;
 			sNodeData = gTestAllocator->allocate(sizeof_node * countof_node);
-			sNodeHeap = gTestAllocator->construct<xfsadexed_array>(sNodeData, sizeof_node, countof_node);
+			sNodeHeap = gTestAllocator->construct<fsadexed_array_t>(sNodeData, sizeof_node, countof_node);
 		}
 
         UNITTEST_FIXTURE_TEARDOWN()
