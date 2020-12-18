@@ -712,7 +712,7 @@ namespace xcore
         else
         {
             u32 const num_physical_pages_committed = m_binmaps[chunkindex];
-            u32 const num_physical_pages_required  = xalignUp(size, m_page_size);
+            u32 const num_physical_pages_required  = xalignUp(size, m_page_size) / m_page_size;
             // if this is a chunk not managed by a binmap than we need to
             // check here if this chunk has enough pages committed.
             if (num_physical_pages_required > num_physical_pages_committed)
