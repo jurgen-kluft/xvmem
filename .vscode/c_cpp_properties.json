@@ -3,24 +3,23 @@
         {
             "name": "Mac",
             "includePath": [
-                "~/Library/Arduino15/packages/AZ3166/tools/**",
-                "~/Library/Arduino15/packages/AZ3166/hardware/stm32f4/1.6.0/**",
-                "~/Dev.Go/src/github.com/jurgen-kluft/xbase/source/main/include",
-                "~/Dev.Go/src/github.com/jurgen-kluft/xvmem/source/main/include",
+                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xbase/source/main/include",
+                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xunittest/source/main/include",
+                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xtime/source/main/include",
+                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xvmem/source/main/include",
                 "${workspaceRoot}"
             ],
             "defines": [
                 "TARGET_MAC_DEV_DEBUG"
             ],
             "macFrameworkPath": [
-                "/Library/Developer/CommandLineTools/SDKs/MacOSX10.14.sdk/System/Library/Frameworks"
+                "/Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/System/Library/Frameworks"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c11",
             "cppStandard": "c++17",
             "intelliSenseMode": "${default}",
             "forcedInclude": [
-                "~/Library/Arduino15/packages/AZ3166/hardware/stm32f4/1.6.0/cores/arduino/Arduino.h"
             ]
         }
     ],
