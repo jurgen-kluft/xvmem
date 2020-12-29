@@ -83,6 +83,72 @@ namespace xcore
         m_ptr += size;
         return toaddress(m_address, offset);
     }
+    class superfl_t
+    {
+    public:
+        void initialize(xvmem* vmem, u64 address_range, u32 item_size)
+        {
+            m_vmem          = vmem;
+            m_address_range = address_range;
+            u32 attrs       = 0;
+            m_vmem->reserve(m_address_range, m_page_size, attrs, m_address_base);
+            m_address_alloc = (xbyte*)m_address_base;
+            m_address_end   = m_address_alloc + m_page_size;
+            m_vmem->commit(m_address_alloc, m_page_size, 1);
+            m_item_size = item_size;
+            m_free_list = nullptr;
+        }
+        void deinitialize()
+        {
+            m_vmem->release(m_address_base, m_address_range);
+            m_address_base  = nullptr;
+            m_address_range = 0;
+            m_item_size     = 0;
+            m_free_list     = nullptr;
+            m_address_alloc = nullptr;
+            m_address_end   = nullptr;
+        }
+        void* alloc()
+        {
+            if (m_free_list != nullptr)
+            {
+                void* ptr   = m_free_list;
+                m_free_list = m_free_list->m_next;
+                return ptr;
+            }
+            else
+            {
+                if ((m_address_alloc + m_item_size) > m_address_end)
+                {
+                    m_vmem->commit(m_address_end, m_page_size, 1);
+                    m_address_end += m_page_size;
+                }
+                void* ptr = m_address_alloc;
+                m_address_alloc += m_item_size;
+                return ptr;
+            }
+        }
+        void dealloc(void* ptr)
+        {
+            item_t* item = (item_t*)ptr;
+            item->m_next = m_free_list;
+            m_free_list  = item;
+        }
+        inline void* idx2ptr(u32 i) const { return toaddress(m_address_base, i); }
+        inline u32   ptr2idx(void* ptr) const { return (u32)(todistance(m_address_base, ptr)); }
+        struct item_t
+        {
+            item_t* m_next;
+        };
+        xvmem*  m_vmem;
+        void*   m_address_base;
+        u64     m_address_range;
+        u32     m_page_size;
+        u32     m_item_size;
+        item_t* m_free_list;
+        xbyte*  m_address_alloc;
+        xbyte*  m_address_end;
+    };
 
     // Book-keeping for chunks requires to allocate/deallocate blocks of data
     // Power-of-2 sizes, minimum size = 8, maximum_size = 16384
@@ -843,4 +909,76 @@ namespace xcore
         return size;
     }
 
+    // Managing requests of different chunk-sizes but underneath we only have chunks of 1 size.
+    // @Example:
+    // Primary Chunk-Size
+    //    512 MB
+    //
+    // Chunk-Size Requests are (all power-of-2 sizes):
+    //    64 KB / 128 KB / 256 KB / 512 KB / 1 MB
+    //    2 MB / 4 MB / 8 MB / 16 MB / 32 MB / 64 MB
+    //    128 MB / 256 MB / 512 MB
+    //
+    // Functionality:
+    //   Allocate
+    //    - Handling the request of a new chunk, either creating one or taking one from the cache
+    //    -
+    //   Deallocate
+    //    - Quickly finding the chunk_t* and superalloc_t* that belong to the 'void* ptr'
+    //    - Collecting a now empty-chunk and either release or cache it
+    //
+    struct chunk_t : llnode_t
+    {
+        u16 m_elem_used;
+        u16 m_bin_index;
+        u32 m_index; // segment:10, block:8, chunk:14
+    };
+    struct region_t
+    {
+        llindex_t allocate_chunk(u32 chunk_size);
+        void      deallocate_chunk(llindex_t chunk);
+        chunk_t* get_chunk(llindex_t chunk);
+        void*    get_chunk_base_address(chunk_t& chunk);
+        struct block_t
+        {
+            s16      m_chunk_size_shift; // e.g. 16 (1<<16 = 64 KB, 8 MB / 64 KB = 128 chunks)
+            chunk_t* m_chunk_array;
+            u32*     m_binmaps;
+            s16      m_chunks_max;
+            s16      m_chunks_used;
+        };
+        struct segment_t : llnode_t
+        {
+            s16      m_block_size_shift; // e.g. 23 (1<<23 = 8 MB, 512 MB / 8 MB = 64 blocks)
+            u64      m_block_free;
+            block_t* m_block_array;
+        };
+
+        block_t*   get_segment_and_block(llindex_t chunk);
+
+        superfl_t  m_chunk_array;
+        llhead_t   m_free_chunks_per_chunk_size[16];
+        llhead_t   m_active_blocks_per_size[16];
+        llhead_t   m_free_blocks_per_size[16];
+        void*      m_address_base;
+        u64        m_address_range;
+        s16        m_segment_size_shift; // e.g. 28 (1<<28 = 512 MB)
+        segment_t* m_segments;
+        llist_t    m_free_segments;
+    };
+
+    // So we will have the following segment -> block -> chunk possibilities
+    // region: 128 GB
+    // Segment Size - Block Size/Count - Chunk Size/Count
+    //      512 MB  -       64 MB /  8 -  64 KB / 1024
+    //      512 MB  -       64 MB /  8 - 512 KB / 128
+    //      512 MB  -       64 MB /  8 -   1 MB /  64
+    //      512 MB  -       64 MB /  8 -   2 MB /  32
+    //      512 MB  -       64 MB /  8 -   4 MB /  16
+    //      512 MB  -       64 MB /  8 -   8 MB /  8
+    //      512 MB  -       64 MB /  8 -  16 MB /  4
+    //      512 MB  -       64 MB /  8 -  32 MB /  2
+    //      512 MB  -      256 MB /  2 -  64 MB /  4
+    //      512 MB  -      256 MB /  2 - 128 MB /  2
+    //      512 MB  -      256 MB /  2 - 256 MB /  1
 } // namespace xcore
