@@ -68,8 +68,9 @@ namespace xcore
 
     void* superheap_t::allocate(u32 size)
     {
-        size        = xalignUp(size, m_size_alignment);
-        u64 ptr_max = ((u64)m_page_count_current * m_page_size);
+        size         = xalignUp(size, m_size_alignment);
+        u64  ptr_max = ((u64)m_page_count_current * m_page_size);
+        u32* m_chunk_array;
         if ((m_ptr + size) > ptr_max)
         {
             // add more pages
@@ -83,7 +84,7 @@ namespace xcore
         m_ptr += size;
         return toaddress(m_address, offset);
     }
-    class superfl_t
+    class superarray_t
     {
     public:
         void initialize(xvmem* vmem, u64 address_range, u32 item_size)
@@ -164,20 +165,20 @@ namespace xcore
 
         struct page_t
         {
-            u16      m_item_size;
-            u16      m_item_index;
-            u16      m_item_count;
-            u16      m_item_max;
-            u16      m_dummy;
-            u16      m_item_freelist;
+            u16 m_item_size;
+            u16 m_item_index;
+            u16 m_item_count;
+            u16 m_item_max;
+            u16 m_dummy;
+            u16 m_item_freelist;
 
             void initialize(u32 size, u32 pagesize)
             {
-                m_item_size  = size;
-                m_item_index = 0;
-                m_item_count = 0;
-                m_item_max   = pagesize / size;
-                m_dummy      = 0x10DA;
+                m_item_size     = size;
+                m_item_index    = 0;
+                m_item_count    = 0;
+                m_item_max      = pagesize / size;
+                m_dummy         = 0x10DA;
                 m_item_freelist = 0xffff;
             }
 
@@ -193,7 +194,7 @@ namespace xcore
                 {
                     u16 const  ielem = m_item_freelist;
                     u16* const pelem = (u16*)idx2ptr(page_address, ielem);
-                    m_item_freelist        = pelem[0];
+                    m_item_freelist  = pelem[0];
                     return (void*)pelem;
                 }
                 else if (m_item_index < m_item_max)
@@ -208,8 +209,8 @@ namespace xcore
             void deallocate(void* page_address, u16 item_index)
             {
                 u16* const pelem = (u16*)idx2ptr(page_address, item_index);
-                pelem[0]               = m_item_freelist;
-                m_item_freelist        = item_index;
+                pelem[0]         = m_item_freelist;
+                m_item_freelist  = item_index;
                 m_item_count -= 1;
             }
         };
@@ -815,7 +816,7 @@ namespace xcore
             u16*      l1     = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
             u16*      l2     = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
             u32 const i      = binmap->findandset(bin.m_alloc_count, l1, l2);
-                ptr              = toaddress(m_memory_base, (u64)(m_chunk_size * chunkindex) + i * bin.m_alloc_size);
+            ptr              = toaddress(m_memory_base, (u64)(m_chunk_size * chunkindex) + i * bin.m_alloc_size);
         }
         else
         {
@@ -931,40 +932,45 @@ namespace xcore
     {
         u16 m_elem_used;
         u16 m_bin_index;
-        u32 m_index; // segment:10, block:8, chunk:14
+        u32 m_bin_map;
+        u32 m_page_index;
     };
     struct region_t
     {
         llindex_t allocate_chunk(u32 chunk_size);
         void      deallocate_chunk(llindex_t chunk);
-        chunk_t* get_chunk(llindex_t chunk);
-        void*    get_chunk_base_address(chunk_t& chunk);
+        chunk_t*  get_chunk(llindex_t chunk);
+
+        void* get_chunk_base_address(chunk_t& chunk) { return toaddress(m_address_base, chunk.m_page_index * m_page_size); }
+
         struct block_t
         {
-            s16      m_chunk_size_shift; // e.g. 16 (1<<16 = 64 KB, 8 MB / 64 KB = 128 chunks)
-            chunk_t* m_chunk_array;
-            u32*     m_binmaps;
-            s16      m_chunks_max;
-            s16      m_chunks_used;
+            u32* m_chunk_array;
+            u16  m_chunk_size_shift; // e.g. 16 (1<<16 = 64 KB, 8 MB / 64 KB = 128 chunks)
+            s16  m_chunks_max;
+            s16  m_chunks_used;
+            u16  m_dummy;
         };
+
         struct segment_t : llnode_t
         {
-            s16      m_block_size_shift; // e.g. 23 (1<<23 = 8 MB, 512 MB / 8 MB = 64 blocks)
-            u64      m_block_free;
+            u16      m_block_size_shift; // e.g. 23 (1<<23 = 8 MB, 512 MB / 8 MB = 64 blocks)
+            u16      m_block_free;
             block_t* m_block_array;
         };
 
-        block_t*   get_segment_and_block(llindex_t chunk);
+        block_t* get_segment_and_block(llindex_t chunk);
 
-        superfl_t  m_chunk_array;
-        llhead_t   m_free_chunks_per_chunk_size[16];
-        llhead_t   m_active_blocks_per_size[16];
-        llhead_t   m_free_blocks_per_size[16];
-        void*      m_address_base;
-        u64        m_address_range;
-        s16        m_segment_size_shift; // e.g. 28 (1<<28 = 512 MB)
-        segment_t* m_segments;
-        llist_t    m_free_segments;
+        superarray_t m_chunk_array;
+        llhead_t     m_free_chunks_per_chunk_size[16];
+        llhead_t     m_active_blocks_per_size[16];
+        llhead_t     m_free_blocks_per_size[16];
+        void*        m_address_base;
+        u64          m_address_range;
+        u32          m_page_size;
+        s16          m_segment_size_shift; // e.g. 28 (1<<28 = 512 MB)
+        segment_t*   m_segments;
+        llist_t      m_free_segments;
     };
 
     // So we will have the following segment -> block -> chunk possibilities
