@@ -84,6 +84,7 @@ namespace xcore
         m_ptr += size;
         return toaddress(m_address, offset);
     }
+
     class superarray_t
     {
     public:
@@ -99,6 +100,7 @@ namespace xcore
             m_item_size = item_size;
             m_free_list = nullptr;
         }
+
         void deinitialize()
         {
             m_vmem->release(m_address_base, m_address_range);
@@ -109,6 +111,7 @@ namespace xcore
             m_address_alloc = nullptr;
             m_address_end   = nullptr;
         }
+
         void* alloc()
         {
             if (m_free_list != nullptr)
@@ -129,20 +132,25 @@ namespace xcore
                 return ptr;
             }
         }
+
         void dealloc(void* ptr)
         {
             item_t* item = (item_t*)ptr;
             item->m_next = m_free_list;
             m_free_list  = item;
         }
-        inline void* idx2ptr(u32 i) const { return toaddress(m_address_base, i); }
-        inline u32   ptr2idx(void* ptr) const { return (u32)(todistance(m_address_base, ptr)); }
+
+        inline void* idx2ptr(u32 i) const { return toaddress(m_address_base, i * m_item_size); }
+        inline u32   ptr2idx(void* ptr) const { return (u32)(todistance(m_address_base, ptr)) / m_item_size; }
+
+        template <typename T> inline T* operator[](s32 index) { return (T*)toaddress(m_address_base, i * m_item_size); }
+
         struct item_t
         {
             item_t* m_next;
         };
         xvmem*  m_vmem;
-        void*   m_address_base;
+        xbyte*  m_address_base;
         u64     m_address_range;
         u32     m_page_size;
         u32     m_item_size;
@@ -910,22 +918,18 @@ namespace xcore
         return size;
     }
 
-    // Managing requests of different chunk-sizes but underneath we only have chunks of 1 size.
-    // @Example:
-    // Primary Chunk-Size
-    //    512 MB
+    // Managing requests of different chunk-sizes but managed through first a division into blocks, where blocks are
+    // divided into segments. Segments contain chunks.
     //
-    // Chunk-Size Requests are (all power-of-2 sizes):
-    //    64 KB / 128 KB / 256 KB / 512 KB / 1 MB
-    //    2 MB / 4 MB / 8 MB / 16 MB / 32 MB / 64 MB
-    //    128 MB / 256 MB / 512 MB
+    // Chunk-Sizes are all power-of-2 sizes
     //
     // Functionality:
     //   Allocate
     //    - Handling the request of a new chunk, either creating one or taking one from the cache
-    //    -
+    //   Get chunk by index
+    //   Get address of chunk
     //   Deallocate
-    //    - Quickly finding the chunk_t* and superalloc_t* that belong to the 'void* ptr'
+    //    - Quickly finding the segment_t*, block_t*, chunk_t* and superalloc_t* that belong to a 'void* ptr'
     //    - Collecting a now empty-chunk and either release or cache it
     //
     struct chunk_t : llnode_t
@@ -935,51 +939,174 @@ namespace xcore
         u32 m_bin_map;
         u32 m_page_index;
     };
+
     struct region_t
     {
-        llindex_t allocate_chunk(u32 chunk_size);
-        void      deallocate_chunk(llindex_t chunk);
-        chunk_t*  get_chunk(llindex_t chunk);
+        llindex_t allocate_chunk(u32 chunk_size)
+        {
+            u32 size        = xalignUp(chunk_size, (u32)8);
+            size            = xceilpo2(size);
+            s32 const index = (xcountTrailingZeros(size) - 16);
 
-        void* get_chunk_base_address(chunk_t& chunk) { return toaddress(m_address_base, chunk.m_page_index * m_page_size); }
+            if (m_segment_per_size_list_active[index] == llindex_t::NIL)
+            {
+                // We need to get an empty segment, check:
+                // - m_segment_per_size_list_cached
+                // - m_segment_per_config_list_free
+                // - m_blocks_list_free (consume a new block and add segments to m_segment_per_config_list_free[])
+            }
+            else
+            {
+                // See if segment has cached chunks
+                // If no cached chunks, find '0' bit in 'm_chunks_binmap'
+                //    Create chunk_t object from 'm_chunks_array'
+                //    Add to segment, commit physical memory
+            }
+        }
+
+        void deallocate_chunk(chunk_t* chunk)
+        {
+            u32 block_index;
+            u32 segment_index;
+            u32 chunk_index;
+            get_from_page_index(chunk->m_page_index, block_index, segment_index, chunk_index);
+
+            blocks_t*  block   = &m_blocks_array[block_index];
+            segment_t* segment = m_segments_array[segment_index];
+
+            segment->m_chunks_used -= 1;
+            if (segment->m_chunk_used == 0)
+            {
+                segment->m_chunks_binmap
+            }
+
+            // Figure out the segment we belong to
+            // If the segment now has no more used chunks we can 'free' the segment
+            //    back to the block.
+            // If the block now has no more used segments we can 'free' the block
+            //    back to the region.
+        }
+
+        //@NOTE: Should we cache the chunks at the segment level or global level?
+        //@NOTE: Should we cache segments ?
 
         struct segment_t : llnode_t
         {
-            u32  m_chunks_binmap;    // binmap for managing free chunks
-            u16  m_chunks_shift; // e.g. 16 (1<<16 = 64 KB, 8 MB / 64 KB = 128 chunks)
-            s16  m_chunks_max;
-            s16  m_chunks_used;
-            u16  m_dummy;
+            u8       m_chunks_shift;       // e.g. 16 (1<<16 = 64 KB, 4 MB / 64 KB = 64 chunks)
+            u8       m_segment_config;     //
+            s16      m_chunks_used;        //
+            llhead_t m_chunks_list_cached; // Single linked list of items in 'm_chunks_array'
+            u64      m_chunks_binmap;      // Maximum 64 chunks per segment
+            u16*     m_chunks_array;       //
         };
 
-        segment_t* get_segment(chunk_t const& chunk);
-        
-        // For sizes >= 64 MB we introduce large_segment_t*
-        
+        struct block_t : llnode_t
+        {
+            u16  m_segment_shift; // e.g. 23 (1<<23 = 8 MB)
+            u16  m_segment_used;
+            u16* m_segment_array;
+        };
 
-        superarray_t m_fsa;
-        llhead_t     m_free_chunks_per_chunk_size[16];
-        llhead_t     m_active_segments_per_size[16];
+        chunk_t* get_chunk(llindex_t i)
+        {
+            if (i.m_index == llindex_t::NIL)
+                return nullptr;
+            return m_chunk_array[chunk];
+        }
+
+        void* get_chunk_base_address(u32 const page_index) const { return toaddress(m_address_base, page_index * m_page_size); }
+
+        void get_from_page_index(u32 const page_index, u32& block_index, u32& segment_index, u32& chunk_index)
+        {
+            u32 const page_to_block_shift           = (m_block_shift - m_page_shift);
+            block_index                             = page_index >> page_to_block_shift;
+            block_t*         block                  = &m_blocks_array[block_index];
+            u32 const        block_segment_index    = page_index & ((1 << page_to_block_shift) - 1);
+            u32 const        page_to_segment_shift  = (block->m_segment_shift - m_page_shift);
+            u32 const        segment_index_in_block = block_segment_index >> page_to_segment_shift;
+            u32 const        segment_index          = block->m_segment_array[segment_index_in_block];
+            segment_t const* segment                = m_segments_array[segment_index];
+            u32 const        segment_chunk_index    = block_segment_index & ((1 << page_to_segment_shift) - 1);
+            chunk_index                             = segment->m_chunk_array[segment_chunk_index];
+        }
+
+        chunk_t* get_chunk(u32 const page_index)
+        {
+            u32 const  page_to_block_shift   = (m_block_shift - m_page_shift);
+            u32 const  block_index           = page_index >> page_to_block_shift;
+            block_t*   block                 = &m_blocks_array[block_index];
+            u32 const  block_segment_index   = page_index & ((1 << page_to_block_shift) - 1);
+            u32 const  page_to_segment_shift = (block->m_segment_shift - m_page_shift);
+            u32 const  segment_index         = block_segment_index >> page_to_segment_shift;
+            segment_t* segment               = m_segments_array[segment_index];
+            u32 const  segment_chunk_index   = block_segment_index & ((1 << page_to_segment_shift) - 1);
+            llindex_t  chunk_index           = segment->m_chunk_array[segment_chunk_index];
+            return get_chunk(chunk_index);
+        }
+
+        bool is_segment_empty(segment_t* seg) const { return seg->m_segment_used == 0; }
+        bool is_segment_full(segment_t* seg) const { return seg->m_segment_used == m_segment_configs[seg->m_segment_config]; }
+
+        segment_t* get_segment_from_page_index(u32 const page_index)
+        {
+            u32 const block_to_page_shift = (m_block_shift - m_page_shift);
+            u32 const block_index         = page_index >> block_to_page_shift;
+            block_t*  block               = &m_blocks_array[block_index];
+            u32 const block_page_index    = page_index & ((1 << block_to_page_shift) - 1);
+            u32 const segment_index       = block_page_index >> block->m_segment_shift;
+            return m_segments_array[segment_index];
+        }
+
+        block_t* get_block_from_page_index(u32 const page_index)
+        {
+            u32 const block_index = page_index >> (m_block_shift - m_page_shift);
+            return &m_blocks_array[block_index];
+        }
+
+        struct config_t
+        {
+            u8  m_segment_shift; // Size of segment (1 << shift)
+            u8  m_segment_index;
+            u16 m_segment_max;
+        };
+
+        superarray_t m_chunks_array;
+        superarray_t m_segments_array;
+        llhead_t     m_segment_per_size_list_active[18];
+        llhead_t     m_segment_per_size_list_cached[18];
+        llhead_t     m_segment_per_config_list_free[4];
         void*        m_address_base;
         u64          m_address_range;
         u32          m_page_size;
-        s16          m_segments_shift; // e.g. 25 (1<<25 = 64 MB)
-        segment_t*   m_segments;
-        llist_t      m_free_segments;
+        u32          m_page_shift;   // e.g. 16 (1<<16 = 64 KB)
+        s16          m_blocks_shift; // e.g. 25 (1<<30 =  1 GB)
+        block_t*     m_blocks_array;
+        llist_t      m_blocks_list_free;
     };
 
-    // So we will have the following segment -> block -> chunk possibilities
-    // region: 128 GB
-    // Segment Size - Block Size/Count - Chunk Size/Count
-    //      512 MB  -       64 MB /  8 -  64 KB / 1024
-    //      512 MB  -       64 MB /  8 - 512 KB / 128
-    //      512 MB  -       64 MB /  8 -   1 MB /  64
-    //      512 MB  -       64 MB /  8 -   2 MB /  32
-    //      512 MB  -       64 MB /  8 -   4 MB /  16
-    //      512 MB  -       64 MB /  8 -   8 MB /  8
-    //      512 MB  -       64 MB /  8 -  16 MB /  4
-    //      512 MB  -       64 MB /  8 -  32 MB /  2
-    //      512 MB  -      256 MB /  2 -  64 MB /  4
-    //      512 MB  -      256 MB /  2 - 128 MB /  2
-    //      512 MB  -      256 MB /  2 - 256 MB /  1
+    // Example Config:
+    //
+    //     Region: 128 GB
+    //     Block :   1 GB
+    //
+    //  C :  Chunk Size - Segment Index -  Segment Size  - Binmaps Or Page-Count
+    //  0 :       4 KB  -          NA
+    //  1 :       8 KB  -          NA
+    //  2 :      16 KB  -          NA
+    //  3 :      32 KB  -          NA
+    //  4 :      64 KB  -           0   -        4 MB    -      Binmaps
+    //  5 :     128 KB  -          NA
+    //  6 :     256 KB  -          NA
+    //  7 :     512 KB  -           1   -       32 MB    -      Page-Count
+    //  8 :       1 MB  -           1   -       32 MB    -      Page-Count
+    //  9 :       2 MB  -           1   -       32 MB    -      Page-Count
+    // 10 :       4 MB  -           1   -       32 MB    -      Page-Count
+    // 11 :       8 MB  -           2   -      512 MB    -      Page-Count
+    // 12 :      16 MB  -           2   -      512 MB    -      Page-Count
+    // 13 :      32 MB  -           2   -      512 MB    -      Page-Count
+    // 14 :      64 MB  -           2   -      512 MB    -      Page-Count
+    // 15 :     128 MB  -           3   -        1 GB    -      Page-Count
+    // 16 :     256 MB  -           3   -        1 GB    -      Page-Count
+    // 17 :     512 MB  -           3   -        1 GB    -      Page-Count
+
 } // namespace xcore

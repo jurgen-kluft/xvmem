@@ -17,6 +17,7 @@ namespace xcore
         inline void reset() { m_index = NIL; }
         inline void operator = (const llindex_t& i) { m_index = i.m_index; }
         inline bool operator == (const llindex_t& i) const { return m_index == i.m_index; }
+        inline operator u32() const { return m_index; }
         inline u16 get() const { return m_index; }
 
         u16 m_index;
