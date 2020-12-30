@@ -943,32 +943,27 @@ namespace xcore
 
         void* get_chunk_base_address(chunk_t& chunk) { return toaddress(m_address_base, chunk.m_page_index * m_page_size); }
 
-        struct block_t
+        struct segment_t : llnode_t
         {
-            u32* m_chunk_array;
-            u16  m_chunk_size_shift; // e.g. 16 (1<<16 = 64 KB, 8 MB / 64 KB = 128 chunks)
+            u32  m_chunks_binmap;    // binmap for managing free chunks
+            u16  m_chunks_shift; // e.g. 16 (1<<16 = 64 KB, 8 MB / 64 KB = 128 chunks)
             s16  m_chunks_max;
             s16  m_chunks_used;
             u16  m_dummy;
         };
 
-        struct segment_t : llnode_t
-        {
-            u16      m_block_size_shift; // e.g. 23 (1<<23 = 8 MB, 512 MB / 8 MB = 64 blocks)
-            u16      m_block_free;
-            block_t* m_block_array;
-        };
+        segment_t* get_segment(chunk_t const& chunk);
+        
+        // For sizes >= 64 MB we introduce large_segment_t*
+        
 
-        block_t* get_segment_and_block(llindex_t chunk);
-
-        superarray_t m_chunk_array;
+        superarray_t m_fsa;
         llhead_t     m_free_chunks_per_chunk_size[16];
-        llhead_t     m_active_blocks_per_size[16];
-        llhead_t     m_free_blocks_per_size[16];
+        llhead_t     m_active_segments_per_size[16];
         void*        m_address_base;
         u64          m_address_range;
         u32          m_page_size;
-        s16          m_segment_size_shift; // e.g. 28 (1<<28 = 512 MB)
+        s16          m_segments_shift; // e.g. 25 (1<<25 = 64 MB)
         segment_t*   m_segments;
         llist_t      m_free_segments;
     };
