@@ -29,7 +29,7 @@ namespace xcore
         {
         }
         void     reset() { m_index = NIL; }
-        bool     is_nil() { return m_index == NIL; }
+        bool     is_nil() const { return m_index == NIL; }
         void     insert(lnode_t* list, lindex_t item); // Inserts 'item' at the head
         lnode_t* remove(lnode_t* list);
         lindex_t remove_i(lnode_t* list);

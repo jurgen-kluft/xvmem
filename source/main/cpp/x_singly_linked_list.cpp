@@ -11,16 +11,16 @@ namespace xcore
     {
         ASSERT(max_size > 0);
         ASSERT(size <= max_size);
-        m_size     = size;
-        m_size_max = max_size;
+        m_size         = size;
+        m_size_max     = max_size;
         m_head.m_index = start;
 
         const u16 end = start + size;
         for (u16 i = 0; i < size; ++i)
         {
-            list[i].link(i+1);
+            list[i].link(i + 1);
         }
-        list[end-1].unlink();
+        list[end - 1].unlink();
     }
 
     void lhead_t::insert(lnode_t* list, lindex_t item)
