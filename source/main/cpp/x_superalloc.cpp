@@ -4,6 +4,7 @@
 #include "xbase/x_integer.h"
 
 #include "xvmem/private/x_doubly_linked_list.h"
+#include "xvmem/private/x_singly_linked_list.h"
 #include "xvmem/private/x_binmap.h"
 #include "xvmem/x_virtual_memory.h"
 
@@ -926,33 +927,32 @@ namespace xcore
     // Functionality:
     //   Allocate
     //    - Handling the request of a new chunk, either creating one or taking one from the cache
-    //   Get chunk by index
-    //   Get address of chunk
     //   Deallocate
     //    - Quickly finding the segment_t*, block_t*, chunk_t* and superalloc_t* that belong to a 'void* ptr'
     //    - Collecting a now empty-chunk and either release or cache it
+    //
+    //   Get chunk by index
+    //   Get address of chunk
     //
     struct chunk_t : llnode_t
     {
         u16 m_elem_used;
         u16 m_bin_index;
         u32 m_bin_map;
-        u32 m_page_index;
+        u16 m_segment_index;
     };
 
     struct region_t
     {
         llindex_t allocate_chunk(u32 chunk_size)
         {
-            u32 size        = xalignUp(chunk_size, (u32)8);
-            size            = xceilpo2(size);
-            s32 const index = (xcountTrailingZeros(size) - 16);
+            u32 const size  = xceilpo2(chunk_size);
+            s32 const index = (xcountTrailingZeros(size));
 
-            if (m_segment_per_size_list_active[index] == llindex_t::NIL)
+            if (m_block_per_group_list_active[index] == llindex_t::NIL)
             {
-                // We need to get an empty segment, check:
-                // - m_segment_per_size_list_cached
-                // - m_segment_per_config_list_free
+                // We need to get a cached block, check:
+                // - m_block_per_group_list_cached
                 // - m_blocks_list_free (consume a new block and add segments to m_segment_per_config_list_free[])
             }
             else
@@ -1001,21 +1001,22 @@ namespace xcore
 
         struct segment_t : llnode_t
         {
-            u8       m_config;     //
+            u8       m_config;             //
             u8       m_chunks_shift;       // e.g. 16 (1<<16 = 64 KB, 4 MB / 64 KB = 64 chunks)
             s16      m_chunks_used;        // Count of how many chunks are active
-            llhead_t m_chunks_list_cached; // Doubly linked list of 'chunk_t' items in 'm_chunks_array'
-            u16      m_chunks_list_free;   // Singly linked list of 'u16' items in 'm_chunks_array'
             u16*     m_chunks_array;       //
+            llhead_t m_chunks_list_cached; // Doubly linked list of 'chunk_t' items in 'm_chunks_array'
+            lhead_t  m_chunks_list_free;   // Singly linked list of 'u16' items in 'm_chunks_array'
+            u16      m_block_index;        // Our parent
         };
 
         struct block_t : llnode_t
         {
-            u16      m_segments_shift; // e.g. 23 (1<<23 = 8 MB)
-            u16      m_segments_used;
             llhead_t m_segments_list_cached;
-            u16      m_segments_list_free;
+            lhead_t  m_segments_list_free;
             u16*     m_segments_array;
+            u16      m_segments_shift; // e.g. 22 (1<<22 = 4 MB)
+            u16      m_segments_used;
         };
 
         chunk_t* get_chunk(llindex_t i)
@@ -1076,7 +1077,7 @@ namespace xcore
 
         struct config_t
         {
-            config_t(u8 segment_index = 0, u8 segment_shift = 0, u16 segment_max_chunks=0, u16 chunk_shift=0)
+            config_t(u8 segment_index = 0, u8 segment_shift = 0, u16 segment_max_chunks = 0, u16 chunk_shift = 0)
                 : m_segment_index(segment_index)
                 , m_segment_shift(segment_shift)
                 , m_segment_max_chunks(segment_max_chunks)
@@ -1091,6 +1092,8 @@ namespace xcore
 
         superarray_t m_chunks_array;
         superarray_t m_segments_array;
+        llhead_t     m_segment_per_chunk_size_active[32];
+        llhead_t     m_segment_per_chunk_size_cached[32];
         llhead_t     m_block_per_group_list_active[4];
         llhead_t     m_block_per_group_list_cached[4];
         void*        m_address_base;
@@ -1102,41 +1105,39 @@ namespace xcore
         llist_t      m_blocks_list_free;
 
         static const s32      c_num_configs            = 32;
-        static const config_t c_configs[c_num_configs] = {
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(),
-            config_t(0, 22, 1024, 16), // 4MB, 64KB
-            config_t(),                // NA
-            config_t(),                // NA
-            config_t(1, 25, 64, 19),   // 32MB, 512KB
-            config_t(1, 25, 32, 20),   // 32MB, 1MB
-            config_t(1, 25, 16, 21),   // 32MB, 2MB
-            config_t(1, 25, 8, 22),    // 32MB, 4MB
-            config_t(2, 28, 64, 23),   // 512MB, 8 MB
-            config_t(2, 28, 32, 24),   // 512MB, 16 MB
-            config_t(2, 28, 16, 25),   // 512MB, 32 MB
-            config_t(2, 28, 8, 26),    // 512MB, 64 MB
-            config_t(3, 29, 8, 26),    // 1GB, 128 MB
-            config_t(3, 29, 4, 26),    // 1GB, 256 MB
-            config_t(3, 29, 2, 26),    // 1GB, 512 MB
-            config_t(),
-            config_t(),
-            config_t()
-        };
+        static const config_t c_configs[c_num_configs] = {config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t(0, 22, 1024, 16), // 4MB, 64KB
+                                                          config_t(),                // NA
+                                                          config_t(),                // NA
+                                                          config_t(1, 25, 64, 19),   // 32MB, 512KB
+                                                          config_t(1, 25, 32, 20),   // 32MB, 1MB
+                                                          config_t(1, 25, 16, 21),   // 32MB, 2MB
+                                                          config_t(1, 25, 8, 22),    // 32MB, 4MB
+                                                          config_t(2, 28, 64, 23),   // 512MB, 8 MB
+                                                          config_t(2, 28, 32, 24),   // 512MB, 16 MB
+                                                          config_t(2, 28, 16, 25),   // 512MB, 32 MB
+                                                          config_t(2, 28, 8, 26),    // 512MB, 64 MB
+                                                          config_t(3, 29, 8, 26),    // 1GB, 128 MB
+                                                          config_t(3, 29, 4, 26),    // 1GB, 256 MB
+                                                          config_t(3, 29, 2, 26),    // 1GB, 512 MB
+                                                          config_t(),
+                                                          config_t(),
+                                                          config_t()};
     };
 
     // Example Config:
