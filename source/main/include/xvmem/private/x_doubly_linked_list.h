@@ -5,6 +5,8 @@
 #pragma once
 #endif
 
+#include "xbase/x_debug.h"
+
 namespace xcore
 {
     typedef u16      llindex_t;
@@ -38,26 +40,26 @@ namespace xcore
 
         void      reset() { m_index = NIL; }
         bool      is_nil() const { return m_index == NIL; }
-        void      insert(llnode_t* list, llindex_t item);      // Inserts 'item' at the head
-        void      insert_tail(llnode_t* list, llindex_t item); // Inserts 'item' at the tail end
-        llnode_t* remove_item(llnode_t* list, llindex_t item);
-        llnode_t* remove_head(llnode_t* list);
-        llnode_t* remove_tail(llnode_t* list);
-        llindex_t remove_headi(llnode_t* list);
-        llindex_t remove_taili(llnode_t* list);
+        void      insert(llnode_t* list, u32 const sizeof_node, llindex_t item);      // Inserts 'item' at the head
+        void      insert_tail(llnode_t* list, u32 const sizeof_node, llindex_t item); // Inserts 'item' at the tail end
+        llnode_t* remove_item(llnode_t* list, u32 const sizeof_node, llindex_t item);
+        llnode_t* remove_head(llnode_t* list, u32 const sizeof_node);
+        llnode_t* remove_tail(llnode_t* list, u32 const sizeof_node);
+        llindex_t remove_headi(llnode_t* list, u32 const sizeof_node);
+        llindex_t remove_taili(llnode_t* list, u32 const sizeof_node);
 
         inline void operator=(u16 i) { m_index = i; }
         inline void operator=(const llindex_t& index) { m_index = index; }
         inline void operator=(const llhead_t& head) { m_index = head.m_index; }
 
-        static llnode_t* idx2node(llnode_t* list, llindex_t i)
+        static llnode_t* idx2node(llnode_t* list, u32 const sizeof_node, llindex_t i)
         {
             if (i == NIL)
                 return nullptr;
             return &list[i];
         }
 
-        static llindex_t node2idx(llnode_t* list, llnode_t* node)
+        static llindex_t node2idx(llnode_t* list, llnode_t* node, u32 const sizeof_node)
         {
             if (node == nullptr)
                 return llindex_t();
@@ -90,23 +92,23 @@ namespace xcore
             m_head.reset();
         }
 
-        void      insert(llnode_t* list, llindex_t item);      // Inserts 'item' at the head
-        void      insert_tail(llnode_t* list, llindex_t item); // Inserts 'item' at the tail end
-        llnode_t* remove_item(llnode_t* list, llindex_t item);
-        llnode_t* remove_head(llnode_t* list);
-        llnode_t* remove_tail(llnode_t* list);
-        llindex_t remove_headi(llnode_t* list);
-        llindex_t remove_taili(llnode_t* list);
+        void      insert(llnode_t* list, u32 const sizeof_node, llindex_t item);      // Inserts 'item' at the head
+        void      insert_tail(llnode_t* list, u32 const sizeof_node, llindex_t item); // Inserts 'item' at the tail end
+        llnode_t* remove_item(llnode_t* list, u32 const sizeof_node, llindex_t item);
+        llnode_t* remove_head(llnode_t* list, u32 const sizeof_node);
+        llnode_t* remove_tail(llnode_t* list, u32 const sizeof_node);
+        llindex_t remove_headi(llnode_t* list, u32 const sizeof_node);
+        llindex_t remove_taili(llnode_t* list, u32 const sizeof_node);
 
-        llnode_t* idx2node(llnode_t* list, llindex_t i) const
+        llnode_t* idx2node(llnode_t* list, u32 const sizeof_node, llindex_t i) const
         {
             ASSERT(i < m_size_max);
-            return m_head.idx2node(list, i);
+            return m_head.idx2node(list, sizeof_node, i);
         }
 
-        llindex_t node2idx(llnode_t* list, llnode_t* node) const
+        llindex_t node2idx(llnode_t* list, llnode_t* node, u32 const sizeof_node) const
         {
-            llindex_t i = m_head.node2idx(list, node);
+            llindex_t i = m_head.node2idx(list, node, sizeof_node);
             ASSERT(i < m_size_max);
             return i;
         }
