@@ -269,7 +269,7 @@ namespace xcore
         m_page_list                  = (llnode_t*)heap.allocate(m_page_count * sizeof(llnode_t));
         u32 const num_pages_to_cache = xalignUp(size_to_pre_allocate, m_page_size) / m_page_size;
         ASSERT(num_pages_to_cache <= m_page_count);
-        m_free_page_list.initialize(m_page_list, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
+        m_free_page_list.initialize(sizeof(llnode_t), m_page_list, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
         for (u32 i = 0; i < m_page_count; i++)
             m_page_array[i].initialize(8, 0);
         for (u32 i = 0; i < c_max_num_sizes; i++)
@@ -277,7 +277,7 @@ namespace xcore
 
         if (num_pages_to_cache > 0)
         {
-            m_cached_page_list.initialize(m_page_list, 0, num_pages_to_cache, num_pages_to_cache);
+            m_cached_page_list.initialize(sizeof(llnode_t), m_page_list, 0, num_pages_to_cache, num_pages_to_cache);
             m_vmem->commit(m_address, m_page_size, num_pages_to_cache);
         }
     }
@@ -302,18 +302,18 @@ namespace xcore
             // Get a page and initialize that page for this size
             if (!m_cached_page_list.is_empty())
             {
-                ipage = m_cached_page_list.remove_headi(m_page_list);
+                ipage = m_cached_page_list.remove_headi(sizeof(llnode_t), m_page_list);
                 ppage = &m_page_array[ipage];
                 ppage->initialize(size, m_page_size);
             }
             else if (!m_free_page_list.is_empty())
             {
-                ipage = m_free_page_list.remove_headi(m_page_list);
+                ipage = m_free_page_list.remove_headi(sizeof(llnode_t), m_page_list);
                 ppage = &m_page_array[ipage];
                 ppage->initialize(size, m_page_size);
                 m_vmem->commit(ppage, m_page_size, 1);
             }
-            m_used_page_list_per_size[c].insert(m_page_list, ipage);
+            m_used_page_list_per_size[c].insert(sizeof(llnode_t), m_page_list, ipage);
         }
         else
         {
@@ -327,7 +327,7 @@ namespace xcore
             void* ptr = ppage->allocate(paddress);
             if (ppage->is_full())
             {
-                m_used_page_list_per_size[c].remove_head(m_page_list);
+                m_used_page_list_per_size[c].remove_head(sizeof(llnode_t), m_page_list);
             }
             return ptr2idx(ptr);
         }
@@ -348,15 +348,15 @@ namespace xcore
         {
             s32 const c = (xcountTrailingZeros(ppage->m_item_size) - 3);
             ASSERT(c >= 0 && c < c_max_num_sizes);
-            m_used_page_list_per_size[c].remove_item(m_page_list, pageindex);
+            m_used_page_list_per_size[c].remove_item(sizeof(llnode_t), m_page_list, pageindex);
             if (!m_cached_page_list.is_full())
             {
-                m_cached_page_list.insert(m_page_list, pageindex);
+                m_cached_page_list.insert(sizeof(llnode_t), m_page_list, pageindex);
             }
             else
             {
                 m_vmem->decommit(paddr, m_page_size, 1);
-                m_free_page_list.insert(m_page_list, pageindex);
+                m_free_page_list.insert(sizeof(llnode_t), m_page_list, pageindex);
             }
         }
     }
@@ -641,10 +641,10 @@ namespace xcore
             m_binmaps[i]     = 0xffffffff;
         }
 
-        m_free_chunk_list.initialize(m_chunk_list, m_max_chunks_to_cache, m_chunk_cnt - m_max_chunks_to_cache, m_chunk_cnt);
+        m_free_chunk_list.initialize(sizeof(llnode_t), m_chunk_list, m_max_chunks_to_cache, m_chunk_cnt - m_max_chunks_to_cache, m_chunk_cnt);
         if (m_max_chunks_to_cache > 0)
         {
-            m_cache_chunk_list.initialize(m_chunk_list, 0, m_max_chunks_to_cache, m_max_chunks_to_cache);
+            m_cache_chunk_list.initialize(sizeof(llnode_t), m_chunk_list, 0, m_max_chunks_to_cache, m_max_chunks_to_cache);
             u32 const num_physical_pages = (u32)(((u64)m_chunk_size * m_max_chunks_to_cache) / m_page_size);
             m_vmem->commit(m_memory_base, m_page_size, num_physical_pages);
         }
@@ -658,34 +658,34 @@ namespace xcore
         llhead_t chunkindex = m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base];
         if (chunkindex.is_nil())
         {
-            chunkindex = m_cache_chunk_list.remove_headi(m_chunk_list);
+            chunkindex.m_index = m_cache_chunk_list.remove_headi(sizeof(llnode_t), m_chunk_list);
             if (chunkindex.is_nil())
             {
-                chunkindex = m_free_chunk_list.remove_headi(m_chunk_list);
+                chunkindex.m_index = m_free_chunk_list.remove_headi(sizeof(llnode_t), m_chunk_list);
                 if (chunkindex.is_nil())
                 {
                     // panic; reason OOO
                     return nullptr;
                 }
-                initialize_chunk(sfsa, chunkindex, size, bin);
-                commit_chunk(chunkindex, size, bin);
+                initialize_chunk(sfsa, chunkindex.m_index, size, bin);
+                commit_chunk(chunkindex.m_index, size, bin);
             }
             else
             {
-                initialize_chunk(sfsa, chunkindex, size, bin);
+                initialize_chunk(sfsa, chunkindex.m_index, size, bin);
                 if (bin.m_use_binmap == 0)
                 {
-                    commit_chunk(chunkindex, size, bin);
+                    commit_chunk(chunkindex.m_index, size, bin);
                 }
             }
-            m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].insert(m_chunk_list, chunkindex);
+            m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].insert(sizeof(llnode_t), m_chunk_list, chunkindex.m_index);
         }
 
         bool        chunk_is_now_full = false;
-        void* const ptr               = allocate_from_chunk(sfsa, chunkindex, size, bin, chunk_is_now_full);
+        void* const ptr               = allocate_from_chunk(sfsa, chunkindex.m_index, size, bin, chunk_is_now_full);
         if (chunk_is_now_full) // Chunk is full, no more allocations possible
         {
-            m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].remove_headi(m_chunk_list);
+            m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].remove_headi(sizeof(llnode_t), m_chunk_list);
         }
         return ptr;
     }
@@ -707,22 +707,22 @@ namespace xcore
         {
             if (!chunk_was_full)
             {
-                m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].remove_item(m_chunk_list, chunkindex);
+                m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].remove_item(sizeof(llnode_t), m_chunk_list, chunkindex);
             }
             deinitialize_chunk(sfsa, chunkindex, bin);
             if (!m_cache_chunk_list.is_full())
             {
-                m_cache_chunk_list.insert(m_chunk_list, chunkindex);
+                m_cache_chunk_list.insert(sizeof(llnode_t), m_chunk_list, chunkindex);
             }
             else
             {
                 decommit_chunk(chunkindex, bin);
-                m_free_chunk_list.insert(m_chunk_list, chunkindex);
+                m_free_chunk_list.insert(sizeof(llnode_t), m_chunk_list, chunkindex);
             }
         }
         else if (chunk_was_full)
         {
-            m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].insert(m_chunk_list, chunkindex);
+            m_used_chunk_list_per_size[bin.m_alloc_bin_index - m_bin_base].insert(sizeof(llnode_t), m_chunk_list, chunkindex);
         }
         return size;
     }
@@ -948,13 +948,13 @@ namespace xcore
 
         struct segment_t : llnode_t
         {
-            u8       m_config_index; //
-            u8       m_chunks_shift;         // e.g. 16 (1<<16 = 64 KB, 4 MB / 64 KB = 64 chunks)
-            s16      m_chunks_used;          // Count of how many chunks are active
-            u16*     m_chunks_array;         //
-            llhead_t m_chunks_list_cached;   // Doubly linked list of 'chunk_t' items in 'm_chunks_array'
-            lhead_t  m_chunks_list_free;     // Singly linked list of 'u16' items in 'm_chunks_array'
-            u16      m_block_index;          // Our parent
+            u8        m_config_index;       //
+            u8        m_chunks_shift;       // e.g. 16 (1<<16 = 64 KB, 4 MB / 64 KB = 64 chunks)
+            s16       m_chunks_used;        // Count of how many chunks are active
+            lindex_t* m_chunks_array;       //
+            llhead_t  m_chunks_list_cached; // Doubly linked list of 'chunk_t' items in 'm_chunks_array'
+            lhead_t   m_chunks_list_free;   // Singly linked list of 'u16' items in 'm_chunks_array'
+            u16       m_block_index;        // Our parent
         };
 
         struct block_t : llnode_t
@@ -968,21 +968,21 @@ namespace xcore
 
         struct config_t
         {
-            config_t(u8 segment_index = 0, u8 segment_shift = 0, u16 segment_max_chunks = 0, u16 chunk_shift = 0)
-                : m_segment_index(segment_index)
+            config_t(u8 group_index = 0, u8 segment_shift = 0, u16 segment_max_chunks = 0, u16 chunk_shift = 0)
+                : m_group_index(group_index)
                 , m_segment_shift(segment_shift)
                 , m_segment_max_chunks(segment_max_chunks)
                 , m_chunk_shift(chunk_shift)
             {
             }
-            u8  m_segment_index;
+            u8  m_group_index;
             u8  m_segment_shift; // Size of segment (1 << shift)
             u16 m_segment_max_chunks;
             u8  m_chunk_shift;
         };
 
-        static const s32 c_num_configs = 32;
-        const config_t c_configs[c_num_configs] = {
+        static const s32 c_num_configs            = 32;
+        const config_t   c_configs[c_num_configs] = {
             config_t(),
             config_t(),
             config_t(),
@@ -1019,34 +1019,94 @@ namespace xcore
 
         llindex_t allocate_chunk(u32 chunk_size)
         {
-            u32 const size  = xceilpo2(chunk_size);
+            u32 const size         = xceilpo2(chunk_size);
             s32 const config_index = (xcountTrailingZeros(size));
 
-            if (m_block_per_group_list_active[config_index].is_nil())
+            if (m_segment_per_chunk_size_active[config_index].is_nil())
             {
-                // We need to get a cached block, check:
-                if (m_block_per_group_list_cached[config_index].is_nil())
+                if (m_segment_per_chunk_size_cached[config_index].is_nil())
                 {
-                    if (m_blocks_list_free.is_empty())
+                    u16 block_index = NIL;
+                    u16 group_index = c_configs[config_index].m_group_index;
+                    if (m_block_per_group_list_active[group_index].is_nil())
                     {
-                        // OOM
-                        return NIL;
+                        // We need to get a cached block, check:
+                        if (m_block_per_group_list_cached[group_index].is_nil())
+                        {
+                            if (m_blocks_list_free.is_empty())
+                            {
+                                // OOM
+                                return NIL;
+                            }
+                            block_index = m_blocks_list_free.remove_headi(sizeof(block_t), m_blocks_array);
+                        }
+                        else
+                        {
+                            block_index = m_block_per_group_list_cached[group_index].remove_headi(sizeof(block_t), m_blocks_array);
+                        }
                     }
-                    // NOTE: So currently the doubly linked list and singly linked list implementations are
-                    //       not working with objects like chunk_t and segment_t because it does not know
-                    //       the size of the object.
-                    block_t* block = (block_t*)m_blocks_list_free.remove_head();
+                    else
+                    {
+                        block_index = m_block_per_group_list_active[group_index].remove_headi(sizeof(block_t), m_blocks_array);
+                    }
+                    // Here we have a block, add it to 'm_block_per_group_list_active' and get a segment from this block and add that
+                    // segment to 'm_segment_per_chunk_size_cached'.
+                    m_block_per_group_list_active[group_index].insert(sizeof(block_t), m_blocks_array, block_index);
+
+                    // Now that we have a block get a segment from it and add that segment to 'm_segment_per_chunk_size_active'
+                    block_t* block         = &m_blocks_array[block_index];
+                    u16      segment_index = NIL;
+                    if (block->m_segments_list_cached.is_nil())
+                    {
+                        ASSERT(!block->m_segments_list_free.is_nil());
+                        u16 const  index               = block->m_segments_list_free.remove_i(sizeof(lnode_t), (lnode_t*)block->m_segments_array);
+                        segment_t* segment             = (segment_t*)m_segments_array.alloc();
+                        segment_index                  = m_segments_array.ptr2idx(segment);
+                        block->m_segments_array[index] = segment_index;
+                        block->m_segments_used += 1;
+                        m_segment_per_chunk_size_active[config_index].insert(sizeof(segment_t), m_segments_array.base<segment_t>(), segment_index);
+                    }
+                    else
+                    {
+                        segment_t* segment = (segment_t*)block->m_segments_list_cached.remove_head(sizeof(segment_t), (llnode_t*)block->m_segments_array);
+                        segment_index      = m_segments_array.ptr2idx(segment);
+                        m_segment_per_chunk_size_active[config_index].insert(sizeof(segment_t), m_segments_array.base<segment_t>(), segment_index);
+                    }
                 }
-                // - m_block_per_group_list_cached
-                // - m_blocks_list_free (consume a new block and add segments to m_segment_per_config_list_free[])
+                else
+                {
+                    u16 const segment_index = m_segment_per_chunk_size_cached[config_index].remove_headi(sizeof(segment_t), m_segments_array.base<segment_t>());
+                    m_segment_per_chunk_size_active[config_index].insert(sizeof(segment_t), m_blocks_array, segment_index);
+                }
             }
-            else
+
+            // Here we have a segment where we can get a chunk from
+            u16 const  segment_index = m_segment_per_chunk_size_active[config_index].m_index;
+            segment_t* segment       = m_segments_array.at<segment_t>(segment_index);
+            u16        chunk_index   = NIL;
+            if (!segment->m_chunks_list_cached.is_nil())
             {
-                // See if segment has cached chunks
-                // If no cached chunks, find '0' bit in 'm_chunks_binmap'
-                //    Create chunk_t object from 'm_chunks_array'
-                //    Add to segment, commit physical memory
+                chunk_index = segment->m_chunks_list_cached.remove_headi(sizeof(chunk_t), m_chunks_array.base<llnode_t>());
+                segment->m_chunks_used += 1;
             }
+            else if (!segment->m_chunks_list_free.is_nil())
+            {
+                u32 const index                = segment->m_chunks_list_free.remove_i(sizeof(lnode_t), (lnode_t*)segment->m_chunks_array);
+                chunk_t*  chunk                = (chunk_t*)m_chunks_array.alloc();
+                chunk_index                    = m_chunks_array.ptr2idx(chunk);
+                segment->m_chunks_array[index] = chunk_index;
+                segment->m_chunks_used += 1;
+            }
+
+            // Check if segment is now empty
+            if (segment->m_chunks_used == c_configs[config_index].m_segment_max_chunks)
+            {
+                m_segment_per_chunk_size_active[config_index].remove_headi(sizeof(segment_t), m_segments_array.base<segment_t>());
+            }
+
+            // Return the chunk index
+
+            return chunk_index;
         }
 
         void deallocate_chunk(chunk_t* chunk)
@@ -1059,34 +1119,31 @@ namespace xcore
 
             block_t*   block   = &m_blocks_array[block_index];
             segment_t* segment = m_segments_array.at<segment_t>(segment_index);
-
             u32 const config_index = segment->m_config_index;
-            u32 const group = c_configs[config_index].m_segment_index;
+
+            if (segment->m_chunks_used == c_configs[config_index].m_segment_max_chunks)
+            {
+                m_segment_per_chunk_size_active[config_index].insert(sizeof(segment_t), m_segments_array.base<segment_t>(), segment_index);
+            }
 
             segment->m_chunks_used -= 1;
-            segment->m_chunks_list_cached.insert(m_chunks_array.base<llnode_t>(), chunk_index);
+            segment->m_chunks_list_cached.insert(sizeof(chunk_t), m_chunks_array.base<llnode_t>(), chunk_index);
             if (segment->m_chunks_used == 0)
             {
-                block->m_segments_list_cached.insert(m_segments_array.base<llnode_t>(), segment_index);
+                m_segment_per_chunk_size_active[config_index].remove_item(sizeof(segment_t), m_segments_array.base<segment_t>(), segment_index);
+
+                block->m_segments_list_cached.insert(sizeof(segment_t), m_segments_array.base<llnode_t>(), segment_index);
                 block->m_segments_used -= 1;
                 if (block->m_segments_used == 0)
                 {
+                    u32 const group_index = c_configs[config_index].m_group_index;
                     // Remove it from the active list of blocks
                     // Insert it in the cached list of blocks
-                    m_block_per_group_list_active[group].remove_item(m_blocks_array, block_index);
-                    m_block_per_group_list_cached[group].insert(m_blocks_array, block_index);
+                    m_block_per_group_list_active[group_index].remove_item(sizeof(block_t), m_blocks_array, block_index);
+                    m_block_per_group_list_cached[group_index].insert(sizeof(block_t), m_blocks_array, block_index);
                 }
             }
-
-            // Figure out the segment we belong to
-            // If the segment now has no more used chunks we can 'free' the segment
-            //    back to the block.
-            // If the block now has no more used segments we can 'free' the block
-            //    back to the region.
         }
-
-        //@NOTE: Should we cache the chunks at the segment level or global level?
-        //@NOTE: Should we cache segments ?
 
         chunk_t* get_chunk(llindex_t i)
         {
