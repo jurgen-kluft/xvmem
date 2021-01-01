@@ -3,17 +3,15 @@
         {
             "name": "Mac",
             "includePath": [
-                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xbase/source/main/include",
-                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xunittest/source/main/include",
-                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xtime/source/main/include",
-                "/Users/obnosis1/Dev.Go/src/github.com/jurgen-kluft/xvmem/source/main/include",
+                "~/dev.go/src/github.com/jurgen-kluft/xbase/source/main/include",
+                "~/dev.go/src/github.com/jurgen-kluft/xunittest/source/main/include",
+                "~/dev.go/src/github.com/jurgen-kluft/xvmem/source/main/include",
                 "${workspaceRoot}"
             ],
-            "defines": [],
+            "defines": ["TARGET_MAC_DEV_DEBUG", "PLATFORM_64BIT", "__clang__"],
             "intelliSenseMode": "clang-x64",
             "browse": {
                 "path": [
-                    "/usr/include",
                     "/usr/local/include",
                     "${workspaceRoot}"
                 ],
@@ -24,25 +22,6 @@
                 "/System/Library/Frameworks",
                 "/Library/Frameworks"
             ]
-        },
-        {
-            "name": "Linux",
-            "includePath": [
-                "/usr/include",
-                "/usr/local/include",
-                "${workspaceRoot}"
-            ],
-            "defines": [],
-            "intelliSenseMode": "clang-x64",
-            "browse": {
-                "path": [
-                    "/usr/include",
-                    "/usr/local/include",
-                    "${workspaceRoot}"
-                ],
-                "limitSymbolsToIncludedHeaders": true,
-                "databaseFilename": ""
-            }
         },
         {
             "name": "Windows 10 x64",
@@ -56,10 +35,7 @@
                 "${workspaceRoot}",
                 "${workspaceRoot}/source/main/include"
             ],
-            "defines": [
-                "_DEBUG",
-                "UNICODE"
-            ],
+            "defines": ["TARGET_PC", "PLATFORM_64BIT"],
             "intelliSenseMode": "msvc-x64",
             "browse": {
                 "path": [
