@@ -11,12 +11,10 @@ namespace xcore
 {
     typedef u16      lindex_t;
     static const u16 NIL = 0xFFFF;
-    inline void      reset(lindex_t& i) { i = NIL; }
-
     struct lnode_t
     {
         inline void link(lindex_t n) { m_next = n; }
-        inline void unlink() { reset(m_next); }
+        inline void unlink() { m_next = NIL; }
         inline bool is_linked() const { return m_next != NIL; }
         lindex_t    m_next;
     };
@@ -30,26 +28,26 @@ namespace xcore
         }
         void     reset() { m_index = NIL; }
         bool     is_nil() const { return m_index == NIL; }
-        void     insert(lnode_t* list, lindex_t item); // Inserts 'item' at the head
-        lnode_t* remove(lnode_t* list);
-        lindex_t remove_i(lnode_t* list);
+        void     insert(u32 const sizeof_node, lnode_t* list, lindex_t item); // Inserts 'item' at the head
+        lnode_t* remove(u32 const sizeof_node, lnode_t* list);
+        lindex_t remove_i(u32 const sizeof_node, lnode_t* list);
 
         inline void operator=(u16 i) { m_index = i; }
         inline void operator=(const lindex_t& index) { m_index = index; }
         inline void operator=(const lhead_t& head) { m_index = head.m_index; }
 
-        static lnode_t* idx2node(lnode_t* list, lindex_t i)
+        static lnode_t* idx2node(u32 const sizeof_node, lnode_t* list, lindex_t i)
         {
             if (i == NIL)
                 return nullptr;
-            return &list[i];
+            return (lnode_t*)((uptr)list + ((uptr)sizeof_node * i));
         }
 
-        static lindex_t node2idx(lnode_t* list, lnode_t* node)
+        static lindex_t node2idx(u32 const sizeof_node, lnode_t* list, lnode_t* node)
         {
             if (node == nullptr)
                 return lindex_t();
-            lindex_t const index = (u16)(((u64)node - (u64)&list[0]) / sizeof(lnode_t));
+            lindex_t const index = (u16)(((uptr)node - (uptr)list) / sizeof_node);
             return index;
         }
     };
@@ -71,26 +69,26 @@ namespace xcore
         inline bool is_empty() const { return m_size == 0; }
         inline bool is_full() const { return m_size == m_size_max; }
 
-        void        initialize(lnode_t* list, u16 start, u16 size, u16 max_size);
+        void        initialize(u32 const sizeof_node, lnode_t* list, u16 start, u16 size, u16 max_size);
         inline void reset()
         {
             m_size = 0;
             m_head.reset();
         }
 
-        void     insert(lnode_t* list, lindex_t item); // Inserts 'item' at the head
-        lnode_t* remove(lnode_t* list);
-        lindex_t remove_i(lnode_t* list);
+        void     insert(u32 const sizeof_node, lnode_t* list, lindex_t item); // Inserts 'item' at the head
+        lnode_t* remove(u32 const sizeof_node, lnode_t* list);
+        lindex_t remove_i(u32 const sizeof_node, lnode_t* list);
 
-        lnode_t* idx2node(lnode_t* list, lindex_t i) const
+        lnode_t* idx2node(u32 const sizeof_node, lnode_t* list, lindex_t i) const
         {
             ASSERT(i < m_size_max);
-            return m_head.idx2node(list, i);
+            return m_head.idx2node(sizeof_node, list, i);
         }
 
-        lindex_t node2idx(lnode_t* list, lnode_t* node) const
+        lindex_t node2idx(u32 const sizeof_node, lnode_t* list, lnode_t* node) const
         {
-            lindex_t i = m_head.node2idx(list, node);
+            lindex_t i = m_head.node2idx(sizeof_node, list, node);
             ASSERT(i < m_size_max);
             return i;
         }
