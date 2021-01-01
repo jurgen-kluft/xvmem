@@ -1137,8 +1137,6 @@ namespace xcore
                 if (block->m_segments_used == 0)
                 {
                     u32 const group_index = c_configs[config_index].m_group_index;
-                    // Remove it from the active list of blocks
-                    // Insert it in the cached list of blocks
                     m_block_per_group_list_active[group_index].remove_item(sizeof(block_t), m_blocks_array, block_index);
                     m_block_per_group_list_cached[group_index].insert(sizeof(block_t), m_blocks_array, block_index);
                 }
