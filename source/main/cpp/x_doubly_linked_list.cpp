@@ -185,27 +185,27 @@ namespace xcore
     {
         llnode_t* node;
         s_remove_head(*this, sizeof_node, list, node);
-        return node2idx(list, node);
+        return node2idx(sizeof_node, list, node);
     }
 
     llindex_t llhead_t::remove_taili(u32 const sizeof_node, llnode_t* list)
     {
         llnode_t* node;
         s_remove_tail(*this, sizeof_node, list, node);
-        return node2idx(list, node);
+        return node2idx(sizeof_node, list, node);
     }
 
     void llist_t::insert(u32 const sizeof_node, llnode_t* list, llindex_t item)
     {
         ASSERT(m_size < m_size_max);
-        m_head.insert(list, item);
+        m_head.insert(sizeof_node, list, item);
         m_size += 1;
     }
 
     void llist_t::insert_tail(u32 const sizeof_node, llnode_t* list, llindex_t item)
     {
         ASSERT(m_size < m_size_max);
-        m_head.insert_tail(list, item);
+        m_head.insert_tail(sizeof_node, list, item);
         m_size += 1;
     }
 
@@ -213,7 +213,7 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size -= s_remove_item(m_head, list, item, node);
+        m_size -= s_remove_item(m_head, sizeof_node, list, item, node);
         return node;
     }
 
@@ -221,7 +221,7 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size -= s_remove_head(m_head, list, node);
+        m_size -= s_remove_head(m_head, sizeof_node, list, node);
         return node;
     }
 
@@ -229,7 +229,7 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size -= s_remove_tail(m_head, list, node);
+        m_size -= s_remove_tail(m_head, sizeof_node, list, node);
         return node;
     }
 
@@ -237,16 +237,16 @@ namespace xcore
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size -= s_remove_head(m_head, list, node);
-        return node2idx(list, node);
+        m_size -= s_remove_head(m_head, sizeof_node, list, node);
+        return node2idx(sizeof_node, list, node);
     }
 
     llindex_t llist_t::remove_taili(u32 const sizeof_node, llnode_t* list)
     {
         llnode_t* node;
         ASSERT(m_size > 0);
-        m_size -= s_remove_tail(m_head, list, node);
-        return node2idx(list, node);
+        m_size -= s_remove_tail(m_head, sizeof_node, list, node);
+        return node2idx(sizeof_node, list, node);
     }
 
 } // namespace xcore
