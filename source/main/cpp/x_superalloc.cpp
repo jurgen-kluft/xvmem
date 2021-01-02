@@ -968,7 +968,7 @@ namespace xcore
 
         struct config_t
         {
-            config_t(u8 group_index = 0, u8 segment_shift = 0, u16 segment_max_chunks = 0, u16 chunk_shift = 0)
+            config_t(u8 group_index = 0, u8 segment_shift = 0, u16 block_segment_count = 0, u16 segment_max_chunks = 0, u16 chunk_shift = 0)
                 : m_group_index(group_index)
                 , m_segment_shift(segment_shift)
                 , m_segment_max_chunks(segment_max_chunks)
@@ -977,6 +977,7 @@ namespace xcore
             }
             u8  m_group_index;
             u8  m_segment_shift; // Size of segment (1 << shift)
+            u16 m_block_segment_count;
             u16 m_segment_max_chunks;
             u8  m_chunk_shift;
         };
@@ -999,23 +1000,38 @@ namespace xcore
             config_t(),
             config_t(),
             config_t(),
-            config_t(0, 22, 1024, 16), // 4MB, 64KB
-            config_t(),                // NA
-            config_t(),                // NA
-            config_t(1, 25, 64, 19),   // 32MB, 512KB
-            config_t(1, 25, 32, 20),   // 32MB, 1MB
-            config_t(1, 25, 16, 21),   // 32MB, 2MB
-            config_t(1, 25, 8, 22),    // 32MB, 4MB
-            config_t(2, 28, 64, 23),   // 512MB, 8 MB
-            config_t(2, 28, 32, 24),   // 512MB, 16 MB
-            config_t(2, 28, 16, 25),   // 512MB, 32 MB
-            config_t(2, 28, 8, 26),    // 512MB, 64 MB
-            config_t(3, 29, 8, 26),    // 1GB, 128 MB
-            config_t(3, 29, 4, 26),    // 1GB, 256 MB
-            config_t(3, 29, 2, 26),    // 1GB, 512 MB
+            config_t(0, 22, 256, 1024, 16), // 4MB, 64KB
+            config_t(),                     // NA
+            config_t(),                     // NA
+            config_t(1, 25, 32, 64, 19),    // 32MB, 512KB
+            config_t(1, 25, 32, 32, 20),    // 32MB, 1MB
+            config_t(1, 25, 32, 16, 21),    // 32MB, 2MB
+            config_t(1, 25, 32, 8, 22),     // 32MB, 4MB
+            config_t(2, 28, 2, 64, 23),     // 512MB, 8 MB
+            config_t(2, 28, 2, 32, 24),     // 512MB, 16 MB
+            config_t(2, 28, 2, 16, 25),     // 512MB, 32 MB
+            config_t(2, 28, 2, 8, 26),      // 512MB, 64 MB
+            config_t(3, 29, 1, 8, 27),      // 1GB, 128 MB
+            config_t(3, 29, 1, 4, 28),      // 1GB, 256 MB
+            config_t(3, 29, 1, 2, 29),      // 1GB, 512 MB
             config_t(),
             config_t(),
         };
+
+        void initialize_block(block_t* block, u32 const config_index)
+        {
+            u16 const num_segments = c_configs[config_index].m_block_segment_count;
+
+            block->unlink();
+            block->m_segments_list_cached.reset();
+            block->m_segments_array = (u16*)m_fsa.alloc(sizeof(u16) * num_segments);
+            block->m_segments_shift = c_configs[config_index].m_segment_shift;
+            block->m_segments_used  = 0;
+
+            list_t segments_list_free;
+            segments_list_free.initialize(sizeof(lindex_t), (lnode_t*)block->m_segments_array, 0, num_segments, num_segments);
+            block->m_segments_list_free = segments_list_free.m_head;
+        }
 
         llindex_t allocate_chunk(u32 chunk_size)
         {
@@ -1039,6 +1055,9 @@ namespace xcore
                                 return NIL;
                             }
                             block_index = m_blocks_list_free.remove_headi(sizeof(block_t), m_blocks_array);
+                            // This block needs to be initialized
+                            block_t* block = &m_blocks_array[block_index];
+                            initialize_block(block, config_index);
                         }
                         else
                         {
@@ -1049,6 +1068,7 @@ namespace xcore
                     {
                         block_index = m_block_per_group_list_active[group_index].remove_headi(sizeof(block_t), m_blocks_array);
                     }
+
                     // Here we have a block, add it to 'm_block_per_group_list_active' and get a segment from this block and add that
                     // segment to 'm_segment_per_chunk_size_cached'.
                     m_block_per_group_list_active[group_index].insert(sizeof(block_t), m_blocks_array, block_index);
@@ -1059,8 +1079,17 @@ namespace xcore
                     if (block->m_segments_list_cached.is_nil())
                     {
                         ASSERT(!block->m_segments_list_free.is_nil());
-                        u16 const  index               = block->m_segments_list_free.remove_i(sizeof(lnode_t), (lnode_t*)block->m_segments_array);
-                        segment_t* segment             = (segment_t*)m_segments_array.alloc();
+                        u16 const  index       = block->m_segments_list_free.remove_i(sizeof(lnode_t), (lnode_t*)block->m_segments_array);
+                        segment_t* segment     = (segment_t*)m_segments_array.alloc();
+                        segment->m_block_index = block_index;
+                        segment->unlink();
+                        segment->m_config_index = config_index;
+                        segment->m_chunks_used  = 0;
+                        segment->m_chunks_shift = c_configs[config_index].m_chunk_shift;
+                        segment->m_chunks_list_cached.reset();
+                        u32 const segment_chunk_count = c_configs[config_index].m_segment_max_chunks;
+                        segment->m_chunks_array       = (u16*)m_fsa.alloc(sizeof(u16) * segment_chunk_count);
+                        segment->m_chunks_list_free.initialize(sizeof(lnode_t), (lnode_t*)segment->m_chunks_array, 0, segment_chunk_count);
                         segment_index                  = m_segments_array.ptr2idx(segment);
                         block->m_segments_array[index] = segment_index;
                         block->m_segments_used += 1;
@@ -1117,9 +1146,9 @@ namespace xcore
             u32 block_segment_index;
             get_from_page_index(chunk->m_page_index, block_index, block_segment_index, segment_index, chunk_index);
 
-            block_t*   block   = &m_blocks_array[block_index];
-            segment_t* segment = m_segments_array.at<segment_t>(segment_index);
-            u32 const config_index = segment->m_config_index;
+            block_t*   block        = &m_blocks_array[block_index];
+            segment_t* segment      = m_segments_array.at<segment_t>(segment_index);
+            u32 const  config_index = segment->m_config_index;
 
             if (segment->m_chunks_used == c_configs[config_index].m_segment_max_chunks)
             {
@@ -1199,6 +1228,7 @@ namespace xcore
             return &m_blocks_array[block_index];
         }
 
+        superfsa_t   m_fsa;
         superarray_t m_chunks_array;
         superarray_t m_segments_array;
         llhead_t     m_segment_per_chunk_size_active[32];
