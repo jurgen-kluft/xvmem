@@ -1168,15 +1168,11 @@ namespace xcore
 
         chunk_t* get_chunk(u32 const page_index)
         {
-            u32 const  page_to_block_shift   = (m_blocks_shift - m_page_shift);
-            u32 const  block_index           = page_index >> page_to_block_shift;
-            block_t*   block                 = &m_blocks_array[block_index];
-            u32 const  block_segment_index   = page_index & ((1 << page_to_block_shift) - 1);
-            u32 const  page_to_segment_shift = (block->m_segments_shift - m_page_shift);
-            u32 const  segment_index         = block_segment_index >> page_to_segment_shift;
-            segment_t* segment               = m_segments_array.at<segment_t>(segment_index);
-            u32 const  segment_chunk_index   = block_segment_index & ((1 << page_to_segment_shift) - 1);
-            llindex_t  chunk_index           = segment->m_chunks_array[segment_chunk_index];
+            u32 block_index;
+            u32 segment_index_in_block;
+            u32 segment_index;
+            u32 chunk_index;
+            get_from_page_index(page_index, block_index, segment_index_in_block, segment_index, chunk_index);
             return get_chunk(chunk_index);
         }
 
