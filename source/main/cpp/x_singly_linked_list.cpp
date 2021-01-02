@@ -13,14 +13,18 @@ namespace xcore
         ASSERT(size <= max_size);
         m_size         = size;
         m_size_max     = max_size;
-        m_head.m_index = start;
+        m_head.initialize(sizeof_node, list, start, size);
+    }
 
+    void lhead_t::initialize(u32 const sizeof_node, lnode_t* list, u16 start, u16 size)
+    {
+        m_index = start;
         const u16 end = start + size;
         for (u16 i = 0; i < size; ++i)
         {
-            list_t::idx2node(sizeof_node, list, i)->link(i + 1);
+            idx2node(sizeof_node, list, i)->link(i + 1);
         }
-        list_t::idx2node(sizeof_node, list, end - 1)->unlink();
+        idx2node(sizeof_node, list, end - 1)->unlink();
     }
 
     void lhead_t::insert(u32 const sizeof_node, lnode_t* list, lindex_t item)

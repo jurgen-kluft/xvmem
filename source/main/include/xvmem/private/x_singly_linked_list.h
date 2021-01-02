@@ -26,6 +26,7 @@ namespace xcore
             : m_index(NIL)
         {
         }
+        void     initialize(u32 const sizeof_node, lnode_t* list, u16 start, u16 size);
         void     reset() { m_index = NIL; }
         bool     is_nil() const { return m_index == NIL; }
         void     insert(u32 const sizeof_node, lnode_t* list, lindex_t item); // Inserts 'item' at the head
