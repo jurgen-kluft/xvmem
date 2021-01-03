@@ -997,46 +997,11 @@ namespace xcore
             list_t chunks_list_free;
             chunks_list_free.initialize(sizeof(lindex_t), (lnode_t*)block->m_chunks_array, 0, num_chunks, num_chunks);
             block->m_chunks_list_free = chunks_list_free.m_head;
+            block->m_chunks_list_cached.reset();
             return block_index;
         }
 
-        u16 get_chunk_from_block(u32 const config_index)
-        {
-            u16 block_index = NIL;
-            if (m_block_per_group_list_active[config_index].is_nil())
-            {
-                block_index = obtain_block(config_index);
-                m_block_per_group_list_active[config_index].insert(sizeof(block_t), m_blocks_array, block_index);
-            }
-            else
-            {
-                block_index = m_block_per_group_list_active[config_index].m_index;
-            }
-
-            // Now that we have a block get a chunk from it and add that segment to 'm_segment_per_chunk_size_active'
-            block_t* block       = &m_blocks_array[block_index];
-            u16      chunk_index = NIL;
-            if (block->m_chunks_list_cached.is_nil())
-            {
-                ASSERT(!block->m_chunks_list_free.is_nil());
-                u16 const index     = block->m_chunks_list_free.remove_i(sizeof(lnode_t), (lnode_t*)block->m_chunks_array);
-                chunk_t*  chunk     = (chunk_t*)m_chunks_array.alloc();
-                chunk->m_bin_index  = 0xffff;
-                chunk->m_bin_map    = 0xffffffff;
-                chunk->m_page_index = (block_index << m_blocks_shift) + (index << c_configs[block->m_config_index].m_chunks_shift);
-                chunk->m_elem_used  = 0;
-                chunk->unlink();
-                chunk_index = m_chunks_array.ptr2idx(chunk);
-            }
-            else
-            {
-                chunk_t* chunk = (chunk_t*)block->m_chunks_list_cached.remove_head(sizeof(chunk_t), m_chunks_array.base<chunk_t>());
-                chunk_index    = m_chunks_array.ptr2idx(chunk);
-            }
-            return chunk_index;
-        }
-
-        llindex_t allocate_chunk(u32 chunk_size)
+        llindex_t allocate_chunk(u32 chunk_size, u8 bin_index)
         {
             u32 const config_index = chunk_size_to_config_index(chunk_size);
             u16       block_index  = NIL;
@@ -1060,8 +1025,13 @@ namespace xcore
             }
             else if (!block->m_chunks_list_free.is_nil())
             {
-                u32 const index              = block->m_chunks_list_free.remove_i(sizeof(lnode_t), (lnode_t*)block->m_chunks_array);
-                chunk_t*  chunk              = (chunk_t*)m_chunks_array.alloc();
+                u32 const index     = block->m_chunks_list_free.remove_i(sizeof(lnode_t), (lnode_t*)block->m_chunks_array);
+                chunk_t*  chunk     = (chunk_t*)m_chunks_array.alloc();
+                chunk->m_bin_index  = bin_index;
+                chunk->m_bin_map    = 0xffffffff;
+                chunk->m_page_index = (block_index << (m_blocks_shift - m_page_shift)) + (index << (c_configs[block->m_config_index].m_chunks_shift - m_page_shift));
+                chunk->m_elem_used  = 0;
+                chunk->unlink();
                 chunk_index                  = m_chunks_array.ptr2idx(chunk);
                 block->m_chunks_array[index] = chunk_index;
                 block->m_chunks_used += 1;
@@ -1072,7 +1042,7 @@ namespace xcore
                 ASSERT(false);
             }
 
-            // Check if segment is now empty
+            // Check if block is now empty
             if (block->m_chunks_used == c_configs[config_index].m_chunks_max)
             {
                 m_block_per_group_list_active[config_index].remove_headi(sizeof(block_t), m_blocks_array);
@@ -1089,8 +1059,8 @@ namespace xcore
             u32 chunk_index;
             get_from_page_index(chunk->m_page_index, block_index, block_chunk_index, chunk_index);
 
-            block_t*   block        = &m_blocks_array[block_index];
-            u32 const  config_index = block->m_config_index;
+            block_t*  block        = &m_blocks_array[block_index];
+            u32 const config_index = block->m_config_index;
 
             if (block->m_chunks_used == c_configs[config_index].m_chunks_max)
             {
@@ -1101,26 +1071,14 @@ namespace xcore
             block->m_chunks_list_cached.insert(sizeof(chunk_t), m_chunks_array.base<llnode_t>(), chunk_index);
             if (block->m_chunks_used == 0)
             {
+                // NOTE: Destroy the resources of this block (decommit cached chunks, cached chunks, chunks array)
                 m_block_per_group_list_active[config_index].remove_item(sizeof(block_t), m_blocks_array, block_index);
-                block->m_chunks_used -= 1;
-                if (block->m_chunks_used == 0)
-                {
-                    m_block_per_group_list_active[config_index].remove_item(sizeof(block_t), m_blocks_array, block_index);
-                    m_blocks_list_free.insert(sizeof(block_t), m_blocks_array, block_index);
-                }
+                m_blocks_list_free.insert(sizeof(block_t), m_blocks_array, block_index);
             }
         }
 
-        chunk_t* get_chunk(llindex_t i)
-        {
-            if (i == NIL)
-                return nullptr;
-            return m_chunks_array.at<chunk_t>(i);
-        }
-
         void* get_chunk_base_address(u32 const page_index) const { return toaddress(m_address_base, page_index * m_page_size); }
-
-        void get_from_page_index(u32 const page_index, u32& block_index, u32& chunk_index_in_block, u32& chunk_index)
+        void  get_from_page_index(u32 const page_index, u32& block_index, u32& chunk_index_in_block, u32& chunk_index)
         {
             u32 const page_index_to_block_index_shift       = (m_blocks_shift - m_page_shift);
             block_index                                     = page_index >> page_index_to_block_index_shift;
@@ -1131,13 +1089,13 @@ namespace xcore
             chunk_index                                     = block->m_chunks_array[chunk_index_in_block];
         }
 
-        chunk_t* get_chunk(u32 const page_index)
+        chunk_t* get_chunk_from_page_index(u32 const page_index)
         {
             u32 block_index;
             u32 chunk_index_in_block;
             u32 chunk_index;
             get_from_page_index(page_index, block_index, chunk_index_in_block, chunk_index);
-            return get_chunk(chunk_index);
+            return m_chunks_array.at<chunk_t>(chunk_index);
         }
 
         block_t* get_block_from_page_index(u32 const page_index)
