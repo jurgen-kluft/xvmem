@@ -86,85 +86,150 @@ namespace xcore
         return toaddress(m_address, offset);
     }
 
-    class superarray_t
+    struct superpage_t
     {
-    public:
-        void initialize(xvmem* vmem, u64 address_range, u32 item_size)
+        u16 m_item_size;
+        u16 m_item_index;
+        u16 m_item_count;
+        u16 m_item_max;
+        u16 m_item_freelist;
+        u16 m_next;
+
+        void initialize(u32 size, u32 pagesize)
         {
-            m_vmem          = vmem;
-            m_address_range = address_range;
-            u32   attrs     = 0;
-            void* base      = nullptr;
-            m_vmem->reserve(m_address_range, m_page_size, attrs, base);
-            m_address_base  = (xbyte*)base;
-            m_address_alloc = (xbyte*)m_address_base;
-            m_address_end   = m_address_alloc + m_page_size;
-            m_vmem->commit(m_address_alloc, m_page_size, 1);
-            m_item_size = item_size;
-            m_free_list = nullptr;
+            m_item_size     = size;
+            m_item_index    = 0;
+            m_item_count    = 0;
+            m_item_max      = pagesize / size;
+            m_item_freelist = 0xffff;
+            m_next          = 0x10DA;
         }
 
-        void deinitialize()
-        {
-            m_vmem->release(m_address_base, m_address_range);
-            m_address_base  = nullptr;
-            m_address_range = 0;
-            m_item_size     = 0;
-            m_free_list     = nullptr;
-            m_address_alloc = nullptr;
-            m_address_end   = nullptr;
-        }
+        inline bool is_full() const { return m_item_count == m_item_max; }
+        inline bool is_empty() const { return m_item_count == 0; }
+        inline u32  ptr2idx(void* const ptr, void* const elem) const { return (u32)(((u64)elem - (u64)ptr) / m_item_size); }
+        inline u32* idx2ptr(void* const ptr, u32 const index) const { return (u32*)((xbyte*)ptr + (index * (u32)m_item_size)); }
 
-        void* alloc()
+        void* allocate(void* page_address)
         {
-            if (m_free_list != nullptr)
+            m_item_count++;
+            if (m_item_freelist != 0xffff)
             {
-                void* ptr   = m_free_list;
-                m_free_list = m_free_list->m_next;
-                return ptr;
+                u16 const  ielem = m_item_freelist;
+                u16* const pelem = (u16*)idx2ptr(page_address, ielem);
+                m_item_freelist  = pelem[0];
+                return (void*)pelem;
+            }
+            else if (m_item_index < m_item_max)
+            {
+                u16 const ielem = m_item_index++;
+                return (void*)idx2ptr(page_address, ielem);
+            }
+            // panic
+            m_item_count -= 1;
+            return nullptr;
+        }
+        void deallocate(void* page_address, u16 item_index)
+        {
+            u16* const pelem = (u16*)idx2ptr(page_address, item_index);
+            pelem[0]         = m_item_freelist;
+            m_item_freelist  = item_index;
+            m_item_count -= 1;
+        }
+    };
+
+    struct superpages_t
+    {
+        void  initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 size_to_pre_allocate);
+        void  deinitialize(superheap_t& heap);
+        u16   checkout_page(u32 const alloc_size);
+        void  release_page(u16 index);
+        void* address_of_page(u16 ipage) const { return toaddress(m_address, (u64)ipage * m_page_size); }
+
+        xvmem*       m_vmem;
+        void*        m_address;
+        u64          m_address_range;
+        u32          m_page_count;
+        u32          m_page_size;
+        superpage_t* m_page_array;
+        llnode_t*    m_page_list;
+        llist_t      m_free_page_list;
+        llist_t      m_cached_page_list;
+    };
+
+    void superpages_t::initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 size_to_pre_allocate)
+    {
+        m_vmem         = vmem;
+        u32 attributes = 0;
+        m_vmem->reserve(address_range, m_page_size, attributes, m_address);
+        m_address_range              = address_range;
+        m_page_count                 = (u32)(address_range / (u64)m_page_size);
+        m_page_array                 = (superpage_t*)heap.allocate(m_page_count * sizeof(superpage_t));
+        m_page_list                  = (llnode_t*)heap.allocate(m_page_count * sizeof(llnode_t));
+        u32 const num_pages_to_cache = xalignUp(size_to_pre_allocate, m_page_size) / m_page_size;
+        ASSERT(num_pages_to_cache <= m_page_count);
+        m_free_page_list.initialize(sizeof(llnode_t), m_page_list, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
+        for (u32 i = 0; i < m_page_count; i++)
+            m_page_array[i].initialize(8, 0);
+
+        if (num_pages_to_cache > 0)
+        {
+            m_cached_page_list.initialize(sizeof(llnode_t), m_page_list, 0, num_pages_to_cache, num_pages_to_cache);
+            m_vmem->commit(m_address, m_page_size, num_pages_to_cache);
+        }
+    }
+
+    void superpages_t::deinitialize(superheap_t& heap)
+    {
+        // NOTE: Do we need to decommit physical pages, or is 'release' enough?
+        m_vmem->release(m_address, m_address_range);
+    }
+
+    u16 superpages_t::checkout_page(u32 const alloc_size)
+    {
+        u16          ipage = NIL;
+        superpage_t* ppage = nullptr;
+
+        // Get a page and initialize that page for this size
+        if (!m_cached_page_list.is_empty())
+        {
+            ipage = m_cached_page_list.remove_headi(sizeof(llnode_t), m_page_list);
+            ppage = &m_page_array[ipage];
+            ppage->initialize(alloc_size, m_page_size);
+        }
+        else if (!m_free_page_list.is_empty())
+        {
+            ipage = m_free_page_list.remove_headi(sizeof(llnode_t), m_page_list);
+            ppage = &m_page_array[ipage];
+            ppage->initialize(alloc_size, m_page_size);
+            m_vmem->commit(ppage, m_page_size, 1);
+        }
+        return ipage;
+    }
+
+    void superpages_t::release_page(u16 pageindex)
+    {
+        superpage_t* const ppage = &m_page_array[pageindex];
+        void* const        paddr = address_of_page(pageindex);
+        if (ppage->is_empty())
+        {
+            if (!m_cached_page_list.is_full())
+            {
+                m_cached_page_list.insert(sizeof(llnode_t), m_page_list, pageindex);
             }
             else
             {
-                if ((m_address_alloc + m_item_size) > m_address_end)
-                {
-                    m_vmem->commit(m_address_end, m_page_size, 1);
-                    m_address_end += m_page_size;
-                }
-                void* ptr = m_address_alloc;
-                m_address_alloc += m_item_size;
-                return ptr;
+                m_vmem->decommit(paddr, m_page_size, 1);
+                m_free_page_list.insert(sizeof(llnode_t), m_page_list, pageindex);
             }
         }
-
-        void dealloc(void* ptr)
-        {
-            item_t* item = (item_t*)ptr;
-            item->m_next = m_free_list;
-            m_free_list  = item;
-        }
-
-        inline void*                    idx2ptr(u32 i) const { return toaddress(m_address_base, i * m_item_size); }
-        inline u32                      ptr2idx(void* ptr) const { return (u32)(todistance(m_address_base, ptr)) / m_item_size; }
-        template <typename T> inline T* base() { return (T*)m_address_base; }
-        template <typename T> inline T* at(u32 index) { return (T*)toaddress(m_address_base, i * m_item_size); }
-
-        struct item_t
-        {
-            item_t* m_next;
-        };
-        xvmem*  m_vmem;
-        xbyte*  m_address_base;
-        u64     m_address_range;
-        u32     m_page_size;
-        u32     m_item_size;
-        item_t* m_free_list;
-        xbyte*  m_address_alloc;
-        xbyte*  m_address_end;
-    };
+    }
 
     // Book-keeping for chunks requires to allocate/deallocate blocks of data
     // Power-of-2 sizes, minimum size = 8, maximum_size = 32768
     // @note: returned index to the user is u32[u16(page-index):u16(item-index)]
+    // Can re-use superarray_t instead of having custom code, or superarray_t
+    // can re-use page_t.
     class superfsa_t
     {
     public:
@@ -174,160 +239,66 @@ namespace xcore
         u32  alloc(u32 size);
         void dealloc(u32 index);
 
-        struct page_t
-        {
-            u16 m_item_size;
-            u16 m_item_index;
-            u16 m_item_count;
-            u16 m_item_max;
-            u16 m_dummy;
-            u16 m_item_freelist;
-
-            void initialize(u32 size, u32 pagesize)
-            {
-                m_item_size     = size;
-                m_item_index    = 0;
-                m_item_count    = 0;
-                m_item_max      = pagesize / size;
-                m_dummy         = 0x10DA;
-                m_item_freelist = 0xffff;
-            }
-
-            inline bool is_full() const { return m_item_count == m_item_max; }
-            inline bool is_empty() const { return m_item_count == 0; }
-            inline u32  ptr2idx(void* const ptr, void* const elem) const { return (u32)(((u64)elem - (u64)ptr) / m_item_size); }
-            inline u32* idx2ptr(void* const ptr, u32 const index) const { return (u32*)((xbyte*)ptr + (index * (u32)m_item_size)); }
-
-            void* allocate(void* page_address)
-            {
-                m_item_count++;
-                if (m_item_freelist != 0xffff)
-                {
-                    u16 const  ielem = m_item_freelist;
-                    u16* const pelem = (u16*)idx2ptr(page_address, ielem);
-                    m_item_freelist  = pelem[0];
-                    return (void*)pelem;
-                }
-                else if (m_item_index < m_item_max)
-                {
-                    u16 const ielem = m_item_index++;
-                    return (void*)idx2ptr(page_address, ielem);
-                }
-                // panic
-                m_item_count -= 1;
-                return nullptr;
-            }
-            void deallocate(void* page_address, u16 item_index)
-            {
-                u16* const pelem = (u16*)idx2ptr(page_address, item_index);
-                pelem[0]         = m_item_freelist;
-                m_item_freelist  = item_index;
-                m_item_count -= 1;
-            }
-        };
-
-        inline void* pageindex_to_pageaddress(u16 ipage) const { return toaddress(m_address, (u64)ipage * m_page_size); }
         inline void* idx2ptr(u32 i) const
         {
-            u16 const           pageindex = i >> 16;
-            u16 const           itemindex = i & 0xFFFF;
-            page_t const* const ppage     = &m_page_array[pageindex];
-            void* const         paddr     = pageindex_to_pageaddress(pageindex);
+            u16 const                pageindex = i >> 16;
+            u16 const                itemindex = i & 0xFFFF;
+            superpage_t const* const ppage     = &m_pages.m_page_array[pageindex];
+            void* const              paddr     = m_pages.address_of_page(pageindex);
             return ppage->idx2ptr(paddr, itemindex);
         }
 
         inline u32 ptr2idx(void* ptr) const
         {
-            u32 const           pageindex = (u32)(todistance(m_address, ptr) / m_page_size);
-            page_t const* const ppage     = &m_page_array[pageindex];
-            void* const         paddr     = pageindex_to_pageaddress(pageindex);
-            u32 const           itemindex = ppage->ptr2idx(paddr, ptr);
+            u32 const                pageindex = (u32)(todistance(m_pages.m_address, ptr) / m_pages.m_page_size);
+            superpage_t const* const ppage     = &m_pages.m_page_array[pageindex];
+            void* const              paddr     = m_pages.address_of_page(pageindex);
+            u32 const                itemindex = ppage->ptr2idx(paddr, ptr);
             return (pageindex << 16) | (itemindex & 0xFFFF);
         }
 
-        xvmem*           m_vmem;
-        void*            m_address;
-        u64              m_address_range;
-        u32              m_page_count;
-        u32              m_page_size;
-        page_t*          m_page_array;
-        llnode_t*        m_page_list;
-        llist_t          m_free_page_list;
-        llist_t          m_cached_page_list;
+        superpages_t     m_pages;
         static const s32 c_max_num_sizes = 16;
         llhead_t         m_used_page_list_per_size[c_max_num_sizes];
     };
 
     void superfsa_t::initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 size_to_pre_allocate)
     {
-        m_vmem         = vmem;
-        u32 attributes = 0;
-        m_vmem->reserve(address_range, m_page_size, attributes, m_address);
-        m_address_range              = address_range;
-        m_page_count                 = (u32)(address_range / (u64)m_page_size);
-        m_page_array                 = (page_t*)heap.allocate(m_page_count * sizeof(page_t));
-        m_page_list                  = (llnode_t*)heap.allocate(m_page_count * sizeof(llnode_t));
-        u32 const num_pages_to_cache = xalignUp(size_to_pre_allocate, m_page_size) / m_page_size;
-        ASSERT(num_pages_to_cache <= m_page_count);
-        m_free_page_list.initialize(sizeof(llnode_t), m_page_list, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
-        for (u32 i = 0; i < m_page_count; i++)
-            m_page_array[i].initialize(8, 0);
+        m_pages.initialize(heap, vmem, address_range, size_to_pre_allocate);
         for (u32 i = 0; i < c_max_num_sizes; i++)
             m_used_page_list_per_size[i].reset();
-
-        if (num_pages_to_cache > 0)
-        {
-            m_cached_page_list.initialize(sizeof(llnode_t), m_page_list, 0, num_pages_to_cache, num_pages_to_cache);
-            m_vmem->commit(m_address, m_page_size, num_pages_to_cache);
-        }
     }
 
-    void superfsa_t::deinitialize(superheap_t& heap)
-    {
-        // NOTE: Do we need to decommit physical pages, or is 'release' enough?
-        m_vmem->release(m_address, m_address_range);
-    }
+    void superfsa_t::deinitialize(superheap_t& heap) { m_pages.deinitialize(heap); }
 
     u32 superfsa_t::alloc(u32 size)
     {
-        size               = xalignUp(size, (u32)8);
-        size               = xceilpo2(size);
-        s32 const c        = (xcountTrailingZeros(size) - 3);
-        void*     paddress = nullptr;
-        page_t*   ppage    = nullptr;
-        u32       ipage    = 0xffffffff;
+        size                  = xalignUp(size, (u32)8);
+        size                  = xceilpo2(size);
+        s32 const    c        = (xcountTrailingZeros(size) - 3);
+        void*        paddress = nullptr;
+        superpage_t* ppage    = nullptr;
+        u32          ipage    = 0xffffffff;
         ASSERT(c >= 0 && c < c_max_num_sizes);
         if (m_used_page_list_per_size[c].is_nil())
         {
             // Get a page and initialize that page for this size
-            if (!m_cached_page_list.is_empty())
-            {
-                ipage = m_cached_page_list.remove_headi(sizeof(llnode_t), m_page_list);
-                ppage = &m_page_array[ipage];
-                ppage->initialize(size, m_page_size);
-            }
-            else if (!m_free_page_list.is_empty())
-            {
-                ipage = m_free_page_list.remove_headi(sizeof(llnode_t), m_page_list);
-                ppage = &m_page_array[ipage];
-                ppage->initialize(size, m_page_size);
-                m_vmem->commit(ppage, m_page_size, 1);
-            }
-            m_used_page_list_per_size[c].insert(sizeof(llnode_t), m_page_list, ipage);
+            u16 const ipage = m_pages.checkout_page(size);
+            m_used_page_list_per_size[c].insert(sizeof(llnode_t), m_pages.m_page_list, ipage);
         }
         else
         {
             ipage = m_used_page_list_per_size[c].m_index;
-            ppage = &m_page_array[ipage];
+            ppage = &m_pages.m_page_array[ipage];
         }
 
         if (ppage != nullptr)
         {
-            paddress  = toaddress(m_address, (u64)ipage * m_page_size);
+            paddress  = toaddress(m_pages.m_address, (u64)ipage * m_pages.m_page_size);
             void* ptr = ppage->allocate(paddress);
             if (ppage->is_full())
             {
-                m_used_page_list_per_size[c].remove_head(sizeof(llnode_t), m_page_list);
+                m_used_page_list_per_size[c].remove_head(sizeof(llnode_t), m_pages.m_page_list);
             }
             return ptr2idx(ptr);
         }
@@ -339,25 +310,110 @@ namespace xcore
 
     void superfsa_t::dealloc(u32 i)
     {
-        u16 const     pageindex = i >> 16;
-        u16 const     itemindex = i & 0xFFFF;
-        page_t* const ppage     = &m_page_array[pageindex];
-        void* const   paddr     = pageindex_to_pageaddress(pageindex);
+        u16 const          pageindex = i >> 16;
+        u16 const          itemindex = i & 0xFFFF;
+        superpage_t* const ppage     = &m_pages.m_page_array[pageindex];
+        void* const        paddr     = m_pages.address_of_page(pageindex);
         ppage->deallocate(paddr, itemindex);
         if (ppage->is_empty())
         {
             s32 const c = (xcountTrailingZeros(ppage->m_item_size) - 3);
             ASSERT(c >= 0 && c < c_max_num_sizes);
-            m_used_page_list_per_size[c].remove_item(sizeof(llnode_t), m_page_list, pageindex);
-            if (!m_cached_page_list.is_full())
+            m_used_page_list_per_size[c].remove_item(sizeof(llnode_t), m_pages.m_page_list, pageindex);
+            m_pages.release_page(pageindex);
+        }
+    }
+
+    class superfreelist_t
+    {
+    public:
+        void initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache, u16 item_size);
+        void deinitialize(superheap_t& heap);
+
+        u16  alloc();
+        void dealloc(u16 index);
+
+        inline void* idx2ptr(u16 i) const
+        {
+            u16 const                pageindex = i / m_items_per_page;
+            u16 const                itemindex = i - (pageindex * m_items_per_page);
+            superpage_t const* const ppage     = &m_pages.m_page_array[pageindex];
+            void* const              paddr     = m_pages.address_of_page(pageindex);
+            return ppage->idx2ptr(paddr, itemindex);
+        }
+
+        inline u16 ptr2idx(void* ptr) const
+        {
+            u32 const                pageindex = (u32)(todistance(m_pages.m_address, ptr) / m_pages.m_page_size);
+            superpage_t const* const ppage     = &m_pages.m_page_array[pageindex];
+            void* const              paddr     = m_pages.address_of_page(pageindex);
+            u32 const                itemindex = ppage->ptr2idx(paddr, ptr);
+            return (pageindex << 16) | (itemindex & 0xFFFF);
+        }
+
+        template <typename T> T* base() { return (T*)m_pages.m_address; }
+        template <typename T> T* at(u16 i) { return (T*)idx2ptr(i); }
+
+        u32          m_item_size;
+        u32          m_items_per_page;
+        superpages_t m_pages;
+        llhead_t     m_active_pages;
+    };
+
+    void superfreelist_t::initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 size_to_pre_allocate, u16 item_size)
+    {
+        m_item_size = item_size;
+        m_pages.initialize(heap, vmem, address_range, size_to_pre_allocate);
+        m_active_pages.reset();
+        m_items_per_page = m_pages.m_page_size / m_item_size;
+    }
+
+    void superfreelist_t::deinitialize(superheap_t& heap) { m_pages.deinitialize(heap); }
+
+    u16 superfreelist_t::alloc()
+    {
+        void*        paddress = nullptr;
+        superpage_t* ppage    = nullptr;
+        u32          ipage    = 0xffffffff;
+        if (m_active_pages.is_nil())
+        {
+            // Get a page and initialize that page for this size
+            u16 const ipage = m_pages.checkout_page(m_item_size);
+            m_active_pages.insert(sizeof(llnode_t), m_pages.m_page_list, ipage);
+        }
+        else
+        {
+            ipage = m_active_pages.m_index;
+            ppage = &m_pages.m_page_array[ipage];
+        }
+
+        if (ppage != nullptr)
+        {
+            paddress  = toaddress(m_pages.m_address, (u64)ipage * m_pages.m_page_size);
+            void* ptr = ppage->allocate(paddress);
+            if (ppage->is_full())
             {
-                m_cached_page_list.insert(sizeof(llnode_t), m_page_list, pageindex);
+                m_active_pages.remove_head(sizeof(llnode_t), m_pages.m_page_list);
             }
-            else
-            {
-                m_vmem->decommit(paddr, m_page_size, 1);
-                m_free_page_list.insert(sizeof(llnode_t), m_page_list, pageindex);
-            }
+            return ptr2idx(ptr);
+        }
+        else
+        {
+            return NIL;
+        }
+    }
+
+    void superfreelist_t::dealloc(u16 i)
+    {
+        u16 const          pageindex = i / m_items_per_page;
+        u16 const          itemindex = i - (pageindex * m_items_per_page);
+        superpage_t* const ppage     = &m_pages.m_page_array[pageindex];
+        void* const        paddr     = m_pages.address_of_page(pageindex);
+        ppage->deallocate(paddr, itemindex);
+        if (ppage->is_empty())
+        {
+            m_active_pages.remove_item(sizeof(llnode_t), m_pages.m_page_list, pageindex);
+            m_pages.release_page(pageindex);
         }
     }
 
@@ -957,13 +1013,13 @@ namespace xcore
 
         struct config_t
         {
-            config_t(u16 indirection, u16 chunks_max, u16 chunks_shift)
-                : m_indirection(indirection)
+            config_t(u16 redirect, u16 chunks_max, u16 chunks_shift)
+                : m_redirect(redirect)
                 , m_chunks_max(chunks_max)
                 , m_chunks_shift(chunks_shift)
             {
             }
-            u8  m_indirection;
+            u8  m_redirect;
             u16 m_chunks_max;
             u8  m_chunks_shift;
         };
@@ -972,8 +1028,8 @@ namespace xcore
         const config_t   c_configs[c_num_configs] = {
             config_t(0, 0, 0),      config_t(0, 0, 0),    config_t(0, 0, 0),    config_t(0, 0, 0),      config_t(0, 0, 0),      config_t(0, 0, 0),     config_t(0, 0, 0),     config_t(0, 0, 0),
             config_t(0, 0, 0),      config_t(0, 0, 0),    config_t(0, 0, 0),    config_t(0, 0, 0),      config_t(0, 0, 0),      config_t(0, 0, 0),     config_t(0, 0, 0),     config_t(0, 0, 0),
-            config_t(16, 2048, 16), config_t(0, 0, 0),    config_t(0, 0, 0),    config_t(19, 2048, 19), config_t(20, 1024, 20), config_t(21, 512, 21), config_t(22, 256, 22), config_t(22, 128, 23),
-            config_t(22, 64, 24),   config_t(22, 32, 25), config_t(22, 16, 26), config_t(22, 8, 27),    config_t(22, 4, 28),    config_t(22, 2, 29),   config_t(0, 0, 0),     config_t(0, 0, 0),
+            config_t(16, 2048, 16), config_t(0, 0, 0),    config_t(0, 0, 0),    config_t(19, 2048, 19), config_t(20, 1024, 20), config_t(21, 512, 21), config_t(22, 256, 22), config_t(23, 128, 23),
+            config_t(24, 64, 24),   config_t(25, 32, 25), config_t(26, 16, 26), config_t(27, 8, 27),    config_t(28, 4, 28),    config_t(29, 2, 29),   config_t(0, 0, 0),     config_t(0, 0, 0),
         };
 
         static inline u32 chunk_size_to_config_index(u32 const chunk_size)
@@ -1104,16 +1160,20 @@ namespace xcore
             return &m_blocks_array[block_index];
         }
 
-        superfsa_t   m_fsa;
-        superarray_t m_chunks_array;
-        llhead_t     m_block_per_group_list_active[32];
-        void*        m_address_base;
-        u64          m_address_range;
-        u32          m_page_size;
-        u32          m_page_shift;   // e.g. 16 (1<<16 = 64 KB)
-        s16          m_blocks_shift; // e.g. 25 (1<<30 =  1 GB)
-        block_t*     m_blocks_array;
-        llist_t      m_blocks_list_free;
+        // When deallocating, call this to get the page-index which you can than use
+        // to get the 'chunk_t*'.
+        u32 address_to_page_index(void* ptr) const { return (u32)(todistance(m_address_base, ptr) >> m_page_shift); }
+
+        superfsa_t      m_fsa;
+        superfreelist_t m_chunks_array;
+        llhead_t        m_block_per_group_list_active[32];
+        void*           m_address_base;
+        u64             m_address_range;
+        u32             m_page_size;
+        u32             m_page_shift;   // e.g. 16 (1<<16 = 64 KB)
+        s16             m_blocks_shift; // e.g. 25 (1<<30 =  1 GB)
+        block_t*        m_blocks_array;
+        llist_t         m_blocks_list_free;
     };
 
     // Example Config:
