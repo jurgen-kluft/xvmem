@@ -94,7 +94,7 @@ namespace xcore
         instance->m_list_array     = list_nodes;
 
         // Initialize the block list by linking all blocks into the empty list
-        instance->m_block_empty_list.initialize(list_nodes, 0, block_count, block_count);
+        instance->m_block_empty_list.initialize(sizeof(llnode_t), list_nodes, 0, block_count, block_count);
         instance->m_block_used_list = llist_t(0, block_count);
         instance->m_block_full_list = llist_t(0, block_count);
 
@@ -213,22 +213,22 @@ namespace xcore
         {
             if (!m_block_empty_list.is_empty())
             {
-                llnode_t* pnode = m_block_empty_list.remove_head(m_list_array);
-                llindex_t const     inode = m_block_empty_list.node2idx(m_list_array, pnode);
-                xblock_t*         block = create_block_at(this, inode.get());
-                m_block_used_list.insert(m_list_array, inode);
-                return allocate_from(this, inode.get(), size);
+                llnode_t* pnode = m_block_empty_list.remove_head(sizeof(llnode_t), m_list_array);
+                llindex_t const     inode = m_block_empty_list.node2idx(sizeof(llnode_t), m_list_array, pnode);
+                xblock_t*         block = create_block_at(this, inode);
+                m_block_used_list.insert(sizeof(llnode_t), m_list_array, inode);
+                return allocate_from(this, inode, size);
             }
         }
         else
         {
-            llindex_t const  bi    = m_block_used_list.m_head;
-            xblock_info_t* binfo = get_binfo_at(this, bi.get());
-            void*          ptr   = allocate_from(this, bi.get(), size);
+            llindex_t const  bi    = m_block_used_list.m_head.m_index;
+            xblock_info_t* binfo = get_binfo_at(this, bi);
+            void*          ptr   = allocate_from(this, bi, size);
             if (is_block_full(binfo))
             {
-                m_block_used_list.remove_item(m_list_array, bi);
-                m_block_full_list.insert(m_list_array, bi);
+                m_block_used_list.remove_item(sizeof(llnode_t), m_list_array, bi);
+                m_block_full_list.insert(sizeof(llnode_t), m_list_array, bi);
             }
             return ptr;
         }
@@ -250,17 +250,17 @@ namespace xcore
         if (is_block_full(binfo))
         {
             size = deallocate_from(this, block_index, ptr);
-            m_block_full_list.remove_item(m_list_array, block_index);
-            m_block_used_list.insert(m_list_array, block_index);
+            m_block_full_list.remove_item(sizeof(llnode_t), m_list_array, block_index);
+            m_block_used_list.insert(sizeof(llnode_t), m_list_array, block_index);
         }
         else
         {
             size = deallocate_from(this, block_index, ptr);
             if (is_block_empty(binfo))
             {
-                m_block_used_list.remove_item(m_list_array, block_index);
+                m_block_used_list.remove_item(sizeof(llnode_t), m_list_array, block_index);
                 destroy_block_at(this, block_index);
-                m_block_empty_list.insert(m_list_array, block_index);
+                m_block_empty_list.insert(sizeof(llnode_t), m_list_array, block_index);
             }
         }
         return size;

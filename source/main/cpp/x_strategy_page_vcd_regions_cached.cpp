@@ -34,7 +34,7 @@ namespace xcore
                 }
                 else
                 {
-                    m_regions_cache.remove_item(m_regions_list, region_index);
+                    m_regions_cache.remove_item(sizeof(llnode_t), m_regions_list, region_index);
                 }
             }
             else
@@ -43,18 +43,18 @@ namespace xcore
                 bool const region_2nd_is_cached = m_regions_list[region_index + 1].is_linked();
                 if (region_1st_is_cached && region_2nd_is_cached)
                 {
-                    m_regions_cache.remove_item(m_regions_list, region_index);
-                    m_regions_cache.remove_item(m_regions_list, region_index + 1);
+                    m_regions_cache.remove_item(sizeof(llnode_t), m_regions_list, region_index);
+                    m_regions_cache.remove_item(sizeof(llnode_t), m_regions_list, region_index + 1);
                 }
                 else if (region_1st_is_cached && !region_2nd_is_cached)
                 {
-                    m_regions_cache.remove_item(m_regions_list, region_index);
+                    m_regions_cache.remove_item(sizeof(llnode_t), m_regions_list, region_index);
                     m_vmem->commit(x_advance_ptr(reg_base, m_reg_range), m_page_size, (u32)(m_reg_range / m_page_size));
                 }
                 else if (!region_1st_is_cached && region_2nd_is_cached)
                 {
                     m_vmem->commit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
-                    m_regions_cache.remove_item(m_regions_list, region_index + 1);
+                    m_regions_cache.remove_item(sizeof(llnode_t), m_regions_list, region_index + 1);
                 }
             }
         }
@@ -67,15 +67,15 @@ namespace xcore
             for (u32 i = 0; i < num_regions; ++i)
             {
 				u32 const region = region_index + i;
-                m_regions_cache.insert_tail(m_regions_list, region);
+                m_regions_cache.insert_tail(sizeof(llnode_t), m_regions_list, region);
             }
 
             // Is cache too large?  ->  decommit the oldest
             while (m_regions_cache.size() > m_max_regions_cached)
             {
-                llnode_t*       pregion  = m_regions_cache.remove_head(m_regions_list);
-                llindex_t const iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
-                void*           reg_base = x_advance_ptr(m_mem_base, iregion.get() * m_reg_range);
+                llnode_t*       pregion  = m_regions_cache.remove_head(sizeof(llnode_t), m_regions_list);
+                llindex_t const iregion  = m_regions_cache.node2idx(sizeof(llnode_t), m_regions_list, pregion);
+                void*           reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
                 m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
             }
         }
@@ -215,9 +215,9 @@ namespace xcore
     {
 		while (m_regions_cache.is_empty() == false)
 		{
-            llnode_t*       pregion  = m_regions_cache.remove_head(m_regions_list);
-            llindex_t const iregion  = m_regions_cache.node2idx(m_regions_list, pregion);
-            void*           reg_base = x_advance_ptr(m_mem_base, iregion.get() * m_reg_range);
+            llnode_t*       pregion  = m_regions_cache.remove_head(sizeof(llnode_t), m_regions_list);
+            llindex_t const iregion  = m_regions_cache.node2idx(sizeof(llnode_t), m_regions_list, pregion);
+            void*           reg_base = x_advance_ptr(m_mem_base, iregion * m_reg_range);
             m_vmem->decommit(reg_base, m_page_size, (u32)(m_reg_range / m_page_size));
 		}
 

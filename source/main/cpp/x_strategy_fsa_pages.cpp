@@ -24,7 +24,7 @@ namespace xcore
             , m_page_list(list_data)
             , m_pages(page_array)
         {
-            m_free_page_list.initialize(list_data, 0, page_cnt, page_cnt);
+            m_free_page_list.initialize(sizeof(llnode_t), list_data, 0, page_cnt, page_cnt);
         }
 
         xpage_t* alloc_page(u32 const elem_size);
@@ -70,8 +70,8 @@ namespace xcore
         if (!m_free_page_list.is_empty())
         {
             // Get an empty page by removing it from the list
-            llindex_t const ipage = m_free_page_list.remove_headi(m_page_list);
-            ppage = indexto_page(ipage.get());
+            llindex_t const ipage = m_free_page_list.remove_headi(sizeof(llnode_t), m_page_list);
+            ppage = indexto_page(ipage);
 
         }
         else if (m_free_page_index < m_page_cnt)
@@ -98,7 +98,7 @@ namespace xcore
 		// TODO: Decommit page
 
         u16 const ipage = indexof_page(ppage);
-        m_free_page_list.insert(m_page_list, ipage);
+        m_free_page_list.insert(sizeof(llnode_t), m_page_list, ipage);
     }
 
     u32 xpages_t::address_to_elem_size(void* const address) const
@@ -164,26 +164,26 @@ namespace xcore
 
     llindex_t xpages_t::next_node(llindex_t const node) const
     {
-        if (node.is_nil())
+        if (node == NIL)
             return llindex_t();
-        ASSERT(node.get() < m_page_cnt);
-        return m_page_list[node.get()].m_next;
+        ASSERT(node < m_page_cnt);
+        return m_page_list[node].m_next;
     }
 
     llindex_t xpages_t::prev_node(llindex_t const node) const
     {
-        if (node.is_nil())
+        if (node == NIL)
             return llindex_t();
-        ASSERT(node.get() < m_page_cnt);
-        return m_page_list[node.get()].m_prev;
+        ASSERT(node < m_page_cnt);
+        return m_page_list[node].m_prev;
     }
 
     llnode_t* xpages_t::indexto_node(llindex_t const node) const
     {
-        if (node.is_nil())
+        if (node == NIL)
             return nullptr;
-        ASSERT(node.get() < m_page_cnt);
-        return &m_page_list[node.get()];
+        ASSERT(node < m_page_cnt);
+        return &m_page_list[node];
     }
 
     llindex_t xpages_t::indexof_node(llnode_t* const node) const
@@ -191,7 +191,7 @@ namespace xcore
         if (node == nullptr)
             return llindex_t();
         llindex_t const index = (u16)(((u64)node - (u64)&m_page_list[0]) / sizeof(llnode_t));
-        ASSERT(index.get() < m_page_cnt);
+        ASSERT(index < m_page_cnt);
         return index;
     }
 
@@ -201,9 +201,9 @@ namespace xcore
             return nullptr;
         llindex_t const index = indexof_page(page);
         llindex_t const next  = next_node(index);
-        if (next.is_nil())
+        if (next == NIL)
             return nullptr;
-        return &m_pages[next.get()];
+        return &m_pages[next];
     }
 
     xpage_t* xpages_t::prev_page(xpage_t* const page)
@@ -212,9 +212,9 @@ namespace xcore
             return nullptr;
         llindex_t const index = indexof_page(page);
         llindex_t const prev  = prev_node(index);
-        if (prev.is_nil())
+        if (prev == NIL)
             return nullptr;
-        return &m_pages[prev.get()];
+        return &m_pages[prev];
     }
 
     xpage_t* xpages_t::indexto_page(u16 const page) const
@@ -277,17 +277,17 @@ namespace xcore
     {
         xpage_t*  ppage = pages->alloc_page(elem_size);
         u16 const ipage = pages->indexof_page(ppage);
-        page_list.insert(pages->m_page_list, ipage);
+        page_list.insert(sizeof(llnode_t), pages->m_page_list, ipage);
         return pages->address_of_page(ppage);
     }
 
     void* free_one_page(xpages_t* pages, llist_t& page_list)
     {
-        llhead_t const ipage = page_list.m_head;
-        if (ipage.is_nil())
+        llindex_t const ipage = page_list.m_head.m_index;
+        if (ipage == NIL)
             return nullptr;
-        page_list.remove_item(pages->m_page_list, ipage);
-        xpage_t*    ppage = pages->indexto_page(ipage.get());
+        page_list.remove_item(sizeof(llnode_t), pages->m_page_list, ipage);
+        xpage_t*    ppage = pages->indexto_page(ipage);
         void* const apage = pages->address_of_page(ppage);
         pages->free_page(ppage);
         return apage;
@@ -297,9 +297,9 @@ namespace xcore
     {
         while (!page_list.is_empty())
         {
-            llhead_t const ipage = page_list.m_head;
-            page_list.remove_item(pages->m_page_list, ipage);
-            xpage_t* ppage = pages->indexto_page(ipage.get());
+            llindex_t const ipage = page_list.m_head.m_index;
+            page_list.remove_item(sizeof(llnode_t), pages->m_page_list, ipage);
+            xpage_t* ppage = pages->indexto_page(ipage);
             pages->free_page(ppage);
         }
     }
@@ -321,16 +321,16 @@ namespace xcore
 			}
 			else
 			{
-				ipage = pages_empty_list.remove_headi(pages->m_page_list);
-				ppage = pages->indexto_page(ipage.get());
+				ipage = pages_empty_list.remove_headi(sizeof(llnode_t), pages->m_page_list);
+				ppage = pages->indexto_page(ipage);
 				ppage->init(pages->m_page_size, elem_size);
 			}
-			page_list.insert(pages->m_page_list, ipage);
+			page_list.insert(sizeof(llnode_t), pages->m_page_list, ipage);
         }
         else
         {
-            ipage = page_list.m_head;
-            ppage = pages->indexto_page(ipage.get());
+            ipage = page_list.m_head.m_index;
+            ppage = pages->indexto_page(ipage);
         }
 
         void* const apage = pages->address_of_page(ppage);
@@ -340,7 +340,7 @@ namespace xcore
             ptr = ppage->allocate(apage);
             if (ppage->is_full())
             {
-                page_list.remove_item(pages->m_page_list, ipage);
+                page_list.remove_item(sizeof(llnode_t), pages->m_page_list, ipage);
             }
         }
         return ptr;
@@ -369,12 +369,12 @@ namespace xcore
         if (ppage->is_empty())
         {
             ASSERT(pages->indexto_node(ipage)->is_linked());
-            page_list.remove_item(pages->m_page_list, ipage);
-            page_empty_list.insert(pages->m_page_list, ipage);
+            page_list.remove_item(sizeof(llnode_t), pages->m_page_list, ipage);
+            page_empty_list.insert(sizeof(llnode_t), pages->m_page_list, ipage);
         }
         else if (was_full)
         {
-            page_list.insert(pages->m_page_list, ipage);
+            page_list.insert(sizeof(llnode_t), pages->m_page_list, ipage);
         }
     }
 

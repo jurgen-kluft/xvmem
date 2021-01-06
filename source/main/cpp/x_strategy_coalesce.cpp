@@ -248,7 +248,7 @@ namespace xcore
     {
         xalloc_coalesce* self = nullptr;
 
-        const u32 size_db_cnt   = xalignUp(1 + ((size_max - size_min) / size_step), 2);
+        const u32 size_db_cnt   = xalignUp((u32)1 + ((size_max - size_min) / size_step), (u32)2);
         const u32 memblock_size = sizeof(xalloc_coalesce) + size_db_cnt * sizeof(u32) + hibitset_t::size_in_dwords(size_db_cnt) * sizeof(u32);
         xbyte*    memblock      = (xbyte*)main_alloc->allocate(memblock_size);
 

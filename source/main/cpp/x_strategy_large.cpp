@@ -51,7 +51,7 @@ namespace xcore
         instance->m_entry_nodes = (llnode_t*)main_heap->allocate(sizeof(llnode_t) * block_cnt, sizeof(void*));
         instance->m_entry_array = (xalloc_large::entry_t*)main_heap->allocate(sizeof(xalloc_large::entry_t) * block_cnt, sizeof(void*));
         instance->m_alloc_list  = llist_t(0, block_cnt);
-        instance->m_free_list.initialize(instance->m_entry_nodes, 0, block_cnt, block_cnt);
+        instance->m_free_list.initialize(sizeof(llnode_t), instance->m_entry_nodes, 0, block_cnt, block_cnt);
 
         for (u32 i = 0; i < block_cnt; ++i)
         {
@@ -72,11 +72,11 @@ namespace xcore
     {
         if (!m_free_list.is_empty())
         {
-            const llindex_t idx = m_free_list.remove_headi(m_entry_nodes);
-            m_alloc_list.insert(m_entry_nodes, idx);
-            xalloc_large::entry_t* entry = &m_entry_array[idx.get()];
+            const llindex_t idx = m_free_list.remove_headi(sizeof(llnode_t), m_entry_nodes);
+            m_alloc_list.insert(sizeof(llnode_t), m_entry_nodes, idx);
+            xalloc_large::entry_t* entry = &m_entry_array[idx];
             entry->m_size                = size;
-            ASSERT(entry->m_index == idx.get());
+            ASSERT(entry->m_index == idx);
             return x_advance_ptr(m_mem_base, entry->m_index * m_block_size);
         }
         return nullptr;
@@ -89,8 +89,8 @@ namespace xcore
         u32 const              size  = entry->m_size;
         entry->m_size                = (u32)m_block_size;
         ASSERT(entry->m_index == idx);
-        m_alloc_list.remove_item(m_entry_nodes, idx);
-        m_free_list.insert(m_entry_nodes, idx);
+        m_alloc_list.remove_item(sizeof(llnode_t), m_entry_nodes, idx);
+        m_free_list.insert(sizeof(llnode_t), m_entry_nodes, idx);
         return size;
     }
 
