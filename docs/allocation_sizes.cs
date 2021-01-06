@@ -384,18 +384,21 @@ namespace SuperAlloc
             return (v & (v - 1)) == 0;
         }
 
+        public static UInt64 AlignTo(UInt64 v, UInt64 a)
+        {
+            return (v + (a - 1)) & ~((UInt64)a - 1);
+        }
         public static UInt64 AlignTo8(UInt64 v)
         {
-            return (v + (8 - 1)) & ~((UInt64)8 - 1);
+            return AlignTo(v, 8);
         }
-
         public static UInt64 AlignTo16(UInt64 v)
         {
-            return (v + (16 - 1)) & ~((UInt64)16 - 1);
+            return AlignTo(v, 16);
         }
         public static UInt64 AlignTo32(UInt64 v)
         {
-            return (v + (32 - 1)) & ~((UInt64)32 - 1);
+            return AlignTo(v, 32);
         }
     }
 
