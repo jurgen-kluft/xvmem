@@ -564,7 +564,7 @@ namespace xcore
             // Check if block is now empty
             if (block->m_chunks_used == c_configs[config_index].m_chunks_max)
             {
-                m_block_per_group_list_active[config_index].remove_headi(sizeof(block_t), m_blocks_array);
+                m_block_per_group_list_active[config_index].remove_item(sizeof(block_t), m_blocks_array, block_index);
             }
 
             // Return the chunk index
