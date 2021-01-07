@@ -22,23 +22,25 @@ namespace xcore
         const u16 end = start + size;
         for (u16 i = 0; i < size; ++i)
         {
-            idx2node(sizeof_node, list, i)->link(i + 1);
+            lnode_t* node = idx2node(sizeof_node, list, i);
+            node->m_next =(i + 1);
         }
-        idx2node(sizeof_node, list, end - 1)->unlink();
+        lnode_t* node = idx2node(sizeof_node, list, end - 1);
+        node->m_next = NIL;
     }
 
     void lhead_t::insert(u32 const sizeof_node, lnode_t* list, lindex_t item)
     {
         lnode_t* const pitem = idx2node(sizeof_node, list, item);
-        ASSERT(pitem->is_linked() == false);
+        ASSERT(pitem->m_next == NIL);
         if (is_nil())
         {
-            pitem->link(item);
+            pitem->m_next = (item);
         }
         else
         {
             lindex_t const inext = m_index;
-            pitem->link(inext);
+            pitem->m_next = (inext);
         }
         m_index = item;
     }
@@ -52,7 +54,7 @@ namespace xcore
         }
 
         lnode_t* const phead = lhead_t::idx2node(sizeof_node, nodes, head.m_index);
-        if (!phead->is_linked())
+        if (phead->m_next == NIL)
         {
             head.reset();
         }
@@ -63,8 +65,8 @@ namespace xcore
             head.m_index         = inext;
         }
 
-        phead->unlink();
         out_node = phead;
+        out_node->m_next = NIL;
         return 1;
     }
 

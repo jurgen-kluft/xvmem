@@ -13,10 +13,7 @@ namespace xcore
     static const u16 NIL = 0xFFFF;
     struct lnode_t
     {
-        inline void link(lindex_t n) { m_next = n; }
-        inline void unlink() { m_next = NIL; }
-        inline bool is_linked() const { return m_next != NIL; }
-        lindex_t    m_next;
+        lindex_t         m_next;
     };
 
     struct lhead_t
