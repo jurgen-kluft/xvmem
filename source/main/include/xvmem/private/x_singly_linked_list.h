@@ -10,9 +10,10 @@
 namespace xcore
 {
     typedef u16      lindex_t;
-    static const u16 NIL = 0xFFFF;
+
     struct lnode_t
     {
+        static const u16 NIL = 0xFFFF;
         lindex_t         m_next;
     };
 
@@ -20,12 +21,12 @@ namespace xcore
     {
         lindex_t m_index;
         inline lhead_t()
-            : m_index(NIL)
+            : m_index(0xFFFF)
         {
         }
         void     initialize(u32 const sizeof_node, lnode_t* list, u16 start, u16 size);
-        void     reset() { m_index = NIL; }
-        bool     is_nil() const { return m_index == NIL; }
+        void     reset() { m_index = 0xFFFF; }
+        bool     is_nil() const { return m_index == 0xFFFF; }
         void     insert(u32 const sizeof_node, lnode_t* list, lindex_t item); // Inserts 'item' at the head
         lnode_t* remove(u32 const sizeof_node, lnode_t* list);
         lindex_t remove_i(u32 const sizeof_node, lnode_t* list);
@@ -36,7 +37,7 @@ namespace xcore
 
         static lnode_t* idx2node(u32 const sizeof_node, lnode_t* list, lindex_t i)
         {
-            if (i == NIL)
+            if (i == 0xFFFF)
                 return nullptr;
             return (lnode_t*)((uptr)list + ((uptr)sizeof_node * i));
         }

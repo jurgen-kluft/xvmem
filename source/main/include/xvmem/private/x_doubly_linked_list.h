@@ -10,23 +10,11 @@
 namespace xcore
 {
     typedef u16      llindex_t;
-    static const u16 NIL = 0xFFFF;
 
     struct llnode_t
     {
-        inline void link(llindex_t p, llindex_t n)
-        {
-            m_prev = p;
-            m_next = n;
-        }
-        inline void unlink()
-        {
-            m_prev = NIL;
-            m_next = NIL;
-        }
+        static const u16 NIL = 0xFFFF;
         inline bool is_linked() const { return m_prev != NIL && m_next != NIL; }
-        inline bool is_last() const { return m_prev != NIL && m_prev == m_next; }
-
         llindex_t m_prev, m_next;
     };
 
@@ -34,12 +22,12 @@ namespace xcore
     {
         llindex_t m_index;
         inline llhead_t()
-            : m_index(NIL)
+            : m_index(0xFFFF)
         {
         }
 
-        void      reset() { m_index = NIL; }
-        bool      is_nil() const { return m_index == NIL; }
+        void      reset() { m_index = 0xFFFF; }
+        bool      is_nil() const { return m_index == 0xFFFF; }
         void      insert(u32 const sizeof_node, llnode_t* list, llindex_t item);      // Inserts 'item' at the head
         void      insert_tail(u32 const sizeof_node, llnode_t* list, llindex_t item); // Inserts 'item' at the tail end
         llnode_t* remove_item(u32 const sizeof_node, llnode_t* list, llindex_t item);
@@ -54,7 +42,7 @@ namespace xcore
 
         static llnode_t* idx2node(u32 const sizeof_node, llnode_t* list, llindex_t i)
         {
-            if (i == NIL)
+            if (i == 0xFFFF)
                 return nullptr;
             return (llnode_t*)((uptr)list + ((uptr)sizeof_node * i));
         }

@@ -164,7 +164,7 @@ namespace xcore
 
     llindex_t xpages_t::next_node(llindex_t const node) const
     {
-        if (node == NIL)
+        if (node == llnode_t::NIL)
             return llindex_t();
         ASSERT(node < m_page_cnt);
         return m_page_list[node].m_next;
@@ -172,7 +172,7 @@ namespace xcore
 
     llindex_t xpages_t::prev_node(llindex_t const node) const
     {
-        if (node == NIL)
+        if (node == llnode_t::NIL)
             return llindex_t();
         ASSERT(node < m_page_cnt);
         return m_page_list[node].m_prev;
@@ -180,7 +180,7 @@ namespace xcore
 
     llnode_t* xpages_t::indexto_node(llindex_t const node) const
     {
-        if (node == NIL)
+        if (node == llnode_t::NIL)
             return nullptr;
         ASSERT(node < m_page_cnt);
         return &m_page_list[node];
@@ -201,7 +201,7 @@ namespace xcore
             return nullptr;
         llindex_t const index = indexof_page(page);
         llindex_t const next  = next_node(index);
-        if (next == NIL)
+        if (next == llnode_t::NIL)
             return nullptr;
         return &m_pages[next];
     }
@@ -212,7 +212,7 @@ namespace xcore
             return nullptr;
         llindex_t const index = indexof_page(page);
         llindex_t const prev  = prev_node(index);
-        if (prev == NIL)
+        if (prev == llnode_t::NIL)
             return nullptr;
         return &m_pages[prev];
     }
@@ -284,7 +284,7 @@ namespace xcore
     void* free_one_page(xpages_t* pages, llist_t& page_list)
     {
         llindex_t const ipage = page_list.m_head.m_index;
-        if (ipage == NIL)
+        if (ipage == llnode_t::NIL)
             return nullptr;
         page_list.remove_item(sizeof(llnode_t), pages->m_page_list, ipage);
         xpage_t*    ppage = pages->indexto_page(ipage);
@@ -368,7 +368,7 @@ namespace xcore
         ppage->deallocate(pages->address_of_page(ppage), ptr);
         if (ppage->is_empty())
         {
-            ASSERT(pages->indexto_node(ipage)->is_linked());
+            ASSERT(pages->indexto_node(ipage)->m_next != llnode_t::NIL && pages->indexto_node(ipage)->m_prev != llnode_t::NIL);
             page_list.remove_item(sizeof(llnode_t), pages->m_page_list, ipage);
             page_empty_list.insert(sizeof(llnode_t), pages->m_page_list, ipage);
         }

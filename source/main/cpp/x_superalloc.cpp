@@ -521,7 +521,8 @@ namespace xcore
             block_t*  block         = &m_blocks_array[block_index];
             u32 const ichunks_array = m_fsa.alloc(sizeof(u32) * num_chunks);
 
-            block->unlink();
+            block->m_next = llnode_t::NIL;
+            block->m_prev = llnode_t::NIL;
             block->m_chunks_array = (u16*)m_fsa.idx2ptr(ichunks_array);
             block->m_config_index = config_index;
             block->m_chunks_used  = 0;
@@ -573,7 +574,8 @@ namespace xcore
 
                 chunk_index = m_chunks_array.alloc();
                 chunk_t* chunk = (chunk_t*)m_chunks_array.idx2ptr(chunk_index);
-                chunk->unlink();
+                chunk->m_next = llnode_t::NIL;
+                chunk->m_prev = llnode_t::NIL;
                 chunk->m_bin_map = superfsa_t::NIL;
                 chunk->m_page_index = (block_index << (m_blocks_shift - m_page_shift)) + (block_chunk_array_slot << (c_configs[block->m_config_index].m_chunks_shift - m_page_shift));
                 chunk->m_elem_used = 0;
@@ -626,13 +628,15 @@ namespace xcore
                 while (block->m_chunks_list_cached.is_nil() == false)
                 {
                     llindex_t item = block->m_chunks_list_cached.remove_headi(sizeof(chunk_t), get_chunk_list_data());
+                    // NOTE: We need to decommit memory here.
                     m_chunks_array.dealloc(item);
                 }
 
                 u32 const chunks_array_index = m_fsa.ptr2idx(block->m_chunks_array);
                 m_fsa.dealloc(chunks_array_index);
 
-                block->unlink();
+                block->m_next = llnode_t::NIL;
+                block->m_prev = llnode_t::NIL;
                 block->m_chunks_array = nullptr;
                 block->m_chunks_list_cached.reset();
                 block->m_chunks_list_free.reset();
