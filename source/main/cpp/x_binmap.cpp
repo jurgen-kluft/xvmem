@@ -26,14 +26,16 @@ namespace xcore
     void binmap_t::init(u32 count, u16* l1, u32 l1len, u16* l2, u32 l2len)
     {
         // Set those bits that we never touch to '1' the rest to '0'
-        u16 l0len = count;
         if (count > 32)
         {
             u32 const c2 = resetarray(count, l2len, l2);
             u32 const c1 = resetarray(c2, l1len, l1);
-            l0len = c1;
+            count = c1;
         }
-        m_l0 = 0xffffffff << (l0len & (32 - 1));
+        if (count == 32)
+            m_l0 = 0;
+        else
+            m_l0 = 0xffffffff << count;
     }
 
     void binmap_t::set(u32 count, u16* l1, u16* l2, u32 k)
