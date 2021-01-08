@@ -8,6 +8,6 @@ Currently this allocator is implemented, 'superalloc', that is ~1200 lines of co
 This allocator is very configurable and all book-keeping data is outside of the managed memory
 making it very suitable for different kind of memory (read-only, GPU etc..).
 
-Note: Benchmarks are still to be done.
+Note: Benchmarks are still to be done.  
 Note: A large running test (60 million alloc/free operations) was done without crashing, so this 
       version is the first release candidate.
