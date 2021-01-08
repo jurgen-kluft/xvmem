@@ -8,27 +8,30 @@
 
 namespace xcore
 {
-    void resetarray(u32 count, u32 len, u16* data)
+    u32 resetarray(u32 count, u32 len, u16* data)
     {
-        for (u32 i = 0; i < len; i++)
+        u32 const wi2 = count >> 4;
+        for (u32 i = 0; i < wi2; i++)
             data[i] = 0;
-        u32 wi2 = count / 16;
-        u32 wd2 = 0xffff << (count & (16 - 1));
-        for (; wi2 < len; wi2++)
-        {
-            data[wi2] = wd2;
-            wd2       = 0xffff;
-        }
+
+        u32 w = wi2;
+        u32 const r = ((count&(16-1)) + (16-1)) >> 4;
+        if (r == 1)
+            data[w++] = 0xffff << (count & (16 - 1));
+        while (w < len)
+            data[w++] = 0xffff;
+        return wi2 + r;
     }
+
     void binmap_t::init(u32 count, u16* l1, u32 l1len, u16* l2, u32 l2len)
     {
         // Set those bits that we never touch to '1' the rest to '0'
         u16 l0len = count;
         if (count > 32)
         {
-            resetarray(count, l2len, l2);
-            resetarray(l2len, l1len, l1);
-            l0len = l1len;
+            u32 const c2 = resetarray(count, l2len, l2);
+            u32 const c1 = resetarray(c2, l1len, l1);
+            l0len = c1;
         }
         m_l0 = 0xffffffff << (l0len & (32 - 1));
     }
@@ -49,7 +52,7 @@ namespace xcore
             if (wd2 == 0xffff)
             {
                 u32 const wi1 = wi2 / 16;
-                u16 const bi1 = 1 << (wi1 & (16 - 1));
+                u16 const bi1 = 1 << (wi2 & (16 - 1));
                 u16 const wd1 = l1[wi1] | bi1;
                 if (wd1 == 0xffff)
                 {
@@ -79,7 +82,7 @@ namespace xcore
             if (wd2 == 0xffff)
             {
                 u32 const wi1 = wi2 / 16;
-                u16 const bi1 = 1 << (wi1 & (16 - 1));
+                u16 const bi1 = 1 << (wi2 & (16 - 1));
                 u16 const wd1 = l1[wi1];
                 if (wd1 == 0xffff)
                 {
@@ -109,41 +112,45 @@ namespace xcore
         }
     }
 
-    u32 binmap_t::find(u32 count, u16 const* l1, u16 const* l2) const
+    s32 binmap_t::find(u32 count, u16 const* l1, u16 const* l2) const
     {
-        u32 const bi0 = (u32)xfindFirstBit(~m_l0);
+        s32 const bi0 = xfindFirstBit(~m_l0);
+        if (bi0 >= 0 && count > 32)
+        {
+            u32 const wi1 = bi0 * 16;
+            s32 const bi1 = xfindFirstBit((u16)~l1[wi1]);
+            ASSERT(bi1 >= 0);
+            u32 const wi2 = wi1 * 16 + bi1;
+            s32 const bi2 = xfindFirstBit((u16)~l2[wi2]);
+            ASSERT(bi2 >= 0);
+            return bi2 + wi2 * 16;
+        }
+        return bi0;
+    }
+
+    s32 binmap_t::findandset(u32 count, u16* l1, u16* l2)
+    {
+        s32 const bi0 = xfindFirstBit(~m_l0);
+        if (bi0 < 0)
+            return -1;
+
         if (count <= 32)
         {
+            u32 const bd0 = 1 << (bi0 & (32 - 1));
+            u32 const wd0 = m_l0 | bd0;
+            m_l0          = wd0;
             return bi0;
         }
         else
         {
-            u32 const wi1 = bi0 * 16;
-            u32 const bi1 = (u32)xfindFirstBit((u16)~l1[wi1]);
-            u32 const wi2 = wi1 * 16 + bi1;
-            u32 const bi2 = (u32)xfindFirstBit((u16)~l2[wi2]);
-            return bi2 + wi2 * 16;
-        }
-    }
-
-    u32 binmap_t::findandset(u32 count, u16* l1, u16* l2)
-    {
-        if (count <= 32)
-        {
-            u32 const b0  = (u32)xfindFirstBit(~m_l0);
-            u32 const bi0 = 1 << (b0 & (32 - 1));
-            u32 const wd0 = m_l0 | bi0;
-            m_l0          = wd0;
-            return b0;
-        }
-        else
-        {
-            u32 const bi0 = (u32)xfindFirstBit(~m_l0);
             u32 const wi1 = bi0;
-            u32 const bi1 = (u32)xfindFirstBit((u16)~l1[wi1]);
-            u32 const wi2 = wi1 * 16 + bi1;
-            u32 const bi2 = (u32)xfindFirstBit((u16)~l2[wi2]);
-            u32 const k   = bi2 + wi2 * 16;
+            s32 const bi1 = xfindFirstBit((u16)~l1[wi1]);
+            ASSERT(bi1 >= 0);
+            u32 const wi2 = (wi1 * 16) + bi1;
+            s32 const bi2 = xfindFirstBit((u16)~l2[wi2]);
+            ASSERT(bi2 >= 0);
+            u32 const k   = (wi2 * 16) + bi2;
+            ASSERT(get(count, l2, k) == false);
 
             u16 const wd2 = l2[wi2] | (1 << bi2);
             if (wd2 == 0xffff)
