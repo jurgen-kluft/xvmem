@@ -119,11 +119,11 @@ namespace xcore
         {
             if (m_item_freelist != NIL)
             {
-                u16 const  ielem = m_item_freelist;
-                u16* const pelem = (u16*)idx2ptr(page_address, ielem);
-                m_item_freelist  = pelem[0];
+                u16 const  iitem = m_item_freelist;
+                u16* const pitem = (u16*)idx2ptr(page_address, iitem);
+                m_item_freelist  = pitem[0];
                 m_item_count++;
-                return ielem;
+                return iitem;
             }
             else if (m_item_count < m_item_max)
             {
@@ -137,7 +137,7 @@ namespace xcore
         void deallocate(void* page_address, u16 item_index)
         {
             ASSERT(m_item_count > 0);
-            ASSERT(item_index < m_item_max);
+            ASSERT(item_index < m_item_count);
             u16* const pelem = (u16*)idx2ptr(page_address, item_index);
             pelem[0]         = m_item_freelist;
             m_item_freelist  = item_index;
@@ -219,17 +219,16 @@ namespace xcore
         u16 ipage = superpage_t::NIL;
         if (!m_cached_page_list.is_empty())
         {
-            ipage              = m_cached_page_list.remove_headi(sizeof(llnode_t), m_page_list);
-            superpage_t* ppage = &m_page_array[ipage];
-            ppage->initialize(alloc_size, m_page_size);
+            ipage = m_cached_page_list.remove_headi(sizeof(llnode_t), m_page_list);
         }
         else if (!m_free_page_list.is_empty())
         {
-            ipage              = m_free_page_list.remove_headi(sizeof(llnode_t), m_page_list);
-            superpage_t* ppage = &m_page_array[ipage];
-            ppage->initialize(alloc_size, m_page_size);
-            m_vmem->commit(ppage, m_page_size, 1);
+            ipage       = m_free_page_list.remove_headi(sizeof(llnode_t), m_page_list);
+            void* apage = address_of_page(ipage);
+            m_vmem->commit(apage, m_page_size, 1);
         }
+        superpage_t* ppage = &m_page_array[ipage];
+        ppage->initialize(alloc_size, m_page_size);
         return ipage;
     }
 
