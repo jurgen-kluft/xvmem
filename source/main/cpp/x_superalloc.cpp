@@ -441,7 +441,7 @@ namespace xcore
     //   Allocate
     //    - Handling the request of a new chunk, either creating one or taking one from the cache
     //   Deallocate
-    //    - Quickly finding the segment_t*, block_t*, chunk_t* and superalloc_t* that belong to a 'void* ptr'
+    //    - Quickly finding the block_t*, chunk_t* and superalloc_t* that belong to a 'void* ptr'
     //    - Collecting a now empty-chunk and either release or cache it
     //
     //   Get chunk by index
@@ -457,6 +457,7 @@ namespace xcore
             u32 m_page_index;
         };
 
+        // list free and cached could be replaced with 2 binmaps?
         struct block_t : llnode_t
         {
             lhead_t  m_chunks_list_free;
@@ -481,6 +482,10 @@ namespace xcore
             u16 m_chunks_max;
         };
 
+        static const u64 c_address_block_range = xGB * 1;
+        static const u64 c_fsa_address_range = xMB * 128;
+        static const u64 c_fsa_initial_range = xMB * 1;
+
         static const s32 c_num_configs            = 32;
         const config_t   c_configs[c_num_configs] = {
             config_t(0, 0, 0),      config_t(0, 0, 0),    config_t(0, 0, 0),    config_t(0, 0, 0),      config_t(0, 0, 0),      config_t(0, 0, 0),     config_t(0, 0, 0),     config_t(0, 0, 0),
@@ -498,10 +503,10 @@ namespace xcore
             m_page_shift = xcountTrailingZeros(m_page_size);
             m_page_count = 0;
 
-            m_fsa.initialize(heap, vmem, 128 * 1024 * 1024, 1 * 1024 * 1024);
+            m_fsa.initialize(heap, vmem, c_fsa_address_range, c_fsa_initial_range);
             m_chunks_array.initialize(heap, vmem, m_page_size * sizeof(chunk_t), (m_page_size >> 2) * sizeof(chunk_t), sizeof(chunk_t));
 
-            m_blocks_shift       = 30; // e.g. 25 (1<<30 =  1 GB)
+            m_blocks_shift       = xcountTrailingZeros(c_address_block_range);
             u32 const num_blocks = (u32)(m_address_range >> m_blocks_shift);
             m_blocks_array       = (block_t*)heap.allocate(num_blocks * sizeof(block_t));
             m_blocks_list_free.initialize(sizeof(block_t), m_blocks_array, 0, num_blocks, num_blocks);
@@ -547,9 +552,9 @@ namespace xcore
             return block_index;
         }
 
-        u16 checkout_chunk(u32 chunk_size, u32 alloc_size)
+        u16 checkout_chunk(u32 main_chunk_size, u32 used_chunk_size, u32 alloc_size)
         {
-            u32 const config_index = chunk_size_to_config_index(chunk_size);
+            u32 const config_index = chunk_size_to_config_index(main_chunk_size);
             u16       block_index  = llnode_t::NIL;
             if (m_block_per_group_list_active[config_index].is_nil())
             {
@@ -791,7 +796,14 @@ namespace xcore
         llindex_t chunkindex = m_used_chunk_list_per_size[c].m_index;
         if (chunkindex == llnode_t::NIL)
         {
-            chunkindex = m_chunks->checkout_chunk(m_chunk_size, alloc_size);
+            if (bin.m_use_binmap == 0)
+            {
+                chunkindex = m_chunks->checkout_chunk(m_chunk_size, alloc_size, bin.m_alloc_size);
+            }
+            else
+            {
+                chunkindex = m_chunks->checkout_chunk(m_chunk_size, bin.m_alloc_size * bin.m_alloc_count, bin.m_alloc_size);
+            }
             initialize_chunk(sfsa, chunkindex, alloc_size, bin);
             m_used_chunk_list_per_size[c].insert(sizeof(superchunks_t::chunk_t), m_chunks->get_chunk_list_data(), chunkindex);
         }
@@ -873,10 +885,6 @@ namespace xcore
             fsa.dealloc(chunk->m_bin_map);
             chunk->m_bin_map = superfsa_t::NIL;
         }
-
-        // NOTE: For debug purposes
-        // chunk->m_bin_index = 0xfefe;
-        chunk->m_elem_used = 0xfefe;
     }
 
     void* superalloc_t::allocate_from_chunk(superfsa_t& fsa, u32 chunkindex, u32 size, superbin_t const& bin, bool& chunk_is_now_full)
@@ -1013,40 +1021,35 @@ namespace xcore
     namespace superallocator_config_desktop_app_t
     {
         // superbin_t(allocation size MB, KB, B, bin redir index, allocator index, use binmap?, maximum allocation count, binmap level 1 length, binmap level 2 length)
-        static const s32        c_num_bins           = 105;
+        static const s32    c_num_bins               = 105;
         static const superbin_t c_asbins[c_num_bins] = {
-            superbin_t(0, 0, 4, 4, 0, 1, 8192, 32, 512),   superbin_t(0, 0, 5, 4, 0, 1, 8192, 32, 512),         superbin_t(0, 0, 6, 4, 0, 1, 8192, 32, 512),         superbin_t(0, 0, 7, 4, 0, 1, 8192, 32, 512),
-            superbin_t(0, 0, 8, 4, 0, 1, 8192, 32, 512),   superbin_t(0, 0, 10, 8, 0, 1, 8192, 32, 512),        superbin_t(0, 0, 12, 8, 0, 1, 8192, 32, 512),        superbin_t(0, 0, 14, 8, 0, 1, 8192, 32, 512),
-            superbin_t(0, 0, 16, 8, 0, 1, 4096, 16, 256),  superbin_t(0, 0, 20, 10, 0, 1, 4096, 16, 256),       superbin_t(0, 0, 24, 10, 0, 1, 2730, 16, 256),       superbin_t(0, 0, 28, 12, 0, 1, 2048, 16, 256),
-            superbin_t(0, 0, 32, 12, 0, 1, 2048, 16, 256), superbin_t(0, 0, 40, 2 * 5 + 3, 0, 1, 1638, 8, 128), superbin_t(0, 0, 48, 2 * 5 + 4, 0, 1, 1365, 8, 128), superbin_t(0, 0, 56, 3 * 5, 0, 1, 1170, 8, 128),
-            superbin_t(0, 0, 64, 16, 0, 1, 1024, 4, 64),   superbin_t(0, 0, 80, 3 * 5 + 2, 0, 1, 819, 4, 64),   superbin_t(0, 0, 96, 3 * 5 + 3, 0, 1, 682, 4, 64),   superbin_t(0, 0, 112, 3 * 5 + 4, 0, 1, 585, 4, 64),
-            superbin_t(0, 0, 128, 20, 0, 1, 512, 2, 32),   superbin_t(0, 0, 160, 4 * 5 + 1, 0, 1, 409, 2, 32),  superbin_t(0, 0, 192, 4 * 5 + 2, 0, 1, 341, 2, 32),  superbin_t(0, 0, 224, 4 * 5 + 3, 0, 1, 292, 2, 32),
-            superbin_t(0, 0, 256, 24, 0, 1, 256, 2, 16),   superbin_t(0, 0, 320, 5 * 5, 1, 1, 1024, 4, 64),     superbin_t(0, 0, 384, 5 * 5 + 1, 1, 1, 1024, 4, 64), superbin_t(0, 0, 448, 5 * 5 + 2, 1, 1, 1024, 4, 64),
-            superbin_t(0, 0, 512, 28, 1, 1, 1024, 4, 64),  superbin_t(0, 0, 640, 5 * 5 + 4, 1, 1, 512, 2, 32),  superbin_t(0, 0, 768, 6 * 5, 1, 1, 512, 2, 32),      superbin_t(0, 0, 896, 6 * 5 + 1, 1, 1, 512, 2, 32),
-            superbin_t(0, 1, 0, 32, 1, 1, 512, 2, 32),     superbin_t(0, 1, 256, 6 * 5 + 3, 1, 1, 256, 2, 16),  superbin_t(0, 1, 512, 6 * 5 + 4, 1, 1, 256, 2, 16),  superbin_t(0, 1, 768, 7 * 5, 1, 1, 256, 2, 16),
-            superbin_t(0, 2, 0, 36, 1, 1, 256, 2, 16),     superbin_t(0, 2, 512, 7 * 5 + 2, 1, 1, 128, 2, 8),   superbin_t(0, 3, 0, 7 * 5 + 3, 1, 1, 128, 2, 8),     superbin_t(0, 3, 512, 7 * 5 + 4, 1, 1, 128, 2, 8),
-            superbin_t(0, 4, 0, 40, 1, 1, 128, 2, 8),      superbin_t(0, 5, 0, 8 * 5 + 1, 1, 1, 64, 2, 4),      superbin_t(0, 6, 0, 8 * 5 + 2, 1, 1, 64, 2, 4),      superbin_t(0, 7, 0, 8 * 5 + 3, 1, 1, 64, 2, 4),
-            superbin_t(0, 8, 0, 44, 1, 1, 64, 2, 4),       superbin_t(0, 10, 0, 9 * 5, 1, 1, 32, 0, 0),         superbin_t(0, 12, 0, 9 * 5 + 1, 1, 1, 32, 0, 0),     superbin_t(0, 14, 0, 9 * 5 + 2, 1, 1, 32, 0, 0),
-            superbin_t(0, 16, 0, 48, 1, 1, 32, 0, 0),      superbin_t(0, 20, 0, 9 * 5 + 4, 1, 1, 16, 0, 0),     superbin_t(0, 24, 0, 10 * 5, 1, 1, 16, 0, 0),        superbin_t(0, 28, 0, 10 * 5 + 1, 1, 1, 16, 0, 0),
-            superbin_t(0, 32, 0, 52, 1, 1, 16, 0, 0),      superbin_t(0, 40, 0, 10 * 5 + 3, 1, 1, 8, 0, 0),     superbin_t(0, 48, 0, 10 * 5 + 4, 1, 1, 8, 0, 0),     superbin_t(0, 56, 0, 11 * 5, 1, 1, 8, 0, 0),
-            superbin_t(0, 64, 0, 56, 1, 1, 8, 0, 0),       superbin_t(0, 80, 0, 11 * 5 + 2, 1, 1, 4, 0, 0),     superbin_t(0, 96, 0, 11 * 5 + 3, 1, 1, 4, 0, 0),     superbin_t(0, 112, 0, 11 * 5 + 4, 1, 1, 4, 0, 0),
-            superbin_t(0, 128, 0, 60, 1, 1, 4, 0, 0),      superbin_t(0, 160, 0, 12 * 5 + 1, 1, 1, 2, 0, 0),    superbin_t(0, 192, 0, 12 * 5 + 2, 1, 1, 2, 0, 0),    superbin_t(0, 224, 0, 12 * 5 + 3, 1, 1, 2, 0, 0),
-            superbin_t(0, 256, 0, 64, 1, 1, 2, 0, 0),      superbin_t(0, 320, 0, 13 * 5, 2, 0, 1, 0, 0),        superbin_t(0, 384, 0, 13 * 5 + 1, 2, 0, 1, 0, 0),    superbin_t(0, 448, 0, 13 * 5 + 2, 2, 0, 1, 0, 0),
-            superbin_t(0, 512, 0, 68, 2, 0, 1, 0, 0),      superbin_t(0, 640, 0, 13 * 5 + 4, 3, 0, 1, 0, 0),    superbin_t(0, 768, 0, 14 * 5, 3, 0, 1, 0, 0),        superbin_t(0, 896, 0, 14 * 5 + 1, 3, 0, 1, 0, 0),
-            superbin_t(1, 0, 0, 72, 3, 0, 1, 0, 0),        superbin_t(1, 256, 0, 14 * 5 + 3, 4, 0, 1, 0, 0),    superbin_t(1, 512, 0, 14 * 5 + 4, 4, 0, 1, 0, 0),    superbin_t(1, 768, 0, 15 * 5, 4, 0, 1, 0, 0),
-            superbin_t(2, 0, 0, 76, 4, 0, 1, 0, 0),        superbin_t(2, 512, 0, 15 * 5 + 2, 5, 0, 1, 0, 0),    superbin_t(3, 0, 0, 15 * 5 + 3, 5, 0, 1, 0, 0),      superbin_t(3, 512, 0, 15 * 5 + 4, 5, 0, 1, 0, 0),
-            superbin_t(4, 0, 0, 80, 5, 0, 1, 0, 0),        superbin_t(5, 0, 0, 16 * 5 + 1, 6, 0, 1, 0, 0),      superbin_t(6, 0, 0, 16 * 5 + 2, 6, 0, 1, 0, 0),      superbin_t(7, 0, 0, 16 * 5 + 3, 6, 0, 1, 0, 0),
-            superbin_t(8, 0, 0, 84, 6, 0, 1, 0, 0),        superbin_t(10, 0, 0, 17 * 5, 7, 0, 1, 0, 0),         superbin_t(12, 0, 0, 17 * 5 + 1, 7, 0, 1, 0, 0),     superbin_t(14, 0, 0, 17 * 5 + 2, 7, 0, 1, 0, 0),
-            superbin_t(16, 0, 0, 88, 7, 0, 1, 0, 0),       superbin_t(20, 0, 0, 17 * 5 + 4, 8, 0, 1, 0, 0),     superbin_t(24, 0, 0, 18 * 5, 8, 0, 1, 0, 0),         superbin_t(28, 0, 0, 18 * 5 + 1, 8, 0, 1, 0, 0),
-            superbin_t(32, 0, 0, 92, 8, 0, 1, 0, 0),       superbin_t(40, 0, 0, 18 * 5 + 3, 9, 0, 1, 0, 0),     superbin_t(48, 0, 0, 18 * 5 + 4, 9, 0, 1, 0, 0),     superbin_t(56, 0, 0, 19 * 5, 9, 0, 1, 0, 0),
-            superbin_t(64, 0, 0, 96, 9, 0, 1, 0, 0),       superbin_t(80, 0, 0, 19 * 5 + 2, 10, 0, 1, 0, 0),    superbin_t(96, 0, 0, 19 * 5 + 3, 10, 0, 1, 0, 0),    superbin_t(112, 0, 0, 19 * 5 + 4, 10, 0, 1, 0, 0),
-            superbin_t(128, 0, 0, 100, 10, 0, 1, 0, 0),    superbin_t(160, 0, 0, 20 * 5 + 1, 11, 0, 1, 0, 0),   superbin_t(192, 0, 0, 20 * 5 + 2, 11, 0, 1, 0, 0),   superbin_t(224, 0, 0, 20 * 5 + 3, 11, 0, 1, 0, 0),
-            superbin_t(256, 0, 0, 104, 11, 0, 1, 0, 0)};
+            superbin_t(0, 0, 4, 4, 0, 1, 8192, 32, 512),   superbin_t(0, 0, 5, 4, 0, 1, 8192, 32, 512),   superbin_t(0, 0, 6, 4, 0, 1, 8192, 32, 512),   superbin_t(0, 0, 7, 4, 0, 1, 8192, 32, 512),  superbin_t(0, 0, 8, 4, 0, 1, 8192, 32, 512),
+            superbin_t(0, 0, 10, 8, 0, 1, 8192, 32, 512),  superbin_t(0, 0, 12, 8, 0, 1, 8192, 32, 512),  superbin_t(0, 0, 14, 8, 0, 1, 8192, 32, 512),  superbin_t(0, 0, 16, 8, 0, 1, 4096, 16, 256), superbin_t(0, 0, 20, 10, 0, 1, 4096, 16, 256),
+            superbin_t(0, 0, 24, 10, 0, 1, 2730, 16, 256), superbin_t(0, 0, 28, 12, 0, 1, 2048, 16, 256), superbin_t(0, 0, 32, 12, 0, 1, 2048, 16, 256), superbin_t(0, 0, 40, 13, 0, 1, 1638, 8, 128), superbin_t(0, 0, 48, 14, 0, 1, 1365, 8, 128),
+            superbin_t(0, 0, 56, 15, 0, 1, 1170, 8, 128),  superbin_t(0, 0, 64, 16, 0, 1, 1024, 4, 64),   superbin_t(0, 0, 80, 17, 0, 1, 819, 4, 64),    superbin_t(0, 0, 96, 18, 0, 1, 682, 4, 64),   superbin_t(0, 0, 112, 19, 0, 1, 585, 4, 64),
+            superbin_t(0, 0, 128, 20, 0, 1, 512, 2, 32),   superbin_t(0, 0, 160, 21, 0, 1, 409, 2, 32),   superbin_t(0, 0, 192, 22, 0, 1, 341, 2, 32),   superbin_t(0, 0, 224, 23, 0, 1, 292, 2, 32),  superbin_t(0, 0, 256, 24, 0, 1, 256, 2, 16),
+            superbin_t(0, 0, 320, 25, 1, 1, 1024, 4, 64),  superbin_t(0, 0, 384, 26, 1, 1, 1024, 4, 64),  superbin_t(0, 0, 448, 27, 1, 1, 1024, 4, 64),  superbin_t(0, 0, 512, 28, 1, 1, 1024, 4, 64), superbin_t(0, 0, 640, 29, 1, 1, 512, 2, 32),
+            superbin_t(0, 0, 768, 30, 1, 1, 512, 2, 32),   superbin_t(0, 0, 896, 31, 1, 1, 512, 2, 32),   superbin_t(0, 1, 000, 32, 1, 1, 512, 2, 32),   superbin_t(0, 1, 256, 33, 1, 1, 256, 2, 16),  superbin_t(0, 1, 512, 34, 1, 1, 256, 2, 16),
+            superbin_t(0, 1, 768, 35, 1, 1, 256, 2, 16),   superbin_t(0, 2, 000, 36, 1, 1, 256, 2, 16),   superbin_t(0, 2, 512, 37, 1, 1, 128, 2, 8),    superbin_t(0, 3, 000, 38, 1, 1, 128, 2, 8),   superbin_t(0, 3, 512, 39, 1, 1, 128, 2, 8),
+            superbin_t(0, 4, 000, 40, 1, 1, 128, 2, 8),    superbin_t(0, 5, 000, 41, 1, 1, 64, 2, 4),     superbin_t(0, 6, 000, 42, 1, 1, 64, 2, 4),     superbin_t(0, 7, 000, 43, 1, 1, 64, 2, 4),    superbin_t(0, 8, 000, 44, 1, 1, 64, 2, 4),
+            superbin_t(0, 10, 0, 45, 1, 1, 32, 0, 0),      superbin_t(0, 12, 0, 46, 1, 1, 32, 0, 0),      superbin_t(0, 14, 0, 47, 1, 1, 32, 0, 0),      superbin_t(0, 16, 0, 48, 1, 1, 32, 0, 0),     superbin_t(0, 20, 0, 49, 1, 1, 16, 0, 0),
+            superbin_t(0, 24, 0, 50, 1, 1, 16, 0, 0),      superbin_t(0, 28, 0, 51, 1, 1, 16, 0, 0),      superbin_t(0, 32, 0, 52, 1, 1, 16, 0, 0),      superbin_t(0, 40, 0, 53, 1, 1, 8, 0, 0),      superbin_t(0, 48, 0, 54, 1, 1, 8, 0, 0),
+            superbin_t(0, 56, 0, 55, 1, 1, 8, 0, 0),       superbin_t(0, 64, 0, 56, 1, 1, 8, 0, 0),       superbin_t(0, 80, 0, 57, 2, 1, 4, 0, 0),       superbin_t(0, 96, 0, 58, 2, 1, 4, 0, 0),      superbin_t(0, 112, 0, 59, 2, 1, 4, 0, 0),
+            superbin_t(0, 128, 0, 60, 2, 1, 4, 0, 0),      superbin_t(0, 160, 0, 61, 2, 1, 2, 0, 0),      superbin_t(0, 192, 0, 62, 2, 1, 2, 0, 0),      superbin_t(0, 224, 0, 63, 2, 1, 2, 0, 0),     superbin_t(0, 256, 0, 64, 2, 1, 2, 0, 0),
+            superbin_t(0, 320, 0, 65, 3, 0, 1, 0, 0),      superbin_t(0, 384, 0, 66, 3, 0, 1, 0, 0),      superbin_t(0, 448, 0, 67, 3, 0, 1, 0, 0),      superbin_t(0, 512, 0, 68, 3, 0, 1, 0, 0),     superbin_t(0, 640, 0, 69, 4, 0, 1, 0, 0),
+            superbin_t(0, 768, 0, 70, 4, 0, 1, 0, 0),      superbin_t(0, 896, 0, 71, 4, 0, 1, 0, 0),      superbin_t(1, 0, 0, 72, 4, 0, 1, 0, 0),        superbin_t(1, 256, 0, 73, 5, 0, 1, 0, 0),     superbin_t(1, 512, 0, 74, 5, 0, 1, 0, 0),
+            superbin_t(1, 768, 0, 75, 5, 0, 1, 0, 0),      superbin_t(2, 0, 0, 76, 5, 0, 1, 0, 0),        superbin_t(2, 512, 0, 77, 6, 0, 1, 0, 0),      superbin_t(3, 0, 0, 78, 6, 0, 1, 0, 0),       superbin_t(3, 512, 0, 79, 6, 0, 1, 0, 0),
+            superbin_t(4, 0, 0, 80, 6, 0, 1, 0, 0),        superbin_t(5, 0, 0, 81, 7, 0, 1, 0, 0),        superbin_t(6, 0, 0, 82, 7, 0, 1, 0, 0),        superbin_t(7, 0, 0, 83, 7, 0, 1, 0, 0),       superbin_t(8, 0, 0, 84, 7, 0, 1, 0, 0),
+            superbin_t(10, 0, 0, 85, 8, 0, 1, 0, 0),       superbin_t(12, 0, 0, 86, 8, 0, 1, 0, 0),       superbin_t(14, 0, 0, 87, 8, 0, 1, 0, 0),       superbin_t(16, 0, 0, 88, 8, 0, 1, 0, 0),      superbin_t(20, 0, 0, 89, 9, 0, 1, 0, 0),
+            superbin_t(24, 0, 0, 90, 9, 0, 1, 0, 0),       superbin_t(28, 0, 0, 91, 9, 0, 1, 0, 0),       superbin_t(32, 0, 0, 92, 9, 0, 1, 0, 0),       superbin_t(40, 0, 0, 93, 10, 0, 1, 0, 0),     superbin_t(48, 0, 0, 94, 10, 0, 1, 0, 0),
+            superbin_t(56, 0, 0, 95, 10, 0, 1, 0, 0),      superbin_t(64, 0, 0, 96, 10, 0, 1, 0, 0),      superbin_t(80, 0, 0, 97, 11, 0, 1, 0, 0),      superbin_t(96, 0, 0, 98, 11, 0, 1, 0, 0),     superbin_t(112, 0, 0, 99, 11, 0, 1, 0, 0),
+            superbin_t(128, 0, 0, 100, 11, 0, 1, 0, 0),    superbin_t(160, 0, 0, 101, 12, 0, 1, 0, 0),    superbin_t(192, 0, 0, 102, 12, 0, 1, 0, 0),    superbin_t(224, 0, 0, 103, 12, 0, 1, 0, 0),   superbin_t(256, 0, 0, 104, 12, 0, 1, 0, 0)};
 
-        static const s32    c_num_allocators               = 12;
+        static const s32    c_num_allocators               = 13;
         static superalloc_t c_allocators[c_num_allocators] = {
             superalloc_t(xKB * 64, 25, 0),   // number of sizes, bin base
-            superalloc_t(xKB * 512, 40, 25), //
+            superalloc_t(xKB * 512, 32, 25), //
+            superalloc_t(xKB * 256, 8, 57),  //
             superalloc_t(xKB * 512, 4, 65),  //
             superalloc_t(xMB * 1, 4, 69),    //
             superalloc_t(xMB * 2, 4, 73),    //
@@ -1064,7 +1067,7 @@ namespace xcore
         static const u32 c_internal_heap_address_range = 32 * xMB;
         static const u32 c_internal_heap_pre_size      = 2 * xMB;
         static const u32 c_internal_fsa_address_range  = 32 * xMB;
-        static const u32 c_internal_fsa_pre_size       = 4 * xMB;
+        static const u32 c_internal_fsa_pre_size       = 2 * xMB;
 
         static superallocator_config_t get_config()
         {
