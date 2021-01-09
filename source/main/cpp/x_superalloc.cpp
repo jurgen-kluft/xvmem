@@ -303,13 +303,13 @@ namespace xcore
         if (ipage != superpage_t::NIL)
         {
             superpage_t* ppage    = &m_pages.m_page_array[ipage];
-            void*        paddress = toaddress(m_pages.m_address, (u64)ipage * m_pages.m_page_size);
-            u16 const    idx      = ppage->iallocate(paddress);
+            void*        paddress = m_pages.address_of_page(ipage);
+            u16 const    itemidx  = ppage->iallocate(paddress);
             if (ppage->is_full())
             {
                 m_used_page_list_per_size[c].remove_item(sizeof(llnode_t), m_pages.m_page_list, ipage);
             }
-            return (ipage << 16) + idx;
+            return (ipage << 16) + itemidx;
         }
         else
         {
