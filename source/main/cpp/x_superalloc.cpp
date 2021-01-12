@@ -248,11 +248,8 @@ namespace xcore
         }
     }
 
-    // Book-keeping for chunks requires to allocate/deallocate blocks of data
     // Power-of-2 sizes, minimum size = 8, maximum_size = 32768
     // @note: returned index to the user is u32[u16(page-index):u16(item-index)]
-    // Can re-use superarray_t instead of having custom code, or superarray_t
-    // can re-use page_t.
     class superfsa_t
     {
     public:
