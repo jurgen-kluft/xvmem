@@ -454,7 +454,6 @@ namespace xcore
             u32 m_page_index;
         };
 
-        // list free and cached could be replaced with 2 binmaps?
         struct block_t : llnode_t
         {
             lhead_t  m_chunks_list_free;

@@ -13,7 +13,7 @@ tags
 !*.h
 !*.inl
 
-!*.build
+!*.md
 
 !*.go
 !*.lua
