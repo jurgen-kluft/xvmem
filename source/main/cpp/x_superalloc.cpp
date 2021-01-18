@@ -444,6 +444,11 @@ namespace xcore
     //   Get chunk by index
     //   Get address of chunk
     //
+    // There are 2 ways to add tracking of allocations:
+    // 1) External data structure (xdtrie2 ?)
+    // 2) Add an u32* array in block_t where every entry can hold another array of u32 to enable
+    //    a u32 per allocation. (This is the most optimum).
+    // 
     struct superchunks_t
     {
         struct chunk_t : llnode_t
