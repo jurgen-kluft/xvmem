@@ -3,11 +3,9 @@ marp: true
 theme: gaia
 _class: lead
 paginate: true
-backgroundColor: #fff
+backgroundColor: #f0f
 backgroundImage: url('superalloc-background.jpg')
 ---
-
-![bg left:40% 80%](superalloc.svg)
 
 # **SuperAlloc**
 
@@ -23,9 +21,10 @@ Current well known memory allocators like DLMalloc are mainly based on handling 
 
 # Problems
 
-* Wasted a lot of memory
-* Suffered from fragmentation
-* Not able to use it for GPU memory, so you need another implementation to handle GPU memory
+* Waste a lot of memory
+* Suffers from fragmentation
+* Easy to crash when intrusive bookkeeping data is overwritten making it hard to find the cause
+* Not able to use it for GPU memory, need another implementation to handle GPU memory
 
 ---
 
@@ -134,8 +133,8 @@ Current well known memory allocators like DLMalloc are mainly based on handling 
 * All bookkeeping data is outside of the managed memory
 * A superalloc allocator manages a range of allocation sizes
 * Only uses 2 data structures:
-  * Linked Lists
-  * BinMap (3 level hierarchical bitmap)
+  * Doubly Linked List (260 lines)
+  * BinMap (3 level hierarchical bitmap) (180 lines)
 * Number of code lines = 1200, excluding the 2 data structures
 
 ---
@@ -147,7 +146,10 @@ class alloc_t
 {
 public:
     virtual void* allocate(u32 size, u32 align) = 0;
-    virtual u32   deallocate(void* pMemory) = 0;
+    virtual u32   deallocate(void* ptr) = 0;
+
+    virtual u32   get_size(void* ptr) = 0;      // Easy to add
+    virtual void* get_gpu(void* cpuptr) = 0;    // Requires some code to support this
 };
 ```
 
@@ -167,55 +169,65 @@ Address space is divided into blocks of 1 GB.
  0 GB   | X | X | F | F | F | F | F | F | F | F | F | F | F | F | F | F | F | F | 128 GB
         |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |       
         +---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---+       
-                                                                                                      
+
 ```
 
 ---
 
 # Block
 
-A block of 1 GB is divided into chunks of a fixed size.
+A block of 1 GB is divided into chunks of a specific size.
 
 ```md
          Chunk (64 KB)
-      __/______________________________
+         /
+     +++/+++++++++++++++++++++++++++++++
 0 GB | X | F | F |                     | 1 GB
-      ---------------------------------
+     +---+---+---+---------------------+
+
 ```
 
-Chunk size is a power-of-2 multiple of 64 KB, some examples of chunk sizes are 64 KB, 256 KB, 512 KB, 1 MB, 2 MB, 4 MB, 8 MB ... 256 MB.
+Chunk size is a power-of-2 multiple of 64 KB, some chunk sizes are 64 KB, 128 KB, 256 KB, 512 KB, 1 MB, 2 MB, 4 MB, 8 MB ... 256 MB.
 
 ---
 
 # Chunk
 
-The smallest chunk-size of 64 KB, handled by the first super alloc, is good for allocation sizes of 8 B to 256 B. The next super alloc has a chunk-size of 512 KB and handles allocation sizes between 256 B and 64 KB. Chunks are managed in two distinct ways, when the allocation size does not need to track the actual number of pages used we can use a binmap. Otherwise a chunk is used for a single allocation and the actual number of physical pages is stored.
+The smallest chunk-size of 64 KB, handled by the first super alloc, is holding allocation sizes of 8 B to 256 B. The next super alloc has a chunk-size of 512 KB and handles allocation sizes between 256 B and 64 KB. Chunks are managed in two distinct ways, when the allocation size does not need to track the actual number of pages used for an allocation we can use a binmap. Otherwise a chunk is used for a single allocation and the actual number of physical pages committed is stored.
 
 ---
 
 # Binmap
 
-The implementation relies mainly on instruction `count trailing zeros`, which is a single instruction on most CPU's nowadays. You have a `find` function which can give you a 'free' element as well as `set` and `clear` functions.
-
+The main purpose of Binmap is to quickly give you the index of a '0' bit. The implementation uses 3 levels of bit arrays. Binmap has a `findandset` function which can give you a 'free' element quickly.
 ```md
-          32 bit, level 0                                                                                                     
-            +--------------------------------+                                                                                
-            |                               0|                                                                                
-            +--------------------------------+                                                                                
-                                             \--------------|                                                                 
-      16-bit words, level 1                                 |                                                                 
-          +----------------+   +----------------+   +-------|--------+                                                        
-          |                |   |                |   |              01|                                                        
-          +----------------+   +----------------+   +--------------||+ First bit '1' means that                               
-                                                                   /\  16-bit word on level 2 is full                         
- 16-bit words, level 2                              |--------------  |                                                        
- +----------------+   +----------------+   +--------|-------+    +---|------------+                                           
- |                |   |                |   |0001000010000010|    |1111111111111111|                                           
- +----------------+   +----------------+   +----------------+    +----------------+                                           
+                           +--------------------------------+                                                                                
+          32-bit, level 0  |                               0|                                                                                
+                           +--------------------------------+                                                                                
+                                                           \----------|                                                                 
+                16-bit words                                          |                                                                 
+                    +----------------+   +----------------+   +-------|--------+                                                        
+            level 1 |                |   |                |   |              01|                                                        
+                    +----------------+   +----------------+   +--------------||+ First bit '1' means that                               
+                                                                             /\  16-bit word on level 2 is full                         
+           level 2                                             /------------+  |                                                        
+           +----------------+   +----------------+   +--------|-------+    +---|------------+                                           
+           |                |   |                |   |0001000001111111|    |1111111111111111|                                           
+           +----------------+   +----------------+   +----------------+    +----------------+                                           
 ```
 
 ---
 
 # SuperAlloc
 
-In total there are 13 super allocators that make up the main allocator. In the implementation you can find a configuration example for a desktop application.
+In total for the desktop application configuration there are 14 super allocators that make up the main allocator. In the implementation you can find the configuration for desktop applications.
+
+Internally superallocator uses it's own simple (virtual memory) heap allocator and a (virtual memory) FSA allocator.
+
+---
+
+# Simulated Test
+
+A test run of 60 million allocations/deallocations (from Watchdogs) has shown that the bookkeeping data uses around 4 MB of memory.
+
+---

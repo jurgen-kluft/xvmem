@@ -4,7 +4,6 @@
 #include "xbase/x_integer.h"
 
 #include "xvmem/private/x_doubly_linked_list.h"
-#include "xvmem/private/x_singly_linked_list.h"
 #include "xvmem/private/x_binmap.h"
 #include "xvmem/x_virtual_memory.h"
 
@@ -137,7 +136,7 @@ namespace xcore
         void deallocate(void* page_address, u16 item_index)
         {
             ASSERT(m_item_count > 0);
-            ASSERT(item_index < m_item_count);
+            ASSERT(item_index < m_item_max);
             u16* const pelem = (u16*)idx2ptr(page_address, item_index);
             pelem[0]         = m_item_freelist;
             m_item_freelist  = item_index;
@@ -149,12 +148,14 @@ namespace xcore
     {
         void  initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 size_to_pre_allocate);
         void  deinitialize(superheap_t& heap);
-        u16   checkout_page(u32 const alloc_size);
-        void  release_page(u16 index);
-        void* address_of_page(u16 ipage) const { return toaddress(m_address, (u64)ipage * m_page_size); }
+        u32   checkout_page(u32 const alloc_size);
+        void  release_page(u32 index);
+        void* address_of_page(u32 ipage) const { return toaddress(m_address, (u64)ipage * m_page_size); }
 
         inline void* idx2ptr(u32 i) const
         {
+            if (i == 0xffffffff)
+                return nullptr;
             u16 const                pageindex = i >> 16;
             u16 const                itemindex = i & 0xFFFF;
             superpage_t const* const ppage     = &m_page_array[pageindex];
@@ -164,6 +165,8 @@ namespace xcore
 
         inline u32 ptr2idx(void* ptr) const
         {
+            if (ptr == nullptr)
+                return 0xffffffff;
             u32 const                pageindex = (u32)(todistance(m_address, ptr) / m_page_size);
             superpage_t const* const ppage     = &m_page_array[pageindex];
             void* const              paddr     = address_of_page(pageindex);
@@ -177,7 +180,7 @@ namespace xcore
         u32          m_page_count;
         u32          m_page_size;
         superpage_t* m_page_array;
-        llnode_t*    m_page_list;
+        lldata_t     m_page_list_data;
         llist_t      m_free_page_list;
         llist_t      m_cached_page_list;
     };
@@ -196,13 +199,16 @@ namespace xcore
             m_page_array[i].reset();
         }
 
-        m_page_list                  = (llnode_t*)heap.allocate(m_page_count * sizeof(llnode_t));
+        m_page_list_data.m_data     = heap.allocate(m_page_count * sizeof(llnode_t));
+        m_page_list_data.m_itemsize = sizeof(llnode_t);
+        m_page_list_data.m_pagesize = m_page_count * sizeof(llnode_t);
+
         u32 const num_pages_to_cache = xalignUp(size_to_pre_allocate, m_page_size) / m_page_size;
         ASSERT(num_pages_to_cache <= m_page_count);
-        m_free_page_list.initialize(sizeof(llnode_t), m_page_list, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
+        m_free_page_list.initialize(m_page_list_data, num_pages_to_cache, m_page_count - num_pages_to_cache, m_page_count);
         if (num_pages_to_cache > 0)
         {
-            m_cached_page_list.initialize(sizeof(llnode_t), m_page_list, 0, num_pages_to_cache, num_pages_to_cache);
+            m_cached_page_list.initialize(m_page_list_data, 0, num_pages_to_cache, num_pages_to_cache);
             m_vmem->commit(m_address, m_page_size, num_pages_to_cache);
         }
     }
@@ -213,17 +219,17 @@ namespace xcore
         m_vmem->release(m_address, m_address_range);
     }
 
-    u16 superpages_t::checkout_page(u32 const alloc_size)
+    u32 superpages_t::checkout_page(u32 const alloc_size)
     {
         // Get a page and initialize that page for this size
-        u16 ipage = superpage_t::NIL;
+        u32 ipage = llnode_t::NIL;
         if (!m_cached_page_list.is_empty())
         {
-            ipage = m_cached_page_list.remove_headi(sizeof(llnode_t), m_page_list);
+            ipage = m_cached_page_list.remove_headi(m_page_list_data);
         }
         else if (!m_free_page_list.is_empty())
         {
-            ipage       = m_free_page_list.remove_headi(sizeof(llnode_t), m_page_list);
+            ipage       = m_free_page_list.remove_headi(m_page_list_data);
             void* apage = address_of_page(ipage);
             m_vmem->commit(apage, m_page_size, 1);
         }
@@ -232,19 +238,19 @@ namespace xcore
         return ipage;
     }
 
-    void superpages_t::release_page(u16 pageindex)
+    void superpages_t::release_page(u32 pageindex)
     {
         superpage_t* const ppage = &m_page_array[pageindex];
         ppage->reset(0xfefe);
         if (!m_cached_page_list.is_full())
         {
-            m_cached_page_list.insert(sizeof(llnode_t), m_page_list, pageindex);
+            m_cached_page_list.insert(m_page_list_data, pageindex);
         }
         else
         {
             void* const paddr = address_of_page(pageindex);
             m_vmem->decommit(paddr, m_page_size, 1);
-            m_free_page_list.insert(sizeof(llnode_t), m_page_list, pageindex);
+            m_free_page_list.insert(m_page_list_data, pageindex);
         }
     }
 
@@ -263,6 +269,9 @@ namespace xcore
 
         inline void* idx2ptr(u32 i) const { return m_pages.idx2ptr(i); }
         inline u32   ptr2idx(void* ptr) const { return m_pages.ptr2idx(ptr); }
+
+        void* baseptr() const { return m_pages.m_address; }
+        u32   pagesize() const { return m_pages.m_page_size; }
 
     private:
         superpages_t     m_pages;
@@ -284,27 +293,27 @@ namespace xcore
         alloc_size      = xalignUp(alloc_size, (u32)8);
         alloc_size      = xceilpo2(alloc_size);
         s32 const c     = xcountTrailingZeros(alloc_size);
-        u16       ipage = 0xffff;
+        u32       ipage = 0xffffffff;
         ASSERT(c >= 0 && c < c_max_num_sizes);
         if (m_used_page_list_per_size[c].is_nil())
         {
             // Get a page and initialize that page for this size
             ipage = m_pages.checkout_page(alloc_size);
-            m_used_page_list_per_size[c].insert(sizeof(llnode_t), m_pages.m_page_list, ipage);
+            m_used_page_list_per_size[c].insert(m_pages.m_page_list_data, ipage);
         }
         else
         {
             ipage = m_used_page_list_per_size[c].m_index;
         }
 
-        if (ipage != superpage_t::NIL)
+        if (ipage != llnode_t::NIL)
         {
             superpage_t* ppage    = &m_pages.m_page_array[ipage];
             void*        paddress = m_pages.address_of_page(ipage);
             u16 const    itemidx  = ppage->iallocate(paddress);
             if (ppage->is_full())
             {
-                m_used_page_list_per_size[c].remove_item(sizeof(llnode_t), m_pages.m_page_list, ipage);
+                m_used_page_list_per_size[c].remove_item(m_pages.m_page_list_data, ipage);
             }
             return (ipage << 16) + itemidx;
         }
@@ -325,106 +334,7 @@ namespace xcore
         {
             s32 const c = xcountTrailingZeros(ppage->m_item_size);
             ASSERT(c >= 0 && c < c_max_num_sizes);
-            m_used_page_list_per_size[c].remove_item(sizeof(llnode_t), m_pages.m_page_list, pageindex);
-            m_pages.release_page(pageindex);
-        }
-    }
-
-    class superarray_t
-    {
-    public:
-        void initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 num_pages_to_cache, u16 item_size);
-        void deinitialize(superheap_t& heap);
-
-        u16  alloc();
-        void dealloc(u16 index);
-
-        inline void* idx2ptr(u16 i) const
-        {
-            u16 const   pageindex = i / m_items_per_page;
-            u16 const   itemindex = i - (pageindex * m_items_per_page);
-            void* const paddr     = m_pages.address_of_page(pageindex);
-            return (xbyte*)paddr + (itemindex * m_item_size);
-        }
-
-        inline u16 ptr2idx(void* ptr) const
-        {
-            u32 const                pageindex     = (u32)(todistance(m_pages.m_address, ptr) / m_pages.m_page_size);
-            superpage_t const* const ppage         = &m_pages.m_page_array[pageindex];
-            void* const              paddr         = m_pages.address_of_page(pageindex);
-            u32 const                pageitemindex = (u32)(todistance(paddr, ptr) / m_item_size);
-            return (pageindex * m_items_per_page) + pageitemindex;
-        }
-
-        template <typename T> T* base()
-        {
-            ASSERT(m_item_size == sizeof(T));
-            return (T*)m_pages.m_address;
-        }
-        template <typename T> T* at(u16 i)
-        {
-            ASSERT(m_item_size == sizeof(T));
-            return (T*)idx2ptr(i);
-        }
-
-        u32          m_item_size;
-        u32          m_items_per_page;
-        superpages_t m_pages;
-        llhead_t     m_active_pages;
-    };
-
-    void superarray_t::initialize(superheap_t& heap, xvmem* vmem, u64 address_range, u32 size_to_pre_allocate, u16 item_size)
-    {
-        m_item_size = item_size;
-        m_pages.initialize(heap, vmem, address_range, size_to_pre_allocate);
-        m_active_pages.reset();
-        m_items_per_page = m_pages.m_page_size / m_item_size;
-    }
-
-    void superarray_t::deinitialize(superheap_t& heap) { m_pages.deinitialize(heap); }
-
-    u16 superarray_t::alloc()
-    {
-        void* paddress = nullptr;
-        u16   ipage    = 0xffff;
-        if (m_active_pages.is_nil())
-        {
-            // Get a page and initialize that page for this size
-            ipage = m_pages.checkout_page(m_item_size);
-            m_active_pages.insert(sizeof(llnode_t), m_pages.m_page_list, ipage);
-        }
-        else
-        {
-            ipage = m_active_pages.m_index;
-        }
-
-        if (ipage != superpage_t::NIL)
-        {
-            superpage_t* ppage = &m_pages.m_page_array[ipage];
-            paddress           = toaddress(m_pages.m_address, (u64)ipage * m_pages.m_page_size);
-            const u16 idx      = ppage->iallocate(paddress);
-            if (ppage->is_full())
-            {
-                m_active_pages.remove_item(sizeof(llnode_t), m_pages.m_page_list, ipage);
-            }
-            return (ipage * m_items_per_page) + idx;
-        }
-        else
-        {
-            return superpage_t::NIL;
-        }
-    }
-
-    void superarray_t::dealloc(u16 i)
-    {
-        u16 const          pageindex = i / m_items_per_page;
-        u16 const          itemindex = i - (pageindex * m_items_per_page);
-        superpage_t* const ppage     = &m_pages.m_page_array[pageindex];
-        void* const        paddr     = m_pages.address_of_page(pageindex);
-        ppage->deallocate(paddr, itemindex);
-        if (ppage->is_empty())
-        {
-            m_active_pages.remove_item(sizeof(llnode_t), m_pages.m_page_list, pageindex);
+            m_used_page_list_per_size[c].remove_item(m_pages.m_page_list_data, pageindex);
             m_pages.release_page(pageindex);
         }
     }
@@ -448,7 +358,7 @@ namespace xcore
     // 1) External data structure (xdtrie2 ?)
     // 2) Add an u32* array in block_t where every entry can hold another array of u32 to enable
     //    a u32 per allocation. (This is the most optimum).
-    // 
+    //
     struct superchunks_t
     {
         struct chunk_t : llnode_t
@@ -461,38 +371,41 @@ namespace xcore
 
         struct block_t : llnode_t
         {
-            lhead_t  m_chunks_list_free;
-            llhead_t m_chunks_list_cached;
-            u16*     m_chunks_array;
-            u16*     m_chunks_list;
-            u16      m_config_index;
-            u16      m_chunks_used;
-            u16      m_chunks_index;
+            u16  m_config_index;
+            u16  m_chunks_used;
+            u16* m_chunks_physical_pages;
+            u32* m_chunks_array;
+            u32  m_binmap_chunks_free;
+            u32  m_binmap_chunks_cached;
+            u32  m_count_chunks_cached;
+            u32  m_count_chunks_used;
         };
 
         struct config_t
         {
-            config_t(u8 redirect, u16 chunks_max, u8 chunks_shift)
-                : m_redirect(redirect)
-                , m_chunks_shift(chunks_shift)
+            config_t(u16 chunks_max, u8 chunks_shift, u16 l1_len, u16 l2_len)
+                : m_chunks_shift(chunks_shift)
                 , m_chunks_max(chunks_max)
+                , m_binmap_l1(l1_len)
+                , m_binmap_l2(l2_len)
             {
             }
-            u8  m_redirect;
-            u8  m_chunks_shift;
+            u16 m_chunks_shift;
             u16 m_chunks_max;
+            u16 m_binmap_l1;
+            u16 m_binmap_l2;
         };
 
         static const u64 c_address_block_range = xGB * 1;
-        static const u64 c_fsa_address_range = xMB * 128;
-        static const u64 c_fsa_initial_range = xMB * 1;
+        static const u64 c_fsa_address_range   = xMB * 128;
+        static const u64 c_fsa_initial_range   = xMB * 1;
 
         static const s32 c_num_configs            = 32;
         const config_t   c_configs[c_num_configs] = {
-            config_t(0, 0, 0),      config_t(0, 0, 0),    config_t(0, 0, 0),    config_t(0, 0, 0),      config_t(0, 0, 0),      config_t(0, 0, 0),     config_t(0, 0, 0),     config_t(0, 0, 0),
-            config_t(0, 0, 0),      config_t(0, 0, 0),    config_t(0, 0, 0),    config_t(0, 0, 0),      config_t(0, 0, 0),      config_t(0, 0, 0),     config_t(0, 0, 0),     config_t(0, 0, 0),
-            config_t(16, 2048, 16), config_t(0, 0, 0),    config_t(0, 0, 0),    config_t(19, 2048, 19), config_t(20, 1024, 20), config_t(21, 512, 21), config_t(22, 256, 22), config_t(23, 128, 23),
-            config_t(24, 64, 24),   config_t(25, 32, 25), config_t(26, 16, 26), config_t(27, 8, 27),    config_t(28, 4, 28),    config_t(29, 2, 29),   config_t(0, 0, 0),     config_t(0, 0, 0),
+            config_t(0, 0, 0, 0),       config_t(0, 0, 0, 0),       config_t(0, 0, 0, 0),       config_t(0, 0, 0, 0),       config_t(0, 0, 0, 0),      config_t(0, 0, 0, 0),     config_t(0, 0, 0, 0),     config_t(0, 0, 0, 0),
+            config_t(0, 0, 0, 0),       config_t(0, 0, 0, 0),       config_t(0, 0, 0, 0),       config_t(0, 0, 0, 0),       config_t(0, 0, 0, 0),      config_t(0, 0, 0, 0),     config_t(0, 0, 0, 0),     config_t(0, 0, 0, 0),
+            config_t(2048, 16, 8, 128), config_t(2048, 17, 8, 128), config_t(2048, 18, 8, 128), config_t(2048, 19, 8, 128), config_t(1024, 20, 4, 64), config_t(512, 21, 2, 32), config_t(256, 22, 2, 16), config_t(128, 23, 2, 8),
+            config_t(64, 24, 2, 4),     config_t(32, 25, 0, 0),     config_t(16, 26, 0, 0),     config_t(8, 27, 0, 0),      config_t(4, 28, 0, 0),     config_t(2, 29, 0, 0),    config_t(0, 0, 0, 0),     config_t(0, 0, 0, 0),
         };
 
         void initialize(xvmem* vmem, u64 address_range, superheap_t& heap)
@@ -505,12 +418,16 @@ namespace xcore
             m_page_count = 0;
 
             m_fsa.initialize(heap, vmem, c_fsa_address_range, c_fsa_initial_range);
-            m_chunks_array.initialize(heap, vmem, m_page_size * sizeof(chunk_t), (m_page_size >> 2) * sizeof(chunk_t), sizeof(chunk_t));
+            m_chunk_list_data.m_data     = m_fsa.baseptr();
+            m_chunk_list_data.m_itemsize = sizeof(chunk_t);
+            m_chunk_list_data.m_pagesize = m_fsa.pagesize();
 
-            m_blocks_shift       = xcountTrailingZeros(c_address_block_range);
-            u32 const num_blocks = (u32)(m_address_range >> m_blocks_shift);
-            m_blocks_array       = (block_t*)heap.allocate(num_blocks * sizeof(block_t));
-            m_blocks_list_free.initialize(sizeof(block_t), m_blocks_array, 0, num_blocks, num_blocks);
+            m_blocks_shift                = xcountTrailingZeros(c_address_block_range);
+            u32 const num_blocks          = (u32)(m_address_range >> m_blocks_shift);
+            m_blocks_array                = (block_t*)heap.allocate(num_blocks * sizeof(block_t));
+            m_blocks_list_data.m_data     = m_blocks_array;
+            m_blocks_list_data.m_itemsize = sizeof(block_t);
+            m_blocks_list_free.initialize(m_blocks_list_data, 0, num_blocks, num_blocks);
 
             for (s32 i = 0; i < 32; i++)
             {
@@ -518,11 +435,7 @@ namespace xcore
             }
         }
 
-        void deinitialize(superheap_t& heap)
-        {
-            m_fsa.deinitialize(heap);
-            m_chunks_array.deinitialize(heap);
-        }
+        void deinitialize(superheap_t& heap) { m_fsa.deinitialize(heap); }
 
         static inline u32 chunk_size_to_config_index(u32 const chunk_size)
         {
@@ -531,94 +444,140 @@ namespace xcore
             return config_index;
         }
 
+        void initialize_binmap(u32 const binmap_index, config_t const& config, bool set)
+        {
+            binmap_t* bm    = (binmap_t*)m_fsa.idx2ptr(binmap_index);
+            bm->m_l1_offset = 0;
+            bm->m_l2_offset = 0;
+            bm->m_l2_offset = m_fsa.alloc(sizeof(u16) * config.m_binmap_l2);
+            if (config.m_binmap_l1 > 0)
+                bm->m_l1_offset = m_fsa.alloc(sizeof(u16) * config.m_binmap_l1);
+            u16* l1 = (u16*)m_fsa.idx2ptr(bm->m_l1_offset);
+            u16* l2 = (u16*)m_fsa.idx2ptr(bm->m_l2_offset);
+            if (set)
+                bm->init1(config.m_chunks_max, l1, config.m_binmap_l1, l2, config.m_binmap_l2);
+            else
+                bm->init(config.m_chunks_max, l1, config.m_binmap_l1, l2, config.m_binmap_l2);
+        }
+
+        binmap_t* get_binmap_by_index(u32 const binmap_index, u16*& l1, u16*& l2)
+        {
+            binmap_t* bm = (binmap_t*)m_fsa.idx2ptr(binmap_index);
+            l1           = (u16*)m_fsa.idx2ptr(bm->m_l1_offset);
+            l2           = (u16*)m_fsa.idx2ptr(bm->m_l2_offset);
+            return bm;
+        }
+
         u16 checkout_block(u32 const config_index)
         {
-            u16 const num_chunks = c_configs[config_index].m_chunks_max;
+            config_t const& config     = c_configs[config_index];
+            u16 const       num_chunks = config.m_chunks_max;
 
-            u16 const block_index   = m_blocks_list_free.remove_headi(sizeof(block_t), m_blocks_array);
+            u16 const block_index   = m_blocks_list_free.remove_headi(m_blocks_list_data);
             block_t*  block         = &m_blocks_array[block_index];
-            u32 const ichunks_list  = m_fsa.alloc(sizeof(u16) * num_chunks);
-            u32 const ichunks_array = m_fsa.alloc(sizeof(u16) * num_chunks);
+            u32 const ichunks_array = m_fsa.alloc(sizeof(u32) * num_chunks);
 
-            block->m_prev         = llnode_t::NIL;
-            block->m_next         = llnode_t::NIL;
-            block->m_chunks_array = (u16*)m_fsa.idx2ptr(ichunks_array);
-            block->m_chunks_list  = (u16*)m_fsa.idx2ptr(ichunks_list);
+            block->m_prev                 = llnode_t::NIL;
+            block->m_next                 = llnode_t::NIL;
+            block->m_chunks_array         = (u32*)m_fsa.idx2ptr(ichunks_array);
+            block->m_binmap_chunks_cached = m_fsa.alloc(sizeof(binmap_t));
+            if (config.m_binmap_l2 > 0)
+            {
+                initialize_binmap(block->m_binmap_chunks_cached, config, true);
+            }
+            block->m_binmap_chunks_free = m_fsa.alloc(sizeof(binmap_t));
+            if (config.m_binmap_l2 > 0)
+            {
+                initialize_binmap(block->m_binmap_chunks_free, config, true);
+            }
+
             block->m_config_index = config_index;
             block->m_chunks_used  = 0;
-            block->m_chunks_index = 0;
 
-            block->m_chunks_list_free.reset();
-            block->m_chunks_list_cached.reset();
+            block->m_count_chunks_cached = 0;
+            block->m_count_chunks_used   = 0;
+
             return block_index;
         }
 
-        u16 checkout_chunk(u32 main_chunk_size, u32 used_chunk_size, u32 alloc_size)
+        u16 checkout_chunk(u32 main_chunk_size, u32 used_chunk_size)
         {
             u32 const config_index = chunk_size_to_config_index(main_chunk_size);
-            u16       block_index  = llnode_t::NIL;
+            u32       block_index  = llnode_t::NIL;
             if (m_block_per_group_list_active[config_index].is_nil())
             {
                 block_index = checkout_block(config_index);
-                m_block_per_group_list_active[config_index].insert(sizeof(block_t), m_blocks_array, block_index);
+                m_block_per_group_list_active[config_index].insert(m_blocks_list_data, block_index);
             }
             else
             {
                 block_index = m_block_per_group_list_active[config_index].m_index;
             }
 
-            m_page_count += (alloc_size + (m_page_size - 1)) >> m_page_shift;
+            u32 const required_physical_pages = (used_chunk_size + (m_page_size - 1));
+            m_page_count += required_physical_pages >> m_page_shift;
 
             // Here we have a block where we can get a chunk from
-            block_t* block       = &m_blocks_array[block_index];
-            u16      chunk_index = llnode_t::NIL;
-            if (!block->m_chunks_list_cached.is_nil())
+            config_t const& config                  = c_configs[config_index];
+            block_t*        block                   = &m_blocks_array[block_index];
+            u32             block_chunk_array_slot  = 0xffffffff;
+            u32             already_committed_pages = 0;
+            if (block->m_binmap_chunks_cached > 0)
             {
-                chunk_index = block->m_chunks_list_cached.remove_headi(sizeof(chunk_t), get_chunk_list_data());
+                u16 *     l1, *l2;
+                binmap_t* bm           = get_binmap_by_index(block->m_binmap_chunks_cached, l1, l2);
+                block_chunk_array_slot = bm->findandset(config.m_chunks_max, l1, l2);
+                block->m_binmap_chunks_cached -= 1;
+                already_committed_pages = block->m_chunks_physical_pages[block_chunk_array_slot];
+            }
+            else if (block->m_binmap_chunks_free > 0)
+            {
+                u16 *     l1, *l2;
+                binmap_t* bm           = get_binmap_by_index(block->m_binmap_chunks_cached, l1, l2);
+                block_chunk_array_slot = bm->findandset(config.m_chunks_max, l1, l2);
+                block->m_binmap_chunks_free -= 1;
             }
             else
             {
-                u16 block_chunk_array_slot = 0;
-                if (!block->m_chunks_list_free.is_nil())
-                {
-                    block_chunk_array_slot = block->m_chunks_list_free.remove_i(sizeof(lnode_t), (lnode_t*)block->m_chunks_list);
-                }
-                else if (block->m_chunks_index < c_configs[config_index].m_chunks_max)
-                {
-                    block_chunk_array_slot = block->m_chunks_index++;
-                }
-                else
-                {
-                    // Error, this segment should have been removed from 'm_segment_per_chunk_size_active'
-                    ASSERT(false);
-                }
+                // Error, this segment should have been removed from 'm_segment_per_chunk_size_active'
+                ASSERT(false);
+            }
 
-                chunk_index         = m_chunks_array.alloc();
-                chunk_t* chunk      = (chunk_t*)m_chunks_array.idx2ptr(chunk_index);
-                chunk->m_prev       = llnode_t::NIL;
-                chunk->m_next       = llnode_t::NIL;
-                chunk->m_bin_map    = superfsa_t::NIL;
-                chunk->m_page_index = (block_index << (m_blocks_shift - m_page_shift)) + (block_chunk_array_slot << (c_configs[block->m_config_index].m_chunks_shift - m_page_shift));
-                ASSERT(chunk->m_page_index < (m_address_range >> 16));
-                chunk->m_elem_used                            = 0;
-                block->m_chunks_list[block_chunk_array_slot]  = 0xffff;
-                block->m_chunks_array[block_chunk_array_slot] = chunk_index;
+            const u32 chunk_index = m_fsa.alloc(sizeof(chunk_t));
+            chunk_t*  chunk       = (chunk_t*)m_fsa.idx2ptr(chunk_index);
+            chunk->m_prev         = llnode_t::NIL;
+            chunk->m_next         = llnode_t::NIL;
+            chunk->m_bin_map      = superfsa_t::NIL;
+            chunk->m_page_index   = (block_index << (m_blocks_shift - m_page_shift)) + (block_chunk_array_slot << (c_configs[block->m_config_index].m_chunks_shift - m_page_shift));
+            ASSERT(chunk->m_page_index < (m_address_range >> 16));
+            chunk->m_elem_used                                     = 0;
+            block->m_chunks_array[block_chunk_array_slot]          = chunk_index;
+            block->m_chunks_physical_pages[block_chunk_array_slot] = required_physical_pages;
+
+            // Commit the virtual pages for this chunk
+            if (required_physical_pages < already_committed_pages)
+            {
+                // Overcommitted, uncommit pages ?
+            }
+            else if (required_physical_pages > already_committed_pages)
+            {
+                // Undercommitted, commit necessary pages
             }
 
             // Check if block is now empty
             block->m_chunks_used += 1;
             if (block->m_chunks_used == c_configs[config_index].m_chunks_max)
             {
-                m_block_per_group_list_active[config_index].remove_item(sizeof(block_t), m_blocks_array, block_index);
+                m_block_per_group_list_active[config_index].remove_item(m_blocks_list_data, block_index);
             }
 
             // Return the chunk index
             return chunk_index;
         }
 
-        void release_chunk(u16 const chunk_index, u32 alloc_size)
+        void release_chunk(u32 const chunk_index, u32 alloc_size)
         {
-            chunk_t* chunk = get_chunk_from_index(chunk_index);
+            chunk_t* chunk = get_chunk_by_index(chunk_index);
 
             u32 block_index;
             u32 block_chunk_index;
@@ -626,56 +585,67 @@ namespace xcore
             get_from_page_index(chunk->m_page_index, block_index, block_chunk_index, chunk_index2);
             ASSERT(chunk_index == chunk_index2);
 
-            //@NOTE: we need to do something with block_chunk_index!
-            // We need to limit the number of cached chunks, once that happens we need to add the
-            // block_chunk_index to the m_chunks_list_free.
+            block_t*        block        = &m_blocks_array[block_index];
+            u32 const       config_index = block->m_config_index;
+            config_t const& config       = c_configs[config_index];
 
-            block_t*  block        = &m_blocks_array[block_index];
-            u32 const config_index = block->m_config_index;
-
-            if (block->m_chunks_used == c_configs[config_index].m_chunks_max)
+            if (block->m_chunks_used == config.m_chunks_max)
             {
-                m_block_per_group_list_active[config_index].insert(sizeof(block_t), m_blocks_array, block_index);
+                m_block_per_group_list_active[config_index].insert(m_blocks_list_data, block_index);
             }
 
             m_page_count -= (alloc_size + (m_page_size - 1)) >> m_page_shift;
 
+            // Release the chunk structure back to the fsa
+            m_fsa.dealloc(chunk_index);
+            chunk                                    = nullptr;
+            block->m_chunks_array[block_chunk_index] = 0xffffffff;
+
+            // We need to limit the number of cached chunks, once that happens we need to add the
+            // block_chunk_index to the m_binmap_chunks_free.
+            u16 *     l1, *l2;
+            binmap_t* bm = get_binmap_by_index(block->m_binmap_chunks_cached, l1, l2);
+            bm->clr(config.m_chunks_max, l1, l2, block_chunk_index);
+            block->m_count_chunks_cached -= 1;
+
             block->m_chunks_used -= 1;
-            block->m_chunks_list_cached.insert(sizeof(chunk_t), get_chunk_list_data(), chunk_index);
             if (block->m_chunks_used == 0)
             {
-                m_block_per_group_list_active[config_index].remove_item(sizeof(block_t), m_blocks_array, block_index);
+                m_block_per_group_list_active[config_index].remove_item(m_blocks_list_data, block_index);
 
-                // Maybe every size should cache at least one block otherwise single alloc/dealloc calls will get
-                // and release a block every time?
+                // Maybe every size should cache at least one block otherwise single alloc/dealloc calls will
+                // checkout and release a block every time?
+                // TODO: Deal with jittering between block checkout/release
 
-                // Release back all cached chunks to fsa
-                while (block->m_chunks_list_cached.is_nil() == false)
+                // Release back all physical pages of the cached chunks
+                binmap_t* bm = get_binmap_by_index(block->m_binmap_chunks_cached, l1, l2);
+                while (block->m_count_chunks_cached > 0)
                 {
-                    llindex_t item = block->m_chunks_list_cached.remove_headi(sizeof(chunk_t), get_chunk_list_data());
+                    u32 const ci = bm->findandset(config.m_chunks_max, l1, l2);
                     // NOTE: We need to decommit memory here.
-                    m_chunks_array.dealloc(item);
+                    block->m_count_chunks_cached -= 1;
                 }
 
                 u32 const chunks_array_index = m_fsa.ptr2idx(block->m_chunks_array);
                 m_fsa.dealloc(chunks_array_index);
-                u32 const chunks_list_index = m_fsa.ptr2idx(block->m_chunks_list);
-                m_fsa.dealloc(chunks_list_index);
+                u32 const chunks_pages_index = m_fsa.ptr2idx(block->m_chunks_physical_pages);
+                m_fsa.dealloc(chunks_pages_index);
+                m_fsa.dealloc(block->m_binmap_chunks_cached);
+                m_fsa.dealloc(block->m_binmap_chunks_free);
 
-                block->m_prev         = llnode_t::NIL;
-                block->m_next         = llnode_t::NIL;
-                block->m_chunks_array = nullptr;
-                block->m_chunks_list_cached.reset();
-                block->m_chunks_list_free.reset();
-                block->m_config_index = 0xffff;
-                block->m_chunks_index = 0;
+                block->m_prev                = llnode_t::NIL;
+                block->m_next                = llnode_t::NIL;
+                block->m_chunks_array        = nullptr;
+                block->m_count_chunks_cached = 0;
+                block->m_count_chunks_used   = 0;
+                block->m_config_index        = 0xffff;
 
-                m_blocks_list_free.insert(sizeof(block_t), m_blocks_array, block_index);
+                m_blocks_list_free.insert(m_blocks_list_data, block_index);
             }
         }
 
         void* page_index_to_address(u32 const page_index) const { return toaddress(m_address_base, (u64)page_index * m_page_size); }
-        void  get_from_page_index(u32 const page_index, u32& block_index, u32& chunk_index_in_block, u32& chunk_index)
+        void  get_from_page_index(u32 const page_index, u32& block_index, u32& chunk_index_in_block, u32& chunk_index) const
         {
             u32 const page_index_to_block_index_shift       = (m_blocks_shift - m_page_shift);
             block_index                                     = page_index >> page_index_to_block_index_shift;
@@ -683,25 +653,31 @@ namespace xcore
             u32 const block_page_index                      = page_index & ((1 << page_index_to_block_index_shift) - 1);
             u32 const block_page_index_to_chunk_index_shift = (c_configs[block->m_config_index].m_chunks_shift - m_page_shift);
             chunk_index_in_block                            = block_page_index >> block_page_index_to_chunk_index_shift;
-            ASSERT(chunk_index_in_block < block->m_chunks_index);
+            ASSERT(chunk_index_in_block < c_configs[block->m_config_index].m_chunks_max);
             chunk_index = block->m_chunks_array[chunk_index_in_block];
             ASSERT(chunk_index < 0xffff);
         }
 
-        chunk_t* get_chunk_from_index(u16 const chunk_index) { return m_chunks_array.at<chunk_t>(chunk_index); }
-        u16      get_chunkindex_from_chunk(chunk_t* chunk) { return m_chunks_array.ptr2idx(chunk); }
-        chunk_t* get_chunk_list_data() { return m_chunks_array.base<chunk_t>(); }
+        chunk_t*  get_chunk_by_index(u32 const chunk_index) const { return (chunk_t*)m_fsa.idx2ptr(chunk_index); }
+        u32       get_index_of_chunk(chunk_t* chunk) const { return m_fsa.ptr2idx(chunk); }
+        lldata_t& get_chunk_list_data() { return m_chunk_list_data; }
 
-        chunk_t* get_chunk_from_page_index(u32 const page_index)
+        chunk_t* get_chunk_from_page_index(u32 const page_index) const
         {
             u32 block_index;
             u32 chunk_index_in_block;
             u32 chunk_index;
             get_from_page_index(page_index, block_index, chunk_index_in_block, chunk_index);
-            return m_chunks_array.at<chunk_t>(chunk_index);
+            return get_chunk_by_index(chunk_index);
         }
 
-        block_t* get_block_from_page_index(u32 const page_index)
+        block_t* get_block_from_page_index(u32 const page_index) const
+        {
+            u32 const block_index = page_index >> (m_blocks_shift - m_page_shift);
+            return &m_blocks_array[block_index];
+        }
+
+        block_t* get_block_and_chunkslot_from_page_index(u32 const page_index, u32& chunkslot) const
         {
             u32 const block_index = page_index >> (m_blocks_shift - m_page_shift);
             return &m_blocks_array[block_index];
@@ -711,18 +687,19 @@ namespace xcore
         // to get the 'chunk_t*'.
         u32 address_to_page_index(void* ptr) const { return (u32)(todistance(m_address_base, ptr) >> m_page_shift); }
 
-        superfsa_t   m_fsa;
-        superarray_t m_chunks_array;
-        llhead_t     m_block_per_group_list_active[32];
-        xvmem*       m_vmem;
-        void*        m_address_base;
-        u64          m_address_range;
-        u32          m_page_count;
-        u32          m_page_size;
-        u32          m_page_shift;   // e.g. 16 (1<<16 = 64 KB)
-        s16          m_blocks_shift; // e.g. 25 (1<<30 =  1 GB)
-        block_t*     m_blocks_array;
-        llist_t      m_blocks_list_free;
+        superfsa_t m_fsa;
+        lldata_t   m_chunk_list_data;
+        llhead_t   m_block_per_group_list_active[32];
+        xvmem*     m_vmem;
+        void*      m_address_base;
+        u64        m_address_range;
+        u32        m_page_count;
+        u32        m_page_size;
+        u32        m_page_shift;   // e.g. 16 (1<<16 = 64 KB)
+        s16        m_blocks_shift; // e.g. 25 (1<<30 =  1 GB)
+        block_t*   m_blocks_array;
+        lldata_t   m_blocks_list_data;
+        llist_t    m_blocks_list_free;
     };
 
     struct superbin_t
@@ -754,6 +731,7 @@ namespace xcore
             : m_chunk_size(s.m_chunk_size)
             , m_num_sizes(s.m_num_sizes)
             , m_bin_base(s.m_bin_base)
+            , m_chunks(nullptr)
             , m_used_chunk_list_per_size(nullptr)
         {
         }
@@ -762,6 +740,7 @@ namespace xcore
             : m_chunk_size(chunk_size)
             , m_num_sizes(numsizes)
             , m_bin_base(binbase)
+            , m_chunks(nullptr)
             , m_used_chunk_list_per_size(nullptr)
         {
         }
@@ -797,23 +776,16 @@ namespace xcore
         llindex_t chunkindex = m_used_chunk_list_per_size[c].m_index;
         if (chunkindex == llnode_t::NIL)
         {
-            if (bin.m_use_binmap == 0)
-            {
-                chunkindex = m_chunks->checkout_chunk(m_chunk_size, alloc_size, bin.m_alloc_size);
-            }
-            else
-            {
-                chunkindex = m_chunks->checkout_chunk(m_chunk_size, bin.m_alloc_size * bin.m_alloc_count, bin.m_alloc_size);
-            }
+            chunkindex = m_chunks->checkout_chunk(m_chunk_size, bin.m_alloc_size * bin.m_alloc_count);
             initialize_chunk(sfsa, chunkindex, alloc_size, bin);
-            m_used_chunk_list_per_size[c].insert(sizeof(superchunks_t::chunk_t), m_chunks->get_chunk_list_data(), chunkindex);
+            m_used_chunk_list_per_size[c].insert(m_chunks->get_chunk_list_data(), chunkindex);
         }
 
         bool        chunk_is_now_full = false;
         void* const ptr               = allocate_from_chunk(sfsa, chunkindex, alloc_size, bin, chunk_is_now_full);
         if (chunk_is_now_full) // Chunk is full, no more allocations possible
         {
-            m_used_chunk_list_per_size[c].remove_item(sizeof(superchunks_t::chunk_t), m_chunks->get_chunk_list_data(), chunkindex);
+            m_used_chunk_list_per_size[c].remove_item(m_chunks->get_chunk_list_data(), chunkindex);
         }
         return ptr;
     }
@@ -828,21 +800,21 @@ namespace xcore
         {
             if (!chunk_was_full)
             {
-                m_used_chunk_list_per_size[c].remove_item(sizeof(superchunks_t::chunk_t), m_chunks->get_chunk_list_data(), chunkindex);
+                m_used_chunk_list_per_size[c].remove_item(m_chunks->get_chunk_list_data(), chunkindex);
             }
             deinitialize_chunk(fsa, chunkindex, bin);
             m_chunks->release_chunk(chunkindex, alloc_size);
         }
         else if (chunk_was_full)
         {
-            m_used_chunk_list_per_size[c].insert(sizeof(superchunks_t::chunk_t), m_chunks->get_chunk_list_data(), chunkindex);
+            m_used_chunk_list_per_size[c].insert(m_chunks->get_chunk_list_data(), chunkindex);
         }
         return alloc_size;
     }
-
+    
     void superalloc_t::initialize_chunk(superfsa_t& fsa, u32 chunkindex, u32 alloc_size, superbin_t const& bin)
     {
-        superchunks_t::chunk_t* chunk = m_chunks->get_chunk_from_index(chunkindex);
+        superchunks_t::chunk_t* chunk = m_chunks->get_chunk_by_index(chunkindex);
         if (bin.m_use_binmap == 1)
         {
             u32 const ibinmap = fsa.alloc(sizeof(binmap_t));
@@ -863,18 +835,13 @@ namespace xcore
                 binmap->init(bin.m_alloc_count, nullptr, 0, nullptr, 0);
             }
         }
-        else
-        {
-            u32 const num_physical_pages = xalignUp(alloc_size, m_chunks->m_page_size) / m_chunks->m_page_size;
-            chunk->m_bin_map             = num_physical_pages;
-        }
         chunk->m_bin_index = bin.m_alloc_bin_index;
         chunk->m_elem_used = 0;
     }
 
     void superalloc_t::deinitialize_chunk(superfsa_t& fsa, u32 chunkindex, superbin_t const& bin)
     {
-        superchunks_t::chunk_t* chunk = m_chunks->get_chunk_from_index(chunkindex);
+        superchunks_t::chunk_t* chunk = m_chunks->get_chunk_by_index(chunkindex);
         if (bin.m_use_binmap == 1)
         {
             binmap_t* binmap = (binmap_t*)fsa.idx2ptr(chunk->m_bin_map);
@@ -890,7 +857,7 @@ namespace xcore
 
     void* superalloc_t::allocate_from_chunk(superfsa_t& fsa, u32 chunkindex, u32 size, superbin_t const& bin, bool& chunk_is_now_full)
     {
-        superchunks_t::chunk_t* chunk = m_chunks->get_chunk_from_index(chunkindex);
+        superchunks_t::chunk_t* chunk = m_chunks->get_chunk_by_index(chunkindex);
         ASSERT(chunk->m_bin_index == bin.m_alloc_bin_index);
 
         void* ptr;
@@ -921,7 +888,7 @@ namespace xcore
 
     u32 superalloc_t::deallocate_from_chunk(superfsa_t& fsa, u32 chunkindex, void* ptr, superbin_t const& bin, bool& chunk_is_now_empty, bool& chunk_was_full)
     {
-        superchunks_t::chunk_t* chunk = m_chunks->get_chunk_from_index(chunkindex);
+        superchunks_t::chunk_t* chunk = m_chunks->get_chunk_by_index(chunkindex);
         ASSERT(chunk->m_bin_index == bin.m_alloc_bin_index);
 
         u32 size;
@@ -1021,8 +988,9 @@ namespace xcore
 
     namespace superallocator_config_desktop_app_t
     {
-        // superbin_t(allocation size MB, KB, B, bin redir index, allocator index, use binmap?, maximum allocation count, binmap level 1 length, binmap level 2 length)
-        static const s32    c_num_bins               = 105;
+        // @TODO: for level 1 we can skip allocating u16[] if the count for level 1 <= 32
+        // superbin_t(allocation size MB, KB, B, bin redir index, allocator index, use binmap?, maximum allocation count, binmap level 1 length (u16), binmap level 2 length (u16))
+        static const s32        c_num_bins           = 105;
         static const superbin_t c_asbins[c_num_bins] = {
             superbin_t(0, 0, 4, 4, 0, 1, 8192, 32, 512),   superbin_t(0, 0, 5, 4, 0, 1, 8192, 32, 512),   superbin_t(0, 0, 6, 4, 0, 1, 8192, 32, 512),   superbin_t(0, 0, 7, 4, 0, 1, 8192, 32, 512),  superbin_t(0, 0, 8, 4, 0, 1, 8192, 32, 512),
             superbin_t(0, 0, 10, 8, 0, 1, 8192, 32, 512),  superbin_t(0, 0, 12, 8, 0, 1, 8192, 32, 512),  superbin_t(0, 0, 14, 8, 0, 1, 8192, 32, 512),  superbin_t(0, 0, 16, 8, 0, 1, 4096, 16, 256), superbin_t(0, 0, 20, 10, 0, 1, 4096, 16, 256),
@@ -1035,22 +1003,23 @@ namespace xcore
             superbin_t(0, 4, 000, 40, 1, 1, 128, 2, 8),    superbin_t(0, 5, 000, 41, 1, 1, 64, 2, 4),     superbin_t(0, 6, 000, 42, 1, 1, 64, 2, 4),     superbin_t(0, 7, 000, 43, 1, 1, 64, 2, 4),    superbin_t(0, 8, 000, 44, 1, 1, 64, 2, 4),
             superbin_t(0, 10, 0, 45, 1, 1, 32, 0, 0),      superbin_t(0, 12, 0, 46, 1, 1, 32, 0, 0),      superbin_t(0, 14, 0, 47, 1, 1, 32, 0, 0),      superbin_t(0, 16, 0, 48, 1, 1, 32, 0, 0),     superbin_t(0, 20, 0, 49, 1, 1, 16, 0, 0),
             superbin_t(0, 24, 0, 50, 1, 1, 16, 0, 0),      superbin_t(0, 28, 0, 51, 1, 1, 16, 0, 0),      superbin_t(0, 32, 0, 52, 1, 1, 16, 0, 0),      superbin_t(0, 40, 0, 53, 1, 1, 8, 0, 0),      superbin_t(0, 48, 0, 54, 1, 1, 8, 0, 0),
-            superbin_t(0, 56, 0, 55, 1, 1, 8, 0, 0),       superbin_t(0, 64, 0, 56, 1, 1, 8, 0, 0),       superbin_t(0, 80, 0, 57, 2, 1, 4, 0, 0),       superbin_t(0, 96, 0, 58, 2, 1, 4, 0, 0),      superbin_t(0, 112, 0, 59, 2, 1, 4, 0, 0),
-            superbin_t(0, 128, 0, 60, 2, 1, 4, 0, 0),      superbin_t(0, 160, 0, 61, 2, 1, 2, 0, 0),      superbin_t(0, 192, 0, 62, 2, 1, 2, 0, 0),      superbin_t(0, 224, 0, 63, 2, 1, 2, 0, 0),     superbin_t(0, 256, 0, 64, 2, 1, 2, 0, 0),
-            superbin_t(0, 320, 0, 65, 3, 0, 1, 0, 0),      superbin_t(0, 384, 0, 66, 3, 0, 1, 0, 0),      superbin_t(0, 448, 0, 67, 3, 0, 1, 0, 0),      superbin_t(0, 512, 0, 68, 3, 0, 1, 0, 0),     superbin_t(0, 640, 0, 69, 4, 0, 1, 0, 0),
-            superbin_t(0, 768, 0, 70, 4, 0, 1, 0, 0),      superbin_t(0, 896, 0, 71, 4, 0, 1, 0, 0),      superbin_t(1, 0, 0, 72, 4, 0, 1, 0, 0),        superbin_t(1, 256, 0, 73, 5, 0, 1, 0, 0),     superbin_t(1, 512, 0, 74, 5, 0, 1, 0, 0),
-            superbin_t(1, 768, 0, 75, 5, 0, 1, 0, 0),      superbin_t(2, 0, 0, 76, 5, 0, 1, 0, 0),        superbin_t(2, 512, 0, 77, 6, 0, 1, 0, 0),      superbin_t(3, 0, 0, 78, 6, 0, 1, 0, 0),       superbin_t(3, 512, 0, 79, 6, 0, 1, 0, 0),
-            superbin_t(4, 0, 0, 80, 6, 0, 1, 0, 0),        superbin_t(5, 0, 0, 81, 7, 0, 1, 0, 0),        superbin_t(6, 0, 0, 82, 7, 0, 1, 0, 0),        superbin_t(7, 0, 0, 83, 7, 0, 1, 0, 0),       superbin_t(8, 0, 0, 84, 7, 0, 1, 0, 0),
-            superbin_t(10, 0, 0, 85, 8, 0, 1, 0, 0),       superbin_t(12, 0, 0, 86, 8, 0, 1, 0, 0),       superbin_t(14, 0, 0, 87, 8, 0, 1, 0, 0),       superbin_t(16, 0, 0, 88, 8, 0, 1, 0, 0),      superbin_t(20, 0, 0, 89, 9, 0, 1, 0, 0),
-            superbin_t(24, 0, 0, 90, 9, 0, 1, 0, 0),       superbin_t(28, 0, 0, 91, 9, 0, 1, 0, 0),       superbin_t(32, 0, 0, 92, 9, 0, 1, 0, 0),       superbin_t(40, 0, 0, 93, 10, 0, 1, 0, 0),     superbin_t(48, 0, 0, 94, 10, 0, 1, 0, 0),
-            superbin_t(56, 0, 0, 95, 10, 0, 1, 0, 0),      superbin_t(64, 0, 0, 96, 10, 0, 1, 0, 0),      superbin_t(80, 0, 0, 97, 11, 0, 1, 0, 0),      superbin_t(96, 0, 0, 98, 11, 0, 1, 0, 0),     superbin_t(112, 0, 0, 99, 11, 0, 1, 0, 0),
-            superbin_t(128, 0, 0, 100, 11, 0, 1, 0, 0),    superbin_t(160, 0, 0, 101, 12, 0, 1, 0, 0),    superbin_t(192, 0, 0, 102, 12, 0, 1, 0, 0),    superbin_t(224, 0, 0, 103, 12, 0, 1, 0, 0),   superbin_t(256, 0, 0, 104, 12, 0, 1, 0, 0)};
+            superbin_t(0, 56, 0, 55, 1, 1, 8, 0, 0),       superbin_t(0, 64, 0, 56, 1, 1, 8, 0, 0),       superbin_t(0, 80, 0, 57, 2, 0, 1, 0, 0),       superbin_t(0, 96, 0, 58, 2, 0, 1, 0, 0),      superbin_t(0, 112, 0, 59, 2, 0, 1, 0, 0),
+            superbin_t(0, 128, 0, 60, 2, 0, 1, 0, 0),      superbin_t(0, 160, 0, 61, 3, 0, 1, 0, 0),      superbin_t(0, 192, 0, 62, 3, 0, 1, 0, 0),      superbin_t(0, 224, 0, 63, 3, 0, 1, 0, 0),     superbin_t(0, 256, 0, 64, 3, 0, 1, 0, 0),
+            superbin_t(0, 320, 0, 65, 4, 0, 1, 0, 0),      superbin_t(0, 384, 0, 66, 4, 0, 1, 0, 0),      superbin_t(0, 448, 0, 67, 4, 0, 1, 0, 0),      superbin_t(0, 512, 0, 68, 4, 0, 1, 0, 0),     superbin_t(0, 640, 0, 69, 5, 0, 1, 0, 0),
+            superbin_t(0, 768, 0, 70, 5, 0, 1, 0, 0),      superbin_t(0, 896, 0, 71, 5, 0, 1, 0, 0),      superbin_t(1, 0, 0, 72, 5, 0, 1, 0, 0),        superbin_t(1, 256, 0, 73, 6, 0, 1, 0, 0),     superbin_t(1, 512, 0, 74, 6, 0, 1, 0, 0),
+            superbin_t(1, 768, 0, 75, 6, 0, 1, 0, 0),      superbin_t(2, 0, 0, 76, 6, 0, 1, 0, 0),        superbin_t(2, 512, 0, 77, 7, 0, 1, 0, 0),      superbin_t(3, 0, 0, 78, 7, 0, 1, 0, 0),       superbin_t(3, 512, 0, 79, 7, 0, 1, 0, 0),
+            superbin_t(4, 0, 0, 80, 7, 0, 1, 0, 0),        superbin_t(5, 0, 0, 81, 8, 0, 1, 0, 0),        superbin_t(6, 0, 0, 82, 8, 0, 1, 0, 0),        superbin_t(7, 0, 0, 83, 8, 0, 1, 0, 0),       superbin_t(8, 0, 0, 84, 8, 0, 1, 0, 0),
+            superbin_t(10, 0, 0, 85, 9, 0, 1, 0, 0),       superbin_t(12, 0, 0, 86, 9, 0, 1, 0, 0),       superbin_t(14, 0, 0, 87, 9, 0, 1, 0, 0),       superbin_t(16, 0, 0, 88, 9, 0, 1, 0, 0),      superbin_t(20, 0, 0, 89, 10, 0, 1, 0, 0),
+            superbin_t(24, 0, 0, 90, 10, 0, 1, 0, 0),      superbin_t(28, 0, 0, 91, 10, 0, 1, 0, 0),      superbin_t(32, 0, 0, 92, 10, 0, 1, 0, 0),      superbin_t(40, 0, 0, 93, 11, 0, 1, 0, 0),     superbin_t(48, 0, 0, 94, 11, 0, 1, 0, 0),
+            superbin_t(56, 0, 0, 95, 11, 0, 1, 0, 0),      superbin_t(64, 0, 0, 96, 11, 0, 1, 0, 0),      superbin_t(80, 0, 0, 97, 12, 0, 1, 0, 0),      superbin_t(96, 0, 0, 98, 12, 0, 1, 0, 0),     superbin_t(112, 0, 0, 99, 12, 0, 1, 0, 0),
+            superbin_t(128, 0, 0, 100, 12, 0, 1, 0, 0),    superbin_t(160, 0, 0, 101, 13, 0, 1, 0, 0),    superbin_t(192, 0, 0, 102, 13, 0, 1, 0, 0),    superbin_t(224, 0, 0, 103, 13, 0, 1, 0, 0),   superbin_t(256, 0, 0, 104, 13, 0, 1, 0, 0)};
 
-        static const s32    c_num_allocators               = 13;
+        static const s32    c_num_allocators               = 14;
         static superalloc_t c_allocators[c_num_allocators] = {
-            superalloc_t(xKB * 64, 25, 0),   // number of sizes, bin base
+            superalloc_t(xKB * 64, 25, 0),   // chunk-size, number of allocation sizes, superbin base
             superalloc_t(xKB * 512, 32, 25), //
-            superalloc_t(xKB * 256, 8, 57),  //
+            superalloc_t(xKB * 128, 4, 57),  //
+            superalloc_t(xKB * 256, 4, 61),  //
             superalloc_t(xKB * 512, 4, 65),  //
             superalloc_t(xMB * 1, 4, 69),    //
             superalloc_t(xMB * 2, 4, 73),    //
@@ -1094,6 +1063,7 @@ namespace xcore
         void  deinitialize();
         void* allocate(u32 size, u32 alignment);
         u32   deallocate(void* ptr);
+        u32   get_size(void* ptr) const;
 
         void test_binmap();
 
@@ -1190,7 +1160,7 @@ namespace xcore
     {
         u32 const               page_index = m_chunks.address_to_page_index(ptr);
         superchunks_t::chunk_t* chunk      = m_chunks.get_chunk_from_page_index(page_index);
-        u16 const               chunkindex = m_chunks.get_chunkindex_from_chunk(chunk);
+        u32 const               chunkindex = m_chunks.get_index_of_chunk(chunk);
         u32 const               binindex   = chunk->m_bin_index;
         u32 const               allocindex = m_config.m_asbins[binindex].m_alloc_index;
         u32 const               size       = m_allocators[allocindex].deallocate(m_internal_fsa, ptr, chunkindex, m_config.m_asbins[binindex]);
@@ -1198,4 +1168,20 @@ namespace xcore
         return size;
     }
 
+    u32 superallocator_t::get_size(void* ptr) const
+    {
+        u32 const               page_index = m_chunks.address_to_page_index(ptr);
+        superchunks_t::chunk_t* chunk      = m_chunks.get_chunk_from_page_index(page_index);
+        u32 const               binindex   = chunk->m_bin_index;
+        if (m_config.m_asbins[binindex].m_use_binmap == 1)
+        {
+            return m_config.m_asbins[binindex].m_alloc_size;
+        }
+        else
+        {
+            u32 chunkslot;
+            superchunks_t::block_t* block = m_chunks.get_block_and_chunkslot_from_page_index(page_index, chunkslot);
+            return block->m_chunks_physical_pages[chunkslot] * m_chunks.m_page_size;
+        }
+    }
 } // namespace xcore

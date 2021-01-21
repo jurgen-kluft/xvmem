@@ -8,11 +8,11 @@
 
 namespace xcore
 {
-    u32 resetarray(u32 count, u32 len, u16* data)
+    u32 resetarray(u32 count, u32 len, u16* data, u16 df = 0)
     {
         u32 const wi2 = count >> 4;
         for (u32 i = 0; i < wi2; i++)
-            data[i] = 0;
+            data[i] = df;
 
         u32 w = wi2;
         u32 const r = ((count&(16-1)) + (16-1)) >> 4;
@@ -36,6 +36,18 @@ namespace xcore
             m_l0 = 0;
         else
             m_l0 = 0xffffffff << count;
+    }
+
+    void binmap_t::init1(u32 count, u16* l1, u32 l1len, u16* l2, u32 l2len)
+    {
+        // Set all bits to '1'
+        if (count > 32)
+        {
+            u32 const c2 = resetarray(count, l2len, l2, 0xffff);
+            u32 const c1 = resetarray(c2, l1len, l1, 0xffff);
+            count = c1;
+        }
+        m_l0 = 0xffffffff;
     }
 
     void binmap_t::set(u32 count, u16* l1, u16* l2, u32 k)

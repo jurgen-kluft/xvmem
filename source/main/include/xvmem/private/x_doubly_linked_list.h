@@ -9,50 +9,61 @@
 
 namespace xcore
 {
-    typedef u16      llindex_t;
+    typedef u32      llindex_t;
 
     struct llnode_t
     {
-        static const u16 NIL = 0xFFFF;
+        static const u32 NIL = 0xFFFFFFFF;
         inline bool is_linked() const { return m_prev != NIL && m_next != NIL; }
         llindex_t m_prev, m_next;
     };
 
+    struct lldata_t;
+
     struct llhead_t
     {
         llindex_t m_index;
+
         inline llhead_t()
-            : m_index(0xFFFF)
+            : m_index(llnode_t::NIL)
         {
         }
 
-        void      reset() { m_index = 0xFFFF; }
-        bool      is_nil() const { return m_index == 0xFFFF; }
-        void      insert(u32 const sizeof_node, llnode_t* list, llindex_t item);      // Inserts 'item' at the head
-        void      insert_tail(u32 const sizeof_node, llnode_t* list, llindex_t item); // Inserts 'item' at the tail end
-        llnode_t* remove_item(u32 const sizeof_node, llnode_t* list, llindex_t item);
-        llnode_t* remove_head(u32 const sizeof_node, llnode_t* list);
-        llnode_t* remove_tail(u32 const sizeof_node, llnode_t* list);
-        llindex_t remove_headi(u32 const sizeof_node, llnode_t* list);
-        llindex_t remove_taili(u32 const sizeof_node, llnode_t* list);
+        void      reset() { m_index = llnode_t::NIL; }
+        bool      is_nil() const { return m_index == llnode_t::NIL; }
+        void      insert(lldata_t& data, llindex_t item);      // Inserts 'item' at the head
+        void      insert_tail(lldata_t& data, llindex_t item); // Inserts 'item' at the tail end
+        llnode_t* remove_item(lldata_t& data, llindex_t item);
+        llnode_t* remove_head(lldata_t& data);
+        llnode_t* remove_tail(lldata_t& data);
+        llindex_t remove_headi(lldata_t& data);
+        llindex_t remove_taili(lldata_t& data);
 
         inline void operator=(u16 i) { m_index = i; }
         inline void operator=(const llindex_t& index) { m_index = index; }
         inline void operator=(const llhead_t& head) { m_index = head.m_index; }
+    };
 
-        static llnode_t* idx2node(u32 const sizeof_node, llnode_t* list, llindex_t i)
+    struct lldata_t
+    {
+        void* m_data;
+        u32 m_pagesize;
+        u32 m_itemsize;
+
+        llnode_t* idx2node(llindex_t i)
         {
-            if (i == 0xFFFF)
+            if (i == llnode_t::NIL)
                 return nullptr;
-            return (llnode_t*)((uptr)list + ((uptr)sizeof_node * i));
+            return (llnode_t*)((uptr)m_data + ((uptr)m_pagesize * (i >> 16)) + ((uptr)m_itemsize * (i & 0xFFFF)));
         }
 
-        static llindex_t node2idx(u32 const sizeof_node, llnode_t* list, llnode_t* node)
+        llindex_t node2idx(llnode_t* node)
         {
             if (node == nullptr)
                 return llindex_t();
-            llindex_t const index = (u16)(((uptr)node - (uptr)list) / sizeof_node);
-            return index;
+            u32 const page_index = (u32)(((uptr)node - (uptr)m_data) / m_pagesize);
+            u32 const item_index = (u32)(((uptr)node - (uptr)m_data) & (m_pagesize - 1)) / m_itemsize;
+            return (page_index << 16) | item_index;
         }
     };
 
@@ -73,30 +84,30 @@ namespace xcore
         inline bool is_empty() const { return m_size == 0; }
         inline bool is_full() const { return m_size == m_size_max; }
 
-        void        initialize(u32 const sizeof_node, llnode_t* list, u16 start, u16 size, u16 max_size);
+        void        initialize(lldata_t& data, u16 start, u16 size, u16 max_size);
         inline void reset()
         {
             m_size = 0;
             m_head.reset();
         }
 
-        void      insert(u32 const sizeof_node, llnode_t* list, llindex_t item);      // Inserts 'item' at the head
-        void      insert_tail(u32 const sizeof_node, llnode_t* list, llindex_t item); // Inserts 'item' at the tail end
-        llnode_t* remove_item(u32 const sizeof_node, llnode_t* list, llindex_t item);
-        llnode_t* remove_head(u32 const sizeof_node, llnode_t* list);
-        llnode_t* remove_tail(u32 const sizeof_node, llnode_t* list);
-        llindex_t remove_headi(u32 const sizeof_node, llnode_t* list);
-        llindex_t remove_taili(u32 const sizeof_node, llnode_t* list);
+        void      insert(lldata_t& data, llindex_t item);      // Inserts 'item' at the head
+        void      insert_tail(lldata_t& data, llindex_t item); // Inserts 'item' at the tail end
+        llnode_t* remove_item(lldata_t& data, llindex_t item);
+        llnode_t* remove_head(lldata_t& data);
+        llnode_t* remove_tail(lldata_t& data);
+        llindex_t remove_headi(lldata_t& data);
+        llindex_t remove_taili(lldata_t& data);
 
-        llnode_t* idx2node(u32 const sizeof_node, llnode_t* list, llindex_t i) const
+        llnode_t* idx2node(lldata_t& data, llindex_t i) const
         {
             ASSERT(i < m_size_max);
-            return m_head.idx2node(sizeof_node, list, i);
+            return data.idx2node(i);
         }
 
-        llindex_t node2idx(u32 const sizeof_node, llnode_t* list, llnode_t* node) const
+        llindex_t node2idx(lldata_t& data, llnode_t* node) const
         {
-            llindex_t i = m_head.node2idx(sizeof_node, list, node);
+            llindex_t i = data.node2idx(node);
             ASSERT(i < m_size_max);
             return i;
         }

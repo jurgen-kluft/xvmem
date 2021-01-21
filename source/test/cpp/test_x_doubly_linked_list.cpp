@@ -9,9 +9,12 @@ using namespace xcore;
 
 extern alloc_t* gTestAllocator;
 
-llnode_t* gCreateList(u32 count)
+llnode_t* gCreateList(u32 count, lldata_t& lldata)
 {
 	llnode_t* list = (llnode_t*)gTestAllocator->allocate(sizeof(llnode_t) * count);
+	lldata.m_data = list;
+	lldata.m_itemsize = sizeof(llnode_t);
+	lldata.m_pagesize = sizeof(llnode_t) * count;
 	return list;
 }
 
@@ -30,7 +33,8 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
         UNITTEST_TEST(init) 
 		{
-			llnode_t* list_data = gCreateList(1024);
+			lldata_t lldata;
+			llnode_t* list_data = gCreateList(1024, lldata);
 			llist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
@@ -42,20 +46,21 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
         UNITTEST_TEST(insert_1) 
 		{
-			llnode_t* list_data = gCreateList(1024);
+			lldata_t lldata;
+			llnode_t* list_data = gCreateList(1024, lldata);
 			llist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
 			CHECK_TRUE(list.m_head.is_nil());
 
-			list.insert(sizeof(llnode_t), list_data, 0);
+			list.insert(lldata, 0);
 
 			CHECK_FALSE(list.is_empty());
 			CHECK_EQUAL(1, list.size());
 			CHECK_FALSE(list.m_head.is_nil());
 
-			llnode_t* node = list.idx2node(sizeof(llnode_t), list_data, 0);
+			llnode_t* node = list.idx2node(lldata, 0);
 			CHECK_EQUAL(0, node->m_next);
 			CHECK_EQUAL(0, node->m_prev);
 
@@ -64,20 +69,21 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
         UNITTEST_TEST(insert_1_remove_head) 
 		{
-			llnode_t* list_data = gCreateList(1024);
+			lldata_t lldata;
+			llnode_t* list_data = gCreateList(1024, lldata);
 			llist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
 			CHECK_TRUE(list.m_head.is_nil());
 
-			list.insert(sizeof(llnode_t), list_data, 0);
+			list.insert(lldata, 0);
 
 			CHECK_FALSE(list.is_empty());
 			CHECK_EQUAL(1, list.size());
 			CHECK_FALSE(list.m_head.is_nil());
 
-			llnode_t* node = list.remove_head(sizeof(llnode_t), list_data);
+			llnode_t* node = list.remove_head(lldata);
 
 			CHECK_TRUE(list.is_empty());
 			CHECK_EQUAL(0, list.size());
@@ -91,7 +97,8 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
         UNITTEST_TEST(insert_N_remove_head) 
 		{
-			llnode_t* list_data = gCreateList(1024);
+			lldata_t lldata;
+			llnode_t* list_data = gCreateList(1024, lldata);
 			llist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
@@ -101,7 +108,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			const s32 count = 256;
 			for (s32 i=0; i<count; ++i)
 			{
-				list.insert(sizeof(llnode_t), list_data, i);
+				list.insert(lldata, i);
 			}
 
 			CHECK_FALSE(list.is_empty());
@@ -110,7 +117,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
 			for (s32 i=0; i<count; ++i)
 			{
-				llnode_t* node = list.remove_head(sizeof(llnode_t), list_data);
+				llnode_t* node = list.remove_head(lldata);
 
 				CHECK_TRUE(node->m_next == llnode_t::NIL);
 				CHECK_TRUE(node->m_prev == llnode_t::NIL);
@@ -125,7 +132,8 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
         UNITTEST_TEST(insert_N_remove_tail) 
 		{
-			llnode_t* list_data = gCreateList(1024);
+			lldata_t lldata;
+			llnode_t* list_data = gCreateList(1024, lldata);
 			llist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
@@ -135,7 +143,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			const s32 count = 256;
 			for (s32 i=0; i<count; ++i)
 			{
-				list.insert(sizeof(llnode_t), list_data, i);
+				list.insert(lldata, i);
 			}
 
 			CHECK_FALSE(list.is_empty());
@@ -144,7 +152,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
 			for (s32 i=0; i<count; ++i)
 			{
-				llnode_t* node = list.remove_tail(sizeof(llnode_t), list_data);
+				llnode_t* node = list.remove_tail(lldata);
 
 				CHECK_TRUE(node->m_next == llnode_t::NIL);
 				CHECK_TRUE(node->m_prev == llnode_t::NIL);
@@ -159,7 +167,8 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
         UNITTEST_TEST(insert_N_remove_item) 
 		{
-			llnode_t* list_data = gCreateList(1024);
+			lldata_t lldata;
+			llnode_t* list_data = gCreateList(1024, lldata);
 			llist_t list(0, 1024);
 
 			CHECK_TRUE(list.is_empty());
@@ -169,7 +178,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 			const s32 count = 256;
 			for (s32 i=0; i<count; ++i)
 			{
-				list.insert(sizeof(llnode_t), list_data, i);
+				list.insert(lldata, i);
 			}
 
 			CHECK_FALSE(list.is_empty());
@@ -178,7 +187,7 @@ UNITTEST_SUITE_BEGIN(doubly_linked_list)
 
 			for (s32 i=0; i<count; ++i)
 			{
-				llnode_t* node = list.remove_item(sizeof(llnode_t), list_data, i);
+				llnode_t* node = list.remove_item(lldata, i);
 				
 				CHECK_TRUE(node->m_next == llnode_t::NIL);
 				CHECK_TRUE(node->m_prev == llnode_t::NIL);

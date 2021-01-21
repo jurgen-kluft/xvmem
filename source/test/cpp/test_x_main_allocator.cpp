@@ -51,44 +51,23 @@ public:
     }
 };
 
-struct xvmem_testconfig : public xvmem_config
-{
-    xvmem_testconfig()
-    {
-    }
-};
-
 UNITTEST_SUITE_BEGIN(main_allocator)
 {
     UNITTEST_FIXTURE(main)
     {
         xalloc_with_stats s_alloc;
-        xvmem_testconfig  s_vmem_testconfig;
-        xvmem_test        s_vmem_test;
 
         UNITTEST_FIXTURE_SETUP()
         {
             s_alloc.init(gTestAllocator);
-            s_vmem_test.init(gTestAllocator, 64 * 1024);
         }
 
         UNITTEST_FIXTURE_TEARDOWN()
 		{
-			s_vmem_test.exit(); 
-		}
-
-        UNITTEST_TEST(test_config)
-        {
-			const char* reason = nullptr;
-			bool const valid = s_vmem_testconfig.validate(reason);
-			CHECK_EQUAL_T(true, valid, reason);
 		}
 
         UNITTEST_TEST(init)
         {
-            alloc_t* allocator = gCreateVmAllocator(&s_alloc, &s_vmem_test, &s_vmem_testconfig);
-
-			s_vmem_test.reset();
         }
     }
 }
