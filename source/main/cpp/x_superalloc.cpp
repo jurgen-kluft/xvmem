@@ -381,6 +381,13 @@ namespace xcore
             u32  m_count_chunks_used;
         };
 
+        struct bcinfo_t
+        {
+            u16 m_block_index;
+            u16 m_block_chunk_index;
+            u32 m_chunk_index;
+        };
+
         struct config_t
         {
             config_t(u16 chunks_max, u8 chunks_shift, u16 l1_len, u16 l2_len)
@@ -578,40 +585,35 @@ namespace xcore
         void release_chunk(u32 const chunk_index, u32 alloc_size)
         {
             chunk_t* chunk = get_chunk_by_index(chunk_index);
+            bcinfo_t info  = page_index_to_info(chunk->m_page_index);
 
-            u32 block_index;
-            u32 block_chunk_index;
-            u32 chunk_index2;
-            get_from_page_index(chunk->m_page_index, block_index, block_chunk_index, chunk_index2);
-            ASSERT(chunk_index == chunk_index2);
-
-            block_t*        block        = &m_blocks_array[block_index];
+            block_t*        block        = &m_blocks_array[info.m_block_index];
             u32 const       config_index = block->m_config_index;
             config_t const& config       = c_configs[config_index];
 
             if (block->m_chunks_used == config.m_chunks_max)
             {
-                m_block_per_group_list_active[config_index].insert(m_blocks_list_data, block_index);
+                m_block_per_group_list_active[config_index].insert(m_blocks_list_data, info.m_block_index);
             }
 
             m_page_count -= (alloc_size + (m_page_size - 1)) >> m_page_shift;
 
             // Release the chunk structure back to the fsa
             m_fsa.dealloc(chunk_index);
-            chunk                                    = nullptr;
-            block->m_chunks_array[block_chunk_index] = 0xffffffff;
+            chunk                                           = nullptr;
+            block->m_chunks_array[info.m_block_chunk_index] = 0xffffffff;
 
             // We need to limit the number of cached chunks, once that happens we need to add the
             // block_chunk_index to the m_binmap_chunks_free.
             u16 *     l1, *l2;
             binmap_t* bm = get_binmap_by_index(block->m_binmap_chunks_cached, l1, l2);
-            bm->clr(config.m_chunks_max, l1, l2, block_chunk_index);
+            bm->clr(config.m_chunks_max, l1, l2, info.m_block_chunk_index);
             block->m_count_chunks_cached -= 1;
 
             block->m_chunks_used -= 1;
             if (block->m_chunks_used == 0)
             {
-                m_block_per_group_list_active[config_index].remove_item(m_blocks_list_data, block_index);
+                m_block_per_group_list_active[config_index].remove_item(m_blocks_list_data, info.m_block_index);
 
                 // Maybe every size should cache at least one block otherwise single alloc/dealloc calls will
                 // checkout and release a block every time?
@@ -640,52 +642,33 @@ namespace xcore
                 block->m_count_chunks_used   = 0;
                 block->m_config_index        = 0xffff;
 
-                m_blocks_list_free.insert(m_blocks_list_data, block_index);
+                m_blocks_list_free.insert(m_blocks_list_data, info.m_block_index);
             }
         }
 
-        void* page_index_to_address(u32 const page_index) const { return toaddress(m_address_base, (u64)page_index * m_page_size); }
-        void  get_from_page_index(u32 const page_index, u32& block_index, u32& chunk_index_in_block, u32& chunk_index) const
+        // When deallocating, call this to get the page-index which you can than use
+        // to get the 'chunk_t*'.
+        u32      address_to_page_index(void* ptr) const { return (u32)(todistance(m_address_base, ptr) >> m_page_shift); }
+        void*    page_index_to_address(u32 const page_index) const { return toaddress(m_address_base, (u64)page_index * m_page_size); }
+        bcinfo_t page_index_to_info(u32 const page_index) const
         {
+            bcinfo_t  info;
             u32 const page_index_to_block_index_shift       = (m_blocks_shift - m_page_shift);
-            block_index                                     = page_index >> page_index_to_block_index_shift;
-            block_t*  block                                 = &m_blocks_array[block_index];
+            info.m_block_index                              = page_index >> page_index_to_block_index_shift;
+            block_t*  block                                 = &m_blocks_array[info.m_block_index];
             u32 const block_page_index                      = page_index & ((1 << page_index_to_block_index_shift) - 1);
             u32 const block_page_index_to_chunk_index_shift = (c_configs[block->m_config_index].m_chunks_shift - m_page_shift);
-            chunk_index_in_block                            = block_page_index >> block_page_index_to_chunk_index_shift;
-            ASSERT(chunk_index_in_block < c_configs[block->m_config_index].m_chunks_max);
-            chunk_index = block->m_chunks_array[chunk_index_in_block];
-            ASSERT(chunk_index < 0xffff);
+            info.m_block_chunk_index                        = block_page_index >> block_page_index_to_chunk_index_shift;
+            ASSERT(info.m_block_chunk_index < c_configs[block->m_config_index].m_chunks_max);
+            info.m_chunk_index = block->m_chunks_array[info.m_block_chunk_index];
+            ASSERT(info.m_chunk_index < 0xffff);
+            return info;
         }
 
         chunk_t*  get_chunk_by_index(u32 const chunk_index) const { return (chunk_t*)m_fsa.idx2ptr(chunk_index); }
         u32       get_index_of_chunk(chunk_t* chunk) const { return m_fsa.ptr2idx(chunk); }
         lldata_t& get_chunk_list_data() { return m_chunk_list_data; }
-
-        chunk_t* get_chunk_from_page_index(u32 const page_index) const
-        {
-            u32 block_index;
-            u32 chunk_index_in_block;
-            u32 chunk_index;
-            get_from_page_index(page_index, block_index, chunk_index_in_block, chunk_index);
-            return get_chunk_by_index(chunk_index);
-        }
-
-        block_t* get_block_from_page_index(u32 const page_index) const
-        {
-            u32 const block_index = page_index >> (m_blocks_shift - m_page_shift);
-            return &m_blocks_array[block_index];
-        }
-
-        block_t* get_block_and_chunkslot_from_page_index(u32 const page_index, u32& chunkslot) const
-        {
-            u32 const block_index = page_index >> (m_blocks_shift - m_page_shift);
-            return &m_blocks_array[block_index];
-        }
-
-        // When deallocating, call this to get the page-index which you can than use
-        // to get the 'chunk_t*'.
-        u32 address_to_page_index(void* ptr) const { return (u32)(todistance(m_address_base, ptr) >> m_page_shift); }
+        block_t*  get_block_from_index(u32 const block_index) const { return &m_blocks_array[block_index]; }
 
         superfsa_t m_fsa;
         lldata_t   m_chunk_list_data;
@@ -811,7 +794,7 @@ namespace xcore
         }
         return alloc_size;
     }
-    
+
     void superalloc_t::initialize_chunk(superfsa_t& fsa, u32 chunkindex, u32 alloc_size, superbin_t const& bin)
     {
         superchunks_t::chunk_t* chunk = m_chunks->get_chunk_by_index(chunkindex);
@@ -1159,11 +1142,11 @@ namespace xcore
     u32 superallocator_t::deallocate(void* ptr)
     {
         u32 const               page_index = m_chunks.address_to_page_index(ptr);
-        superchunks_t::chunk_t* chunk      = m_chunks.get_chunk_from_page_index(page_index);
-        u32 const               chunkindex = m_chunks.get_index_of_chunk(chunk);
+        superchunks_t::bcinfo_t info       = m_chunks.page_index_to_info(page_index);
+        superchunks_t::chunk_t* chunk      = m_chunks.get_chunk_by_index(info.m_chunk_index);
         u32 const               binindex   = chunk->m_bin_index;
         u32 const               allocindex = m_config.m_asbins[binindex].m_alloc_index;
-        u32 const               size       = m_allocators[allocindex].deallocate(m_internal_fsa, ptr, chunkindex, m_config.m_asbins[binindex]);
+        u32 const               size       = m_allocators[allocindex].deallocate(m_internal_fsa, ptr, info.m_chunk_index, m_config.m_asbins[binindex]);
         ASSERT(size <= m_config.m_asbins[binindex].m_alloc_size);
         return size;
     }
@@ -1171,7 +1154,8 @@ namespace xcore
     u32 superallocator_t::get_size(void* ptr) const
     {
         u32 const               page_index = m_chunks.address_to_page_index(ptr);
-        superchunks_t::chunk_t* chunk      = m_chunks.get_chunk_from_page_index(page_index);
+        superchunks_t::bcinfo_t info       = m_chunks.page_index_to_info(page_index);
+        superchunks_t::chunk_t* chunk      = m_chunks.get_chunk_by_index(info.m_chunk_index);
         u32 const               binindex   = chunk->m_bin_index;
         if (m_config.m_asbins[binindex].m_use_binmap == 1)
         {
@@ -1179,9 +1163,8 @@ namespace xcore
         }
         else
         {
-            u32 chunkslot;
-            superchunks_t::block_t* block = m_chunks.get_block_and_chunkslot_from_page_index(page_index, chunkslot);
-            return block->m_chunks_physical_pages[chunkslot] * m_chunks.m_page_size;
+            superchunks_t::block_t* block = m_chunks.get_block_from_index(info.m_block_index);
+            return block->m_chunks_physical_pages [info.m_block_chunk_index] * m_chunks.m_page_size;
         }
     }
 } // namespace xcore
