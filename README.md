@@ -19,6 +19,9 @@ class alloc_t
       void* allocate(u32 size, u32 align) = 0;
       u32   deallocate(void*) = 0;
       u32   get_size() = 0;
+      
+      void  set_tag(void*, u32) = 0;
+      u32   get_tag(void*) = 0;
 };
 ```
 
