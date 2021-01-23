@@ -26,6 +26,9 @@ Note: Benchmarks are still to be done.
 Note: A large running test (60 million alloc/free operations) was done without crashing, so this 
       version is the first release candidate.
 
+## WIP
+
 Some things are missing though, cached chunks are not limited so nothing is released back in terms
-of unused physical pages.
+of unused physical pages. Also adding support for tagging allocations with a 32-bit integer, usefull
+for adding debugging support or GPU pointer mapping.
 
