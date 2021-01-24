@@ -1104,12 +1104,15 @@ namespace xcore
         ASSERT(size <= m_config.m_asbins[binindex].m_alloc_size);
         ASSERT(m_config.m_asbins[binindex].m_alloc_bin_index == binindex);
         void* ptr = m_allocators[allocindex].allocate(m_internal_fsa, size, m_config.m_asbins[binindex]);
-        ASSERT(ptr < ((xbyte*)m_chunks.m_address_base + m_chunks.m_address_range));
+        ASSERT(ptr >= m_chunks.m_address_base && ptr < ((xbyte*)m_chunks.m_address_base + m_chunks.m_address_range));
         return ptr;
     }
 
     u32 superallocator_t::deallocate(void* ptr)
     {
+        if (ptr == nullptr)
+            return 0;
+        ASSERT(ptr >= m_chunks.m_address_base && ptr < ((xbyte*)m_chunks.m_address_base + m_chunks.m_address_range));
         u32 const               page_index = m_chunks.address_to_page_index(ptr);
         superchunks_t::index_t  index      = m_chunks.page_index_to_info(page_index);
         superchunks_t::chunk_t* chunk      = m_chunks.get_chunk_by_index(index.m_chunk_index);
@@ -1122,6 +1125,8 @@ namespace xcore
 
     u32 superallocator_t::get_size(void* ptr) const
     {
+        if (ptr == nullptr)
+            return 0;
         u32 const               page_index = m_chunks.address_to_page_index(ptr);
         superchunks_t::index_t  index      = m_chunks.page_index_to_info(page_index);
         superchunks_t::chunk_t* chunk      = m_chunks.get_chunk_by_index(index.m_chunk_index);
