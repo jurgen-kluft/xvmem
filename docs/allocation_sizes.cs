@@ -7,21 +7,13 @@ namespace SuperAlloc
     {
         public static int AllocSizeToBin(UInt64 size)
         {
-            UInt64 f = FloorPo2(size);
-            int r = CountTrailingZeros(f >> 4) * 4;
-            int t = CountTrailingZeros(AlignTo32(f) >> 2);
-            int i = (int)((size - (f & ~((UInt64)32 - 1))) >> t);
-            i += r;
-            return i - 1;
-        }
-
-        public static UInt64 AlignAllocSize(UInt64 size)
-        {
-            size = AlignTo8(size);
-            UInt64 f = FloorPo2(size);
-            f = AlignTo8(f);
-            size = f + ((size - f) + ((f >> 2) - 1) & ~((f >> 2) - 1));
-            return size;
+            int w = CountLeadingZeros(size);
+            UInt64 f = (UInt64)0x8000000000000000 >> w;
+            UInt64 r = (f >> 3) * 0xF;
+            UInt64 t = ((f - 1) >> 3);
+            size = (size + t) & ~t;
+            int i = (int)((size & r) >> (60 - w)) + ((60 - w) * 8);
+            return i;
         }
 
         public class BinMapConfig
@@ -29,18 +21,6 @@ namespace SuperAlloc
             public UInt64 Count { get; set; }
             public UInt64 L1Len { get; set; }
             public UInt64 L2Len { get; set; }
-        }
-
-        public static UInt64 CalcAddressRange(UInt64 size)
-        {
-            UInt64 addressrange;
-            if (size <= 256) addressrange = 256 * 1024 * 1024;
-            else if (size <= 2048) addressrange = 256 * 1024 * 1024;
-            else if (size <= 32768) addressrange = 1 * 1024 * 1024 * 1024;
-            else if (size < 512 * 1024) addressrange = (UInt64)8 * 1024 * 1024 * 1024;
-            else if (size < 16 * 1024 * 1024) addressrange = (UInt64)16 * 1024 * 1024 * 1024;
-            else addressrange = (UInt64)16 * 1024 * 1024 * 1024;
-            return addressrange;
         }
 
         public static UInt64 CalcChunkSize(UInt64 s)
@@ -62,29 +42,27 @@ namespace SuperAlloc
             else return (int)(s / 65536);
         }
 
-        public static int CalcPageTrackingNodeBits(UInt64 s)
+        public class SuperBin_t
+		{
+            public SuperBin_t(UInt64 size)
+			{
+                Size = (UInt32)size;
+                NumPages = 1;
+			}
+            public UInt32 Size { get; set; }
+            public int AllocIndex { get; set; }
+            public UInt32 NumPages { get; set; }
+            public UInt32 Waste { get; set; }
+            public UInt32 AllocCount { get; set; }
+            public UInt32 BmL1Len { get; set; }
+            public UInt32 BmL2Len { get; set; }
+		}
+        public class SuperAlloc_t
         {
-            if (s <= 256) return 16;
-            else if (s < 65536) return 8;
-            else if (s < (512 * 1024)) return 8;
-            return 16;
-        }
-
-        public static string CalcPageTrackingMode(UInt64 s)
-        {
-            if (s <= 256) return "Ref";
-            else if (s < 65536) return "Ref";
-            else if (s < (512 * 1024)) return "Ref";
-            return "Count";
-        }
-
-        public static UInt64 CalcMemoryFootPrint()
-        {
-            // Need: how many allocations of each size
-
-
-            return 0;
-        }
+            public List<SuperBin_t> AllocSizes { get; set; } = new List<SuperBin_t>();
+            public UInt64 ChunkSize { get; set; } = 0;
+            public UInt64 ChunkCount { get; set; } = 0;
+        };
 
         public static void CalcBinMap(BinMapConfig bm, UInt64 allocCount, UInt64 chunksize)
         {
@@ -116,113 +94,117 @@ namespace SuperAlloc
             bm.L2Len = CeilPo2(bm.L2Len);
         }
 
-        class AllocSizeBin
-		{
-            public UInt64 Size { get; set; }
-		}
-
-        static List<UInt64> BinToSize = new List<UInt64>();
-        static List<AllocSizeBin> Bins = new List<AllocSizeBin>();
-
         public static void Main()
         {
             try
             {
+				List<UInt64> BinToSize = new List<UInt64>();
+				List<SuperBin_t> AllocSizes = new List<SuperBin_t>();
+
+				Dictionary<int, List<UInt64>> binSizes = new Dictionary<int, List<UInt64>>();
                 UInt64 maxAllocSize = MB(256);
                 for (UInt64 b = 8; b <= maxAllocSize; )
 				{
-                    UInt64 d = b / 4;
+                    UInt64 d = b / 8;
                     UInt64 s = b;
                     while (s < (b<<1))
                     {
-                        //Console.WriteLine("AllocSize: {0}, Bin: {1}", s, AllocSizeToBin(s));
-                        BinToSize.Add(s);
-                        Bins.Add(new AllocSizeBin() { Size = s });
-                        s += AlignTo8(d);
+                        Console.WriteLine("AllocSize: {0}, Bin: {1}", s, AllocSizeToBin(s));
+                        int bin = AllocSizeToBin(s);
+                        while (BinToSize.Count < bin)
+							BinToSize.Add(s);
+						AllocSizes.Add(new SuperBin_t(s));
+						if (binSizes.ContainsKey(bin) == false)
+						{
+                            binSizes.Add(bin, new List<UInt64>());
+						}
+                        binSizes[bin].Add(s);
+                        s += d;
                     }
                     b = s;
                 }
 
-                UInt64 page = 64 * 1024;
+                // Go over all the power-of-2 chunk sizes and determine which allocation sizes to add
+                UInt32 pageSize = (UInt32)KB(64);
+                HashSet<UInt32> allocSizesToDo = new HashSet<UInt32>();
+				foreach (SuperBin_t allocSize in AllocSizes)
+				{
+                    allocSizesToDo.Add(allocSize.Size);
+				}
+				List<SuperAlloc_t> Allocators = new List<SuperAlloc_t>();
+				for (UInt64 chunkSize = KB(64); chunkSize <= MB(512); chunkSize *= 2)
                 {
-                    UInt64 size = 8;
-                    foreach (Allocator am in Allocators)
+                    SuperAlloc_t allocator = new SuperAlloc_t();
+                    allocator.ChunkSize = chunkSize;
+                    foreach (SuperBin_t allocSize in AllocSizes)
                     {
-                        am.MinAllocSize = size;
-                        int bin = AllocSizeToBin(am.MaxAllocSize);
-                        size = BinToSize[bin + 1];
-                    }
-                }
-                foreach (Allocator am in Allocators)
-                {
-                    am.ChunkManager = new ChunkManager();
-                    for (UInt64 size = am.MinAllocSize; size <= am.MaxAllocSize;)
-                    {
-                        ChunkManager cm = am.ChunkManager;
-                        cm.PagesPerChunk = (int)(am.ChunkSize / page);
-
-                        int bin = AllocSizeToBin(size);
-                        UInt64 inc = FloorPo2(size) / 4;
-                        while (AllocSizeToBin(size) == bin)
-                            size += inc;
-                    }
+                        if (!allocSizesToDo.Contains(allocSize.Size))
+                            continue;
+                        if (allocSize.Size > chunkSize)
+                            continue;
+                        //if (allocSize > pageSize)
+                        //{
+                        //   allocator.AllocSizes.Add(allocSize);
+                        //  allocSizesToDo.Remove(allocSize);
+                        // continue;
+                        //}
+                        // Figure out if this size can be part of this Chunk Size
+                        // Go down in chunksize until page-size to try and fit the allocation size
+                        bool addToAllocator = false;
+                        UInt32 numPages = 1;
+                        UInt32 lowestWaste = pageSize;
+                        for (UInt64 cs = chunkSize; cs >= pageSize; cs -= pageSize)
+                        {
+                            UInt32 chunkWaste = (UInt32)(cs % allocSize.Size);
+                            if ((chunkWaste <= (UInt32)(cs / 100)) && chunkWaste < lowestWaste)
+                            {
+                                numPages = (UInt32)(cs / pageSize);
+                                lowestWaste = chunkWaste;
+                                addToAllocator = true;
+                                break;
+                            }
+                        }
+                        if (addToAllocator)
+						{
+                            allocSizesToDo.Remove(allocSize.Size);
+                            allocSize.AllocCount = (pageSize * numPages) / allocSize.Size;
+                            allocSize.NumPages = numPages;
+                            allocSize.Waste = lowestWaste;
+                            allocSize.AllocIndex = (int)Allocators.Count;
+							allocator.AllocSizes.Add(allocSize);
+						}
+					}
+                    Allocators.Add(allocator);
                 }
 
                 UInt64 totalChunkCount = 0;
                 int allocatorIndex = 0;
-                foreach (Allocator am in Allocators)
+                foreach (SuperAlloc_t am in Allocators)
                 {
-                    ChunkManager cm = am.ChunkManager;
-                    cm.OneAllocPerChunk = (am.ChunkSize / am.MaxAllocSize) <= 1;
-
-                    for (UInt64 size = am.MinAllocSize; size <= am.MaxAllocSize;)
-                    {
+                    foreach (SuperBin_t allocSize in am.AllocSizes)
+                    { 
+                        UInt64 allocCountPerChunk = am.ChunkSize / allocSize.Size;
                         UInt64 chunkSize = am.ChunkSize;
-                        UInt64 chunkCount = am.AddressRange / am.ChunkSize;
-                        UInt64 allocCountPerChunk = (chunkSize / size);
-                        UInt64 pages;
-                        if (chunkSize > 65536)
-                        {
-                            do
-                            {
-                                if (((allocCountPerChunk * size) & (page - 1)) == 0)
-                                    break;
-                                allocCountPerChunk--;
-                            } while (true);
-                            pages = (allocCountPerChunk * size) / page;
-                        }
-                        else
-                        {
-                            pages = 1;
-                        }
-                        am.ChunkCount = chunkCount;
-
-                        BinMapConfig bm = new BinMapConfig();
-                        if (!cm.OneAllocPerChunk)
-                        {
-                            CalcBinMap(bm, allocCountPerChunk, am.ChunkSize);
-                        }
-
-
-                        int bin = AllocSizeToBin(size);
+                        int bin = AllocSizeToBin(allocSize.Size);
 
                         Console.Write("{0}:", allocatorIndex);
-                        Console.Write("{0} AllocSize:{1}, AllocCount:{2}, ChunkSize:{3}, AddressRange:{4}, ChunkCount:{5}, UsedPagesPerChunk:{6}", bin, size.ToByteSize(), allocCountPerChunk, chunkSize.ToByteSize(), am.AddressRange.ToByteSize(), chunkCount, pages);
-                        Console.Write(", BinMap(4,{0},{1}):{2}", bm.L1Len, bm.L2Len, 4 + 2 * (bm.L1Len + bm.L2Len));
-                        Console.Write(", Chunk: Pages:{0}, Min:{1}, Max:{2}, OneAlloc:{3}", cm.PagesPerChunk, am.MinAllocSize.ToByteSize(), am.MaxAllocSize.ToByteSize(), cm.OneAllocPerChunk ? "Yes" : "No");
+                        Console.Write("{0} AllocSize:{1}, AllocCount:{2}, ChunkSize:{3}, UsedPagesPerChunk:{4}", bin, allocSize.Size.ToByteSize(), allocCountPerChunk, chunkSize.ToByteSize(), allocSize.NumPages);
+                        
+                        if (allocSize.AllocCount > 1)
+                        {
+                            BinMapConfig bm = new BinMapConfig();
+                            CalcBinMap(bm, allocCountPerChunk, am.ChunkSize);
+                            allocSize.BmL1Len = (UInt32)bm.L1Len;
+                            allocSize.BmL2Len = (UInt32)bm.L2Len;
+                            Console.Write(", BinMap({0},{1}):{2}", bm.L1Len, bm.L2Len, 4 + 2 * (bm.L1Len + bm.L2Len));
+                        }
                         Console.WriteLine();
-
-                        UInt64 inc = FloorPo2(size) / 4;
-                        while (AllocSizeToBin(size) == bin)
-                            size += inc;
                     }
 
                     totalChunkCount += (UInt64)am.ChunkCount;
                     allocatorIndex += 1;
                 }
                 Console.WriteLine();
-                Console.WriteLine("Memory Stats:");
-                Console.Write("    Total Chunk Data = (4+4+4)x{0} = {1}", totalChunkCount, ((4+4+4)* totalChunkCount).ToByteSize());
             }
             catch (Exception e)
             {
@@ -231,41 +213,12 @@ namespace SuperAlloc
             Console.WriteLine("Done...");
         }
 
-        public class ChunkManager
-        {
-            public bool OneAllocPerChunk { get; set; } = false;
-            public int PagesPerChunk { get; set; }
-        }
-
-        public class Allocator
-        {
-            public UInt64 MinAllocSize { get; set; } = 0;
-            public UInt64 MaxAllocSize { get; set; } = 0;
-            public UInt64 AddressRange { get; set; } = 0;
-            public UInt64 ChunkSize { get; set; } = 0;
-            public UInt64 ChunkCount { get; set; } = 0;
-            public ChunkManager ChunkManager { get; set; }
-            public UInt64 MemoryFootPrint { get; set; } = 0;
-        };
-
-        // CPU Memory Configuration for ~5 GB of device memory (PS4, Xbox One, Nintendo Switch)
-        static Allocator[] Allocators = new Allocator[] {
-            new Allocator { MinAllocSize=8, MaxAllocSize=     256, AddressRange= MB(128), ChunkSize=  KB(64) },
-			new Allocator { MinAllocSize=0, MaxAllocSize= KB(256), AddressRange= MB(384), ChunkSize= KB(512) },
-			new Allocator { MinAllocSize=0, MaxAllocSize= KB(512), AddressRange= MB(512), ChunkSize= KB(512) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=   MB(1), AddressRange=   GB(1), ChunkSize=   MB(1) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=   MB(2), AddressRange=   GB(1), ChunkSize=   MB(2) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=   MB(4), AddressRange=   GB(1), ChunkSize=   MB(4) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=   MB(8), AddressRange=   GB(1), ChunkSize=   MB(8) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=  MB(16), AddressRange=   GB(1), ChunkSize=  MB(16) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=  MB(32), AddressRange=   GB(1), ChunkSize=  MB(32) },
-			new Allocator { MinAllocSize=0, MaxAllocSize=  MB(64), AddressRange=   GB(1), ChunkSize=  MB(64) },
-			new Allocator { MinAllocSize=0, MaxAllocSize= MB(128), AddressRange=   GB(2), ChunkSize= MB(128) },
-			new Allocator { MinAllocSize=0, MaxAllocSize= MB(256), AddressRange=   GB(4), ChunkSize= MB(256) },
-		};
-
-
-
+        // Targetting 10% allocation waste, this is hard for a specific range of allocation sizes
+        // that are close to the page-size of 64 KB. For this we would like to re-route to a region
+        // that can deal with 4 KB or 16 KB pages.
+        // For example, sizes between 64 KB and 128 KB like 80 KB is automatically wasting 48 KB at
+        // the tail. We can reduce this only by going for a page-size of 4 KB / 16 KB.
+        // 
 
         ///  ----------------------------------------------------------------------------------------------------------
         ///  ----------------------------------------------------------------------------------------------------------
@@ -413,6 +366,11 @@ namespace SuperAlloc
         {
             return String.Format(new FileSizeFormatProvider(), "{0:fs}", size);
         }
+        public static string ToByteSize(this UInt32 size)
+        {
+            return String.Format(new FileSizeFormatProvider(), "{0:fs}", size);
+        }
+
         public static string ToByteSize(this UInt64 size)
         {
             return String.Format(new FileSizeFormatProvider(), "{0:fs}", size);
