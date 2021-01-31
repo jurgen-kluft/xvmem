@@ -23,25 +23,6 @@ namespace SuperAlloc
             public UInt64 L2Len { get; set; }
         }
 
-        public static UInt64 CalcChunkSize(UInt64 s)
-        {
-            UInt64 size = s;
-            UInt64 chunksize;
-            if (size <= 256) chunksize = 64 * 1024;
-            else if (size <= 2048) chunksize = 512 * 1024;
-            else if (size <= 32768) chunksize = 4 * 1024 * 1024;
-            else if (size < 512 * 1024) chunksize = 32 * 1024 * 1024;
-            else if (size < 16 * 1024 * 1024) chunksize = 64 * 1024 * 1024;
-            else chunksize = (UInt64)1 * 1024 * 1024 * 1024;
-            return chunksize;
-        }
-
-        public static int CalcPageTrackingGranularity(UInt64 s)
-        {
-            if (s < (2 * 65536)) return 1;
-            else return (int)(s / 65536);
-        }
-
         public class SuperBin_t
 		{
             public SuperBin_t(UInt64 size)
@@ -64,8 +45,9 @@ namespace SuperAlloc
             public UInt64 ChunkCount { get; set; } = 0;
         };
 
-        public static void CalcBinMap(BinMapConfig bm, UInt64 allocCount, UInt64 chunksize)
+        public static BinMapConfig CalcBinMap(UInt64 allocCount, UInt64 chunksize)
         {
+            BinMapConfig bm = new BinMapConfig();
             UInt64 l2_len = ((allocCount / (UInt64)16) + (UInt64)3) & ~((UInt64)3);
             if ((allocCount / 16) > 16)
             {
@@ -92,6 +74,7 @@ namespace SuperAlloc
 
             bm.L1Len = CeilPo2(bm.L1Len);
             bm.L2Len = CeilPo2(bm.L2Len);
+            return bm;
         }
 
         public static void Main()
@@ -109,7 +92,7 @@ namespace SuperAlloc
                     UInt64 s = b;
                     while (s < (b<<1))
                     {
-                        Console.WriteLine("AllocSize: {0}, Bin: {1}", s, AllocSizeToBin(s));
+                        //Console.WriteLine("AllocSize: {0}, Bin: {1}", s, AllocSizeToBin(s));
                         int bin = AllocSizeToBin(s);
                         while (BinToSize.Count < bin)
 							BinToSize.Add(s);
@@ -125,6 +108,7 @@ namespace SuperAlloc
                 }
 
                 // Go over all the power-of-2 chunk sizes and determine which allocation sizes to add
+                // to each SuperAlloc.
                 UInt32 pageSize = (UInt32)KB(64);
                 HashSet<UInt32> allocSizesToDo = new HashSet<UInt32>();
 				foreach (SuperBin_t allocSize in AllocSizes)
@@ -192,8 +176,7 @@ namespace SuperAlloc
                         
                         if (allocSize.AllocCount > 1)
                         {
-                            BinMapConfig bm = new BinMapConfig();
-                            CalcBinMap(bm, allocCountPerChunk, am.ChunkSize);
+                            BinMapConfig bm = CalcBinMap(allocCountPerChunk, am.ChunkSize);
                             allocSize.BmL1Len = (UInt32)bm.L1Len;
                             allocSize.BmL2Len = (UInt32)bm.L2Len;
                             Console.Write(", BinMap({0},{1}):{2}", bm.L1Len, bm.L2Len, 4 + 2 * (bm.L1Len + bm.L2Len));
