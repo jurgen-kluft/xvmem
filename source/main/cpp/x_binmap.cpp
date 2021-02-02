@@ -17,7 +17,10 @@ namespace xcore
         u32 w = wi2;
         u32 const r = ((count&(16-1)) + (16-1)) >> 4;
         if (r == 1)
-            data[w++] = 0xffff << (count & (16 - 1));
+        {
+            u16 const m = 0xffff << (count & (16 - 1));
+            data[w++] = m | (df & ~m);
+        }
         while (w < len)
             data[w++] = 0xffff;
         return wi2 + r;

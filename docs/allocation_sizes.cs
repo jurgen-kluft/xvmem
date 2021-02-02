@@ -5,15 +5,35 @@ namespace SuperAlloc
 {
     public class Program
     {
-        public static int AllocSizeToBin(UInt64 size)
+        public enum EWasteTarget : int
+		{
+            PERCENT_10 = 8,
+            PERCENT_25 = 4,
+		};
+
+        public static int AllocSizeToBin(UInt64 size, EWasteTarget target)
         {
-            int w = CountLeadingZeros(size);
-            UInt64 f = (UInt64)0x8000000000000000 >> w;
-            UInt64 r = (f >> 3) * 0xF;
-            UInt64 t = ((f - 1) >> 3);
-            size = (size + t) & ~t;
-            int i = (int)((size & r) >> (60 - w)) + ((60 - w) * 8);
-            return i;
+            if (target == EWasteTarget.PERCENT_10)
+            {
+                int w = CountLeadingZeros(size);
+                UInt64 f = (UInt64)0x8000000000000000 >> w;
+                UInt64 r = (UInt64)0xFFFFFFFFFFFFFFFF >> (60 - w);
+                UInt64 t = ((f - 1) >> 3);
+                size = (size + t) & ~t;
+                int i = (int)((size & r) >> (60 - w)) + ((60 - w) * 8);
+                return i;
+            }
+			else if (target == EWasteTarget.PERCENT_25)
+			{
+                int w = CountLeadingZeros(size);
+                UInt64 f = (UInt64)0x8000000000000000 >> w;
+                UInt64 r = (UInt64)0xFFFFFFFFFFFFFFFF >> (61 - w);
+                UInt64 t = ((f - 1) >> 2);
+                size = (size + t) & ~t;
+                int i = (int)((size & r) >> (61 - w)) + ((61 - w) * 4);
+                return i;
+            }
+            return -1;
         }
 
         public class BinMapConfig
@@ -25,12 +45,14 @@ namespace SuperAlloc
 
         public class SuperBin_t
 		{
-            public SuperBin_t(UInt64 size)
+            public SuperBin_t(UInt64 size, int index)
 			{
                 Size = (UInt32)size;
+                BinIndex = index;
                 NumPages = 1;
 			}
             public UInt32 Size { get; set; }
+            public int BinIndex { get; set; }
             public int AllocIndex { get; set; }
             public UInt32 NumPages { get; set; }
             public UInt32 Waste { get; set; }
@@ -48,18 +70,6 @@ namespace SuperAlloc
         public static BinMapConfig CalcBinMap(UInt64 allocCount, UInt64 chunksize)
         {
             BinMapConfig bm = new BinMapConfig();
-            UInt64 l2_len = ((allocCount / (UInt64)16) + (UInt64)3) & ~((UInt64)3);
-            if ((allocCount / 16) > 16)
-            {
-                l2_len = (((l2_len / (UInt64)4) * (UInt64)4) + (UInt64)3) & ~((UInt64)3);
-            }
-            else
-            {
-                l2_len = ((allocCount / 16) + (UInt64)1) & ~((UInt64)1);
-            }
-            UInt64 l1_len = (l2_len + 15) / (UInt64)16;
-            if (l1_len < 2) l1_len = 2;
-
             bm.Count = (uint)(allocCount);
             if (bm.Count <= 32)
             {
@@ -68,6 +78,9 @@ namespace SuperAlloc
             }
             else
             {
+                int l2_len = (int)CeilPo2((uint)((allocCount + 15) / 16));
+                int l1_len = (int)((l2_len + 15) / 16);
+                l1_len = Math.Max(l1_len, 2);
                 bm.L1Len = (uint)l1_len;
                 bm.L2Len = (uint)l2_len;
             }
@@ -81,31 +94,57 @@ namespace SuperAlloc
         {
             try
             {
-				List<UInt64> BinToSize = new List<UInt64>();
+                EWasteTarget wt = EWasteTarget.PERCENT_10;
+
+                // This is the place to override certain sizes and map them to a higher size
+                Dictionary<UInt32, UInt32> allocSizeRemap = new Dictionary<uint, uint>();
+                // remap size     from -> to
+                if (wt == EWasteTarget.PERCENT_10)
+                {
+                    allocSizeRemap.Add(9, 12);
+                    allocSizeRemap.Add(10, 12);
+                    allocSizeRemap.Add(11, 12);
+                    allocSizeRemap.Add(13, 16);
+                    allocSizeRemap.Add(14, 16);
+                    allocSizeRemap.Add(15, 16);
+                    allocSizeRemap.Add(18, 20);
+                    allocSizeRemap.Add(22, 24);
+                    allocSizeRemap.Add(26, 28);
+                    allocSizeRemap.Add(30, 32);
+                }
+                else if (wt == EWasteTarget.PERCENT_25)
+				{
+                    allocSizeRemap.Add(10, 12);
+                    allocSizeRemap.Add(14, 16);
+				}
 				List<SuperBin_t> AllocSizes = new List<SuperBin_t>();
 
-				Dictionary<int, List<UInt64>> binSizes = new Dictionary<int, List<UInt64>>();
-                UInt64 maxAllocSize = MB(256);
-                for (UInt64 b = 8; b <= maxAllocSize; )
+                UInt32 maxAllocSize = (UInt32)MB(256);
+                for (UInt32 b = 8; b <= maxAllocSize; )
 				{
-                    UInt64 d = b / 8;
-                    UInt64 s = b;
+                    UInt32 d = b / (uint)wt;
+                    UInt32 s = b;
                     while (s < (b<<1))
                     {
-                        //Console.WriteLine("AllocSize: {0}, Bin: {1}", s, AllocSizeToBin(s));
-                        int bin = AllocSizeToBin(s);
-                        while (BinToSize.Count < bin)
-							BinToSize.Add(s);
-						AllocSizes.Add(new SuperBin_t(s));
-						if (binSizes.ContainsKey(bin) == false)
-						{
-                            binSizes.Add(bin, new List<UInt64>());
-						}
-                        binSizes[bin].Add(s);
+                        int bin = AllocSizeToBin(s, wt);
+						//Console.WriteLine("AllocSize: {0}, Bin: {1}", s, bin);
+						SuperBin_t sbin = new SuperBin_t(s, bin);
+						while (AllocSizes.Count <= bin)
+                        {
+							AllocSizes.Add(sbin);
+                        }
                         s += d;
                     }
                     b = s;
                 }
+
+                // Remap certain sizes to another (higher) bin
+                foreach(var s2s in allocSizeRemap)
+				{
+                    int fbin = AllocSizeToBin(s2s.Key, wt);
+                    int tbin = AllocSizeToBin(s2s.Value, wt);
+                    AllocSizes[fbin].BinIndex = tbin;
+				}                    
 
                 // Go over all the power-of-2 chunk sizes and determine which allocation sizes to add
                 // to each SuperAlloc.
@@ -169,7 +208,7 @@ namespace SuperAlloc
                     { 
                         UInt64 allocCountPerChunk = am.ChunkSize / allocSize.Size;
                         UInt64 chunkSize = am.ChunkSize;
-                        int bin = AllocSizeToBin(allocSize.Size);
+                        int bin = AllocSizeToBin(allocSize.Size, wt);
 
                         Console.Write("{0}:", allocatorIndex);
                         Console.Write("{0} AllocSize:{1}, AllocCount:{2}, ChunkSize:{3}, UsedPagesPerChunk:{4}", bin, allocSize.Size.ToByteSize(), allocCountPerChunk, chunkSize.ToByteSize(), allocSize.NumPages);
@@ -188,6 +227,32 @@ namespace SuperAlloc
                     allocatorIndex += 1;
                 }
                 Console.WriteLine();
+
+                // Generate C++ Code
+                Console.WriteLine("static const s32        c_num_bins = {0};", AllocSizes.Count);
+                Console.WriteLine("static const superbin_t c_asbins[c_num_bins] = {");
+                foreach(SuperBin_t bin in AllocSizes)
+				{
+                    int MB = (int)(bin.Size >> 20) & 0x3FF;
+                    int KB = (int)(bin.Size >> 10) & 0x3FF;
+                    int B = (int)(bin.Size & 0x3FF);
+                    int BinIndex = bin.BinIndex;
+                    int AllocatorIndex = bin.AllocIndex;
+                    int UseBinMap = (bin.AllocCount > 1) ? 1 : 0;
+                    int AllocationCount = (int)bin.AllocCount;
+                    int BinMapL1Len = (int)bin.BmL1Len;
+                    int BinMapL2Len = (int)bin.BmL2Len;
+                    Console.WriteLine("superbin_t({0},{1},{2},{3},{4},{5},{6},{7},{8}){9}", MB, KB, B, BinIndex, AllocatorIndex, UseBinMap, AllocationCount, BinMapL1Len, BinMapL2Len, ",");
+				}
+                Console.WriteLine("};");
+
+                Console.WriteLine("static const s32    c_num_allocators = {0};", Allocators.Count);
+				Console.WriteLine("static superalloc_t c_allocators[c_num_allocators] = {");
+				foreach (SuperAlloc_t am in Allocators)
+                {
+                    Console.WriteLine("    superalloc_t({0}),", am.ChunkSize); 
+                }
+                Console.WriteLine("};");
             }
             catch (Exception e)
             {
