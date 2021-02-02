@@ -228,6 +228,7 @@ Internally superallocator uses it's own simple (virtual memory) heap allocator a
 
 # Simulated Test
 
-A test run of 60 million allocations/deallocations (from Watchdogs) has shown that the bookkeeping data uses around 4 MB of memory.
+A test run of 60 million allocations/deallocations (from Watchdogs) has shown that the bookkeeping data uses around 5 MB of memory.
+The amount of waste from chunks not totally full using a naive configuration is ~8% of the actual requested memory.
 
 ---

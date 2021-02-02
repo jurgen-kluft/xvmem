@@ -428,7 +428,7 @@ namespace xcore
         };
 
         static const u64 c_address_block_range = xGB * 1;
-        static const u64 c_fsa_address_range   = xMB * 128;
+        static const u64 c_fsa_address_range   = xMB * 16;
         static const u64 c_fsa_initial_range   = xMB * 1;
 
         static const s32 c_num_configs            = 32;
@@ -1000,9 +1000,9 @@ namespace xcore
 
         static const u64 c_address_range = 128 * xGB;
 
-        static const u32 c_internal_heap_address_range = 32 * xMB;
+        static const u32 c_internal_heap_address_range = 16 * xMB;
         static const u32 c_internal_heap_pre_size      = 2 * xMB;
-        static const u32 c_internal_fsa_address_range  = 32 * xMB;
+        static const u32 c_internal_fsa_address_range  = 16 * xMB;
         static const u32 c_internal_fsa_pre_size       = 2 * xMB;
 
         static superallocator_config_t get_config()
@@ -1081,9 +1081,9 @@ namespace xcore
 
         static const u64 c_address_range = 128 * xGB;
 
-        static const u32 c_internal_heap_address_range = 32 * xMB;
+        static const u32 c_internal_heap_address_range = 16 * xMB;
         static const u32 c_internal_heap_pre_size      = 2 * xMB;
-        static const u32 c_internal_fsa_address_range  = 32 * xMB;
+        static const u32 c_internal_fsa_address_range  = 16 * xMB;
         static const u32 c_internal_fsa_pre_size       = 2 * xMB;
 
         static superallocator_config_t get_config()
