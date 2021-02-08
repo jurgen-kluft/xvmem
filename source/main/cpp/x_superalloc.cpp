@@ -280,7 +280,7 @@ namespace xcore
 
     private:
         superpages_t     m_pages;
-        static const s32 c_max_num_sizes = 32;
+        static const s32 c_max_num_sizes = 16;
         llhead_t         m_used_page_list_per_size[c_max_num_sizes];
     };
 
@@ -298,7 +298,7 @@ namespace xcore
         alloc_size      = xceilpo2(alloc_size);
         s32 const c     = xcountTrailingZeros(alloc_size);
         u32       ipage = 0xffffffff;
-        ASSERT(c >= 0 && c < c_max_num_sizes);
+        ASSERT(c >= 3 && c < c_max_num_sizes);
         if (m_used_page_list_per_size[c].is_nil())
         {
             // Get a page and initialize that page for this size
@@ -339,7 +339,7 @@ namespace xcore
         if (ppage->is_empty())
         {
             s32 const c = xcountTrailingZeros(ppage->m_item_size);
-            ASSERT(c >= 0 && c < c_max_num_sizes);
+            ASSERT(c >= 3 && c < c_max_num_sizes);
             m_used_page_list_per_size[c].remove_item(m_pages.m_page_list_data, pageindex);
             m_pages.release_page(pageindex);
         }
