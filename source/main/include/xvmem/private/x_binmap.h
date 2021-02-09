@@ -19,11 +19,6 @@ namespace xcore
         s32  find(u32 count, u16 const* l1, u16 const* l2) const;
         s32  findandset(u32 count, u16* l1, u16* l2);
 
-        // There is actually an unused 'u32' here since we are allocating
-        // it using fsa which only has power-of-2 sizes.
-        u16 m_count;
-        u8  m_l1_len; // 1 << l1_len
-        u8  m_l2_len; // 1 << l2_len
         u32 m_l0;
         u32 m_l1_offset;
         u32 m_l2_offset;
