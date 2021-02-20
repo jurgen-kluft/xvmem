@@ -200,6 +200,7 @@ The smallest chunk-size of 64 KB, handled by the first super alloc, is holding a
 # Binmap
 
 The main purpose of Binmap is to quickly give you the index of a '0' bit. The implementation uses 3 levels of bit arrays. Binmap has a `findandset` function which can give you a 'free' element quickly.
+
 ```md
                            +--------------------------------+                                                                                
           32-bit, level 0  |                               0|                                                                                
@@ -228,7 +229,7 @@ Internally superallocator uses it's own simple (virtual memory) heap allocator a
 
 # Simulated Test
 
-A test run of 60 million allocations/deallocations (from Watchdogs) has shown that the bookkeeping data uses around 5 MB of memory.
+A test run of 60 million allocations/deallocations has shown that the bookkeeping data uses around 5 MB of memory.
 The amount of waste from chunks not totally full using a naive configuration is ~8% of the actual requested memory.
 
 ---
