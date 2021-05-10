@@ -9,8 +9,9 @@
 
 namespace xcore
 {
-    // @TODO: We could also include an index to an array of superchunks_t. In this way we could create multiple regions with different page-size or other attributes.
-    // @TODO: for level 1 we can skip allocating u16[] if the count for level 1 <= 32
+    // @TODO: We could also include an index to an array of superchunks_t. 
+    //        An index in superalloc_t to a superchunks_t object.
+    //        In this way we could create multiple regions with different page-size or other attributes.
     // @TODO: Deal with jittering between block checkout/release
 
     #define SUPERALLOC_DEBUG
