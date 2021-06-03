@@ -465,15 +465,24 @@ namespace xcore
         void initialize_binmap(u32 const binmap_index, config_t const& config, bool set)
         {
             binmap_t* bm    = (binmap_t*)m_fsa->idx2ptr(binmap_index);
-            bm->m_l1_offset = 0xffffffff;
-            bm->m_l2_offset = 0xffffffff;
-            if (config.m_binmap_l2 > 0)
-                bm->m_l2_offset = m_fsa->alloc(sizeof(u16) * config.m_binmap_l2);
-            if (config.m_binmap_l1 > 0)
-                bm->m_l1_offset = m_fsa->alloc(sizeof(u16) * config.m_binmap_l1);
-            u16* l1 = (u16*)m_fsa->idx2ptr(bm->m_l1_offset);
-            u16* l2 = (u16*)m_fsa->idx2ptr(bm->m_l2_offset);
-            if (set)
+
+			u16* l2;
+			bm->m_l2_offset = m_fsa->alloc(sizeof(u16) * config.m_binmap_l2);
+			l2 = (u16*)m_fsa->idx2ptr(bm->m_l2_offset);
+			
+			u16* l1;
+			if (config.m_binmap_l1 > 2)
+			{
+				bm->m_l1_offset = m_fsa->alloc(sizeof(u16) * config.m_binmap_l1);
+				l1 = (u16*)m_fsa->idx2ptr(bm->m_l1_offset);
+			}
+			else
+			{
+				bm->m_l1_offset = set ? 0xffffffff : 0;
+				l1 = (u16*)&bm->m_l1_offset;
+			}
+
+			if (set)
                 bm->init1(config.m_chunks_max, l1, config.m_binmap_l1, l2, config.m_binmap_l2);
             else
                 bm->init(config.m_chunks_max, l1, config.m_binmap_l1, l2, config.m_binmap_l2);
@@ -818,11 +827,22 @@ namespace xcore
             binmap_t* binmap = (binmap_t*)&chunk->m_track.m_binmap;
             if (bin.m_alloc_count > 32)
             {
-                binmap->m_l1_offset = fsa.alloc(sizeof(u16) * bin.m_binmap_l1len);
-                binmap->m_l2_offset = fsa.alloc(sizeof(u16) * bin.m_binmap_l2len);
-                u16* l1             = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
-                u16* l2             = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
-                binmap->init(bin.m_alloc_count, l1, bin.m_binmap_l1len, l2, bin.m_binmap_l2len);
+				u16* l2;
+				binmap->m_l2_offset = fsa.alloc(sizeof(u16) * bin.m_binmap_l2len);
+				l2 = (u16*)fsa.idx2ptr(binmap->m_l2_offset);
+
+				u16* l1;
+				if (bin.m_binmap_l1len > 2)
+				{
+					binmap->m_l1_offset = fsa.alloc(sizeof(u16) * bin.m_binmap_l1len);
+					l1 = (u16*)fsa.idx2ptr(binmap->m_l1_offset);
+				}
+				else 
+				{
+					l1 = (u16*)&binmap->m_l1_offset;
+				}
+
+				binmap->init(bin.m_alloc_count, l1, bin.m_binmap_l1len, l2, bin.m_binmap_l2len);
             }
             else
             {
