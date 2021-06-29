@@ -370,8 +370,8 @@ namespace xcore
         u16 m_binmap_l2len;
     };
 
-    // Managing requests of different chunk-sizes but managed through first a division into blocks, where blocks are
-    // divided into segments. Segments contain chunks.
+    // Managing requests of different chunk-sizes but managed through first a division into blocks, 
+    // where blocks are divided into segments. Segments contain chunks.
     //
     // Chunk-Sizes are all power-of-2 sizes
     //
@@ -381,14 +381,12 @@ namespace xcore
     //   Deallocate
     //    - Quickly finding the block_t*, chunk_t* and superalloc_t* that belong to a 'void* ptr'
     //    - Collecting a now empty-chunk and either release or cache it
+    //   Get/Set Assoc
+    //    - Set an associated value for a pointer
+    //    - Get the associated value for a pointer
     //
     //   Get chunk by index
     //   Get address of chunk
-    //
-    // There are 2 ways to add tracking of allocations:
-    // 1) External data structure (xdtrie2 ?)
-    // 2) Add an u32* array in block_t where every entry can hold another array of u32 to enable
-    //    a u32 per allocation. (This is the most optimum).
     //
     struct superchunks_t
     {
@@ -681,10 +679,36 @@ namespace xcore
         {
             block_t* block = &m_blocks_array[chain.m_block_index];
             u32 const chunk_tracking_array_index = block->m_m_chunks_alloc_tracking_array[chain.m_chunk_index];
-            u32* const chunk_tracking_array = m_fsa.idx2ptr(chunk_tracking_array_index);
+            u32* const chunk_tracking_arrays = m_fsa.idx2ptr(chunk_tracking_array_index);
+            u32* const chunk_tracking_array = fsa.idx2ptr(chunk_tracking_arrays);
+            
             chunk_t* chunk = (chunk_t*)fsa.idx2ptr(chain.m_chunk_index);
-            chunk->
-            chunk_tracking_array[chain.m_]
+            ASSERT(chunk->m_bin_index == bin.m_alloc_bin_index);
+            u32 i = 0;
+            if (bin.m_use_binmap == 1)
+            {
+                void* const chunkaddress = page_index_to_address(chunk->m_page_index);
+                i = (u32)(todistance(chunkaddress, ptr) / bin.m_alloc_size);
+            }
+            chunk_tracking_array[i] = assoc;
+        }
+
+        u32 get_assoc(void* ptr, chain_t const& chain, superbin_t const& bin) const
+        {
+            block_t* block = &m_blocks_array[chain.m_block_index];
+            u32 const chunk_tracking_array_index = block->m_m_chunks_alloc_tracking_array[chain.m_chunk_index];
+            u32* const chunk_tracking_arrays = m_fsa.idx2ptr(chunk_tracking_array_index);
+            u32* const chunk_tracking_array = fsa.idx2ptr(chunk_tracking_arrays);
+            
+            chunk_t* chunk = (chunk_t*)fsa.idx2ptr(chain.m_chunk_index);
+            ASSERT(chunk->m_bin_index == bin.m_alloc_bin_index);
+            u32 i = 0;
+            if (bin.m_use_binmap == 1)
+            {
+                void* const chunkaddress = page_index_to_address(chunk->m_page_index);
+                i = (u32)(todistance(chunkaddress, ptr) / bin.m_alloc_size);
+            }
+            return chunk_tracking_array[i];
         }
         
         // When deallocating, call this to get the page-index which you can than use
@@ -938,20 +962,6 @@ namespace xcore
         chunk_is_now_full = (bin.m_alloc_count == chunk->m_elem_used);
 
         return ptr;
-    }
-
-    u32 superalloc_t::chunk_allocptr_to_idx(superalloc_t::chunk_t* chunk, superchunks_t::chain_t const& chain, void* ptr, superbin_t const& bin) const
-    {
-        ASSERT(chunk->m_bin_index == bin.m_alloc_bin_index);
-        if (bin.m_use_binmap == 1)
-        {
-            void* const chunkaddress = m_chunks->page_index_to_address(chunk->m_page_index);
-            return (u32)(todistance(chunkaddress, ptr) / bin.m_alloc_size);
-        }
-        else
-        {
-            return 0;
-        }
     }
 
     u32 superalloc_t::deallocate_from_chunk(superfsa_t& fsa, superchunks_t::chain_t const& chain, void* ptr, superbin_t const& bin, bool& chunk_is_now_empty, bool& chunk_was_full)
@@ -1334,14 +1344,15 @@ namespace xcore
     void  superallocator_t::set_assoc(void* ptr, u32 assoc)
     {
         if (ptr == nullptr)
-            return 0;
-        ASSERT(ptr >= m_chunks.m_address_base && ptr < ((xbyte*)m_chunks.m_address_base + m_chunks.m_address_range));
-        u32 const              page_index = m_chunks.address_to_page_index(ptr);
-        superchunks_t::chain_t chain      = m_chunks.page_index_to_chunk_info(page_index);
-        superalloc_t::chunk_t* chunk      = (superalloc_t::chunk_t*)m_internal_fsa.idx2ptr(chain.m_chunk_index);
-        u32 const              binindex   = chunk->m_bin_index;
-        u32 const              allocindex = m_config.m_asbins[binindex].m_alloc_index;
-        m_allocators[allocindex].set_assoc(ptr, assoc, chain, m_config.m_asbins[binindex]);
+        {
+            ASSERT(ptr >= m_chunks.m_address_base && ptr < ((xbyte*)m_chunks.m_address_base + m_chunks.m_address_range));
+            u32 const              page_index = m_chunks.address_to_page_index(ptr);
+            superchunks_t::chain_t chain      = m_chunks.page_index_to_chunk_info(page_index);
+            superalloc_t::chunk_t* chunk      = (superalloc_t::chunk_t*)m_internal_fsa.idx2ptr(chain.m_chunk_index);
+            u32 const              binindex   = chunk->m_bin_index;
+            u32 const              allocindex = m_config.m_asbins[binindex].m_alloc_index;
+            m_allocators[allocindex].set_assoc(ptr, assoc, chain, m_config.m_asbins[binindex]);
+        }
     }
 
     u32   superallocator_t::get_assoc(void* ptr) const
